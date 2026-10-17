@@ -85,6 +85,10 @@ def focus_guard() -> list:  # run by the "App is opened" automation (Instagram, 
     ]
 
 
+def signal(path: str, query: str) -> list:  # Focus / location automations: just tell the server (it decides whether to speak up)
+    return [get(path, uid(), query)]
+
+
 def weekly_report() -> list:
     acts = [action("setvolume", WFVolume=0.7)]
     for part in range(1, 7):                   # six ~5-minute chapters (silence if a chapter isn't there)
@@ -113,7 +117,14 @@ def main() -> None:
     OUT.mkdir(exist_ok=True)
     for name, acts, color in (("Trinetra Wake-Up Call", wake_up(), 4282601983), ("Trinetra Time Check", now(), 4292093695),
                               ("Trinetra Weekly Report", weekly_report(), 463140863),
-                              ("Trinetra Focus Guard", focus_guard(), 4271458815)):
+                              ("Trinetra Focus Guard", focus_guard(), 4271458815),
+                              ("Trinetra Focus On", signal("/sc/focus", "&state=on"), 2071128575),
+                              ("Trinetra Focus Off", signal("/sc/focus", "&state=off"), 2071128575),
+                              ("Trinetra At USC", signal("/sc/place", "&name=usc&event=arrive"), 4292093695),
+                              ("Trinetra Left USC", signal("/sc/place", "&name=usc&event=leave"), 4292093695),
+                              ("Trinetra At Gym", signal("/sc/place", "&name=gym&event=arrive"), 4282601983),
+                              ("Trinetra Left Gym", signal("/sc/place", "&name=gym&event=leave"), 4282601983),
+                              ("Trinetra Home", signal("/sc/place", "&name=home&event=arrive"), 463140863)):
         raw = OUT / f"{name}.unsigned.shortcut"
         raw.write_bytes(plistlib.dumps(shortcut(acts, color, 59446), fmt=plistlib.FMT_BINARY))
         signed = OUT / f"{name}.shortcut"

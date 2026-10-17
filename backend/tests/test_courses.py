@@ -95,3 +95,31 @@ def test_import_a_dated_plan_fills_blocks_by_minutes_and_rebuilds_the_roadmap(cl
     t = block(client, "TUF DSA — catch-up", datetime(2026, 10, 17, 17, 0, tzinfo=timezone.utc))
     form = client.get(f"/proof/{t['id']}").json()
     assert [i["title"] for i in form["aimed"]] == ["Basic Hashing", "Basic String", "Palindrome Check"]
+
+
+def test_weekly_analyst_feeds_course_progress_into_the_report(client, llm_calls, monkeypatch):
+    from datetime import date
+
+    from app.core import report
+
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    tuf = course(client, "tuf")
+    rows = [{"section": "Sprint 1 · Day 1 · 2026-10-19", "title": "Pattern 1", "kind": "dsa", "est_min": 60, "planned_date": "2026-10-19"},
+            {"section": "Sprint 1 · Day 2 · 2026-10-20", "title": "Pattern 2", "kind": "dsa", "est_min": 60, "planned_date": "2026-10-20"}]
+    client.post(f"/courses/{tuf['id']}/import", json={"items": rows, "active_from": "2026-10-19"})
+    t = block(client, "TUF DSA (1/2)", MON)
+    form = client.get(f"/proof/{t['id']}").json()
+    client.post(f"/proof/{t['id']}", json={"done_ids": [form["aimed"][0]["id"]]})
+    with client.session_factory() as db:  # it happened during that Monday's block
+        from app.db.models import StudyItem
+        db.get(StudyItem, form["aimed"][0]["id"]).done_at = MON + timedelta(hours=1)
+        db.commit()
+    r = client.post("/events", json={"type": "cron.weekly", "payload": {"week_of": "2026-10-19"}, "source": "test"})
+    assert "weekly_analyst" in r.json()["ran"]
+    with client.session_factory() as db:
+        m = report.compute_metrics(db, date(2026, 10, 19))
+    tufa = next(c for c in m["analysis"]["courses"] if c["course"] == tuf["title"])
+    assert tufa["done_this_week"] == 1 and tufa["planned_this_week"] == 2 and tufa["current_sprint"]["name"] == "Sprint 1"
+    page = client.get("/agents").json()
+    voice = next(a for ms in page["councils"].values() for a in ms if a["id"] == "voice_agent")
+    assert voice["status"] == "active"  # built into the voice pipeline

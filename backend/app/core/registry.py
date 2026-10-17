@@ -44,6 +44,7 @@ class AgentSpec:
     priority: int = 5  # higher runs first, and wins reply arbitration
     phase: str = "1"
     enabled: bool = True
+    builtin: str | None = None  # works inside a core pipeline (e.g. the voice), not through dispatch: where it lives
 
     @property
     def handler(self) -> Handler | None:
@@ -53,7 +54,7 @@ class AgentSpec:
     def status(self) -> str:
         if not self.enabled:
             return "disabled"
-        return "active" if self.handler else "planned"
+        return "active" if self.handler or self.builtin else "planned"
 
     def listens_to(self, event_type: str) -> bool:
         return any(fnmatch.fnmatchcase(event_type, t) for t in self.triggers)

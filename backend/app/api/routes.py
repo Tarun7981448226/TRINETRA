@@ -1045,6 +1045,24 @@ async def sc_opened(app: str = "", db: Session = Depends(get_db), core: Orchestr
     return _audio(await voice.speak(result.reply, result.mood))
 
 
+@router.get("/sc/focus", dependencies=[Depends(require_shortcut_key)], response_class=Response)
+async def sc_focus(state: str = "on", db: Session = Depends(get_db), core: Orchestrator = Depends(get_orchestrator)):
+    """iPhone Focus mode turned on / off (two automations, one per state)."""
+    await core.dispatch(IncomingEvent(type="shortcut.focus", payload={"state": state[:8]}, source="shortcut"), db)
+    db.commit()
+    return Response("ok", media_type="text/plain")
+
+
+@router.get("/sc/place", dependencies=[Depends(require_shortcut_key)], response_class=Response)
+async def sc_place(name: str, event: str = "arrive", db: Session = Depends(get_db),
+                   core: Orchestrator = Depends(get_orchestrator)):
+    """Arrived at / left USC, the gym or home (location automations)."""
+    await core.dispatch(IncomingEvent(type="shortcut.location", payload={"place": name[:20], "event": event[:10]},
+                                      source="shortcut"), db)
+    db.commit()
+    return Response("ok", media_type="text/plain")
+
+
 @router.get("/sc/report/audio", dependencies=[Depends(require_shortcut_key)], response_class=Response)
 async def sc_report_audio(part: int = 1, db: Session = Depends(get_db)):
     """Chapter `part` (1-6) of the latest ready weekly report, as audio."""

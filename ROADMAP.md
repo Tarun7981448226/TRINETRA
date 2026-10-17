@@ -7,12 +7,12 @@
 | 3 | iPhone + Mac apps installed, passcode lock, lock-screen push to both, private HTTPS via Tailscale | ✅ |
 | 3b | Emotion Engine ✅ · Mentor ✅ (goals→milestones→approved weekly plan, promises + deadline check-ins, progressive overload, Sunday session, 🎯 screen) | ✅ |
 | 4 | Thinking before acting ✅ (Planner → Sleep Guardian, Buffer Manager, Deadline Tracker, Neural odds → Critic → Arbiter) + timetable dashboard (week grid / phone day view, voice edits) | ✅ |
-| 5 | Monitoring (iOS Shortcuts, distraction/silence detection, escalation) | ⬜ |
+| 5 | Monitoring: Focus Guard · red alerts · silence · proof of work (TUF + Coursera) · Focus mode + places | ✅ |
 | 5b | Gmail + WhatsApp + n8n | ⬜ |
 | 6 | ML brain: Neural Core ✅ (growing MLP, nightly retrain, completion prediction) · more models + coaching reports ⬜ | 🟡 |
 | 7 | Cloud LIVE ✅ (Vercel + Neon + Cloudflare cron, works with the Mac off) · remaining agents ⬜ | 🟡 |
 
-## 🗺️ Route map to 100% (set 2026-10-16) — 23 of 66 agents live, ~70% of the product
+## 🗺️ Route map to 100% (set 2026-10-16) — 27 of 66 agents live (2026-10-17), ~75% of the product
 Built in this order; each stage ships and gets tested on the iPhone before the next starts.
 
 **Stage A · Monitoring — "is he actually working?"** (Phase 5) ← *we are here*
@@ -20,7 +20,7 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 2. ✅ Escalation: important block (priority 4–5) ignored through all 3 follow-ups → 🚨 red alert push + full-screen alarm in the app, twice (free, no new service)
 3. ✅ Silence Detector: a started block + an hour with no word from you → a light "still on it?" (👍 On it · ✅ Done · ⏭ Stopped), at most twice
 4. ✅ Proof of Work (built; real syllabus + progress from Tarun on Mon 19 Oct): 📚 TUF DSA + ML Specialization tracker — each block gets a target, at the end you tick what you finished and where you stopped, TRINETRA reacts
-5. ⬜ Focus-mode + location signals (Shortcuts automations)
+5. ✅ Focus mode + places (iPhone automations → /sc/focus, /sc/place): Focus on = working (pauses free-time check-ins, counts as life, offers Start); off mid-block → "break or done?"; gym arrive → Start; home during class / leaving USC mid-class → asked
 
 **Stage B · Daily rhythm & wellbeing** (Phase 2/3b gaps)
 6. ⬜ Daily Planner (tomorrow's plan each night) + Replanner (when something slips)

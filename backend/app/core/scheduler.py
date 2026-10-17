@@ -200,6 +200,10 @@ async def free_watch(db: Session, core: Orchestrator, now: datetime) -> bool:
     free_until = min(from_db(nxt.planned_start), quiet) if nxt else quiet
     if free_until - free_since < FREE_MIN_GAP or now - free_since < FREE_SETTLE or free_until - now < FREE_SETTLE:
         return False
+    from app.agents.monitoring import focus_on
+
+    if focus_on(db, now):  # Focus mode is on: he's working on something, leave him be
+        return False
     row = db.get(KeyValue, "free_checkin_last")
     if row and now - datetime.fromisoformat(row.value) < FREE_EVERY:
         return False
@@ -232,6 +236,9 @@ async def silence_watch(db: Session, core: Orchestrator, now: datetime) -> bool:
     if seen["n"] >= SILENCE_MAX:
         return False
     last_word = db.scalar(select(func.max(Message.created_at)).where(Message.role == "user"))
+    phone = db.get(KeyValue, "last_signal")  # Focus mode / places from the iPhone count as signs of life
+    if phone and phone.value:
+        last_word = max(filter(None, [from_db(last_word) if last_word else None, datetime.fromisoformat(phone.value)]))
     signs = [from_db(t) for t in (task.actual_start, last_word) if t] + \
             ([datetime.fromisoformat(seen["at"])] if seen["at"] else []) + [from_db(task.planned_start)]
     quiet = now - max(signs)

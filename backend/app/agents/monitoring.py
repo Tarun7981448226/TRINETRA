@@ -91,3 +91,109 @@ async def distraction_watcher(ctx: AgentContext) -> AgentResult | None:
         await asyncio.to_thread(push.send, db, "TRINETRA", out.reply, "/", f"focus-{block.id}")
         ctx.notes["silent"] = True
     return out
+
+
+# ---------- signals from the iPhone: Focus mode, arriving / leaving places ----------
+
+PLACES = {"usc": "USC", "gym": "the gym", "home": "home"}
+CLASSY = re.compile(r"\b(class|lecture hall|seminar|exam)\b", re.I)
+GYM = re.compile(r"\b(gym|workout|lift|run)\b", re.I)
+
+
+def remember_signal(db, kind: str, value: str, now: datetime) -> None:
+    """The last thing the phone told us — a sign of life for the Silence Detector, and context for the rest."""
+    import json
+
+    from app.db.models import KeyValue
+
+    for key, val in ((f"signal:{kind}", json.dumps({"value": value, "at": now.isoformat()})), ("last_signal", now.isoformat())):
+        row = db.get(KeyValue, key)
+        if row is None:
+            db.add(KeyValue(key=key, value=val))
+        else:
+            row.value = val
+    db.flush()
+
+
+def focus_on(db, now: datetime, within: timedelta = timedelta(hours=4)) -> bool:
+    import json
+
+    from app.db.models import KeyValue
+
+    row = db.get(KeyValue, "signal:focus")
+    if not row or not row.value:
+        return False
+    d = json.loads(row.value)
+    return d["value"] == "on" and now - datetime.fromisoformat(d["at"]) < within
+
+
+def _block_around(db, now: datetime, early: timedelta = timedelta(minutes=20)) -> Task | None:
+    return db.scalars(select(Task).where(
+        Task.planned_start <= now + early, Task.planned_end > now, Task.notify != "none", Task.category != "sleep",
+        Task.status.in_([TaskStatus.PLANNED, TaskStatus.STARTED])).order_by(Task.planned_start)).first()
+
+
+def _buttons(task: Task, buttons: list[str], kind: str) -> dict:
+    return {"kind": kind, "task_id": task.id, "buttons": buttons, "respond": f"/tasks/{task.id}/respond"}
+
+
+@agent("focus_session_monitor")
+async def focus_session_monitor(ctx: AgentContext) -> AgentResult | None:
+    """iPhone Focus turned on / off. On = you're working (a sign of life, and free-time check-ins pause)."""
+    db, now = ctx.db, clock()
+    state = "on" if str(ctx.event.payload.get("state", "")).lower() in ("on", "1", "true") else "off"
+    remember_signal(db, "focus", state, now)
+    block = _block_around(db, now, early=timedelta(minutes=10))
+    if block is None:
+        return None
+    left = round((from_db(block.planned_end) - now).total_seconds() / 60)
+    if state == "on" and block.status == TaskStatus.PLANNED and from_db(block.planned_start) <= now + timedelta(minutes=10):
+        return await _speak_up(
+            ctx, instruction=(f"I just switched on Focus mode, and '{block.title}' is on the plan now. One short "
+                              "sentence: notice it, and ask me to tap Start so it counts."),
+            fallback=f"Focus on. Tap Start so {block.title} counts.", mood="calm and attentive",
+            meta=_buttons(block, ["start"], "focus"))
+    if state == "off" and block.status == TaskStatus.STARTED and left > 15:
+        return await _speak_up(
+            ctx, instruction=(f"I switched Focus mode off, but '{block.title}' still has {left} minutes to go. One "
+                              "short, light sentence: a break, or am I done?"),
+            fallback=f"Focus is off with {left} minutes of {block.title} left. Break, or done?",
+            mood="calm and attentive", meta=_buttons(block, ["onit", "done", "skipped"], "focus"))
+    return None
+
+
+@agent("location_context")
+async def location_context(ctx: AgentContext) -> AgentResult | None:
+    """Arriving at / leaving USC, the gym or home, checked against what the plan says right now."""
+    db, now = ctx.db, clock()
+    place = str(ctx.event.payload.get("place", "")).lower()
+    event = "arrive" if str(ctx.event.payload.get("event", "")).lower().startswith("arr") else "leave"
+    if place not in PLACES:
+        return None
+    remember_signal(db, "place", f"{event}:{place}", now)
+    block = _block_around(db, now)
+    if block is None:
+        return None
+    is_class, is_gym = bool(CLASSY.search(block.title)), bool(GYM.search(block.title)) or block.category == "fitness"
+    late = round((now - from_db(block.planned_start)).total_seconds() / 60)
+    if event == "arrive" and place == "gym" and is_gym and block.status == TaskStatus.PLANNED:
+        return await _speak_up(ctx, instruction=f"I just walked into the gym for '{block.title}'. One short, upbeat sentence; ask me to tap Start.",
+                               fallback="At the gym. Tap Start and let's go.", mood="proud and upbeat",
+                               meta=_buttons(block, ["start"], "place"))
+    if event == "leave" and place == "gym" and is_gym and block.status == TaskStatus.STARTED:
+        return await _speak_up(ctx, instruction=f"I just left the gym; '{block.title}' was on. One short sentence: done?",
+                               fallback="Left the gym. Done?", mood="calm and caring",
+                               meta=_buttons(block, ["done", "partly"], "place"))
+    if event == "arrive" and place == "home" and is_class and late >= 0:
+        return await _speak_up(ctx, instruction=(f"I just got home, but '{block.title}' started {late} minutes ago and "
+                                                 "runs until later. Two short sentences: firm, not insulting; what happened?"),
+                               fallback=f"You're home, but {block.title} is on right now. What happened?",
+                               mood="firm — a clear nudge", meta=_buttons(block, ["skipped"], "place"))
+    if event == "leave" and place == "usc" and is_class and late >= 0 and block.status != TaskStatus.DONE:
+        left = round((from_db(block.planned_end) - now).total_seconds() / 60)
+        if left > 15:
+            return await _speak_up(ctx, instruction=(f"I just left USC while '{block.title}' has {left} minutes left. "
+                                                     "One short sentence: is it over early, or am I skipping?"),
+                                   fallback=f"Leaving USC with {left} minutes of {block.title} left. Over early, or skipping?",
+                                   mood="firm — a clear nudge", meta=_buttons(block, ["done", "skipped"], "place"))
+    return None

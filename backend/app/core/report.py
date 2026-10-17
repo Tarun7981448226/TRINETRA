@@ -26,8 +26,9 @@ CHAPTERS = [
                         "patterns (which days, which times, which subjects) and the likely real reasons. No insults."),
     ("Mornings and energy", "Analyse the wake-up data day by day (rings, minutes to wake, wrong answers), weekday vs "
                             "weekend, Monday vs others, and how mornings affected the rest of the day."),
-    ("Goals and the roadmap", "Progress on each goal and milestone, the DSA roadmap topics done vs due, the CSCI exam "
-                              "prep, the internship pipeline. What's on track, what's behind, by how much."),
+    ("Goals and the roadmap", "Progress on each goal and milestone, the TUF plan (sprint, topics done this week, "
+                              "overdue) and the ML Specialization from the analysis, the CSCI exam prep, the internship "
+                              "pipeline. What's on track, what's behind, by how much, and what pace fixes it."),
     ("Compared with before, and next week", "Compare this week with previous weeks (the deltas and trend). Then lay "
                                             "out the plan for next week: three concrete fixes, one stretch challenge, "
                                             "and a closing mentor message to send him to sleep motivated."),
@@ -100,6 +101,11 @@ def compute_metrics(db: Session, monday: date) -> dict:
                      "list": [{"text": p.text, "status": p.status} for p in promises]},
         "goals": goals,
     }
+    from app.db.models import KeyValue
+
+    row = db.get(KeyValue, f"week_analysis:{monday.isoformat()}")  # the Weekly Analyst's findings (courses, lag)
+    if row and row.value:
+        metrics["analysis"] = json.loads(row.value)
     metrics["compare"] = compare(db, monday, metrics)
     return metrics
 

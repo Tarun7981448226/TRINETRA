@@ -7,4 +7,4 @@ agents:
   - {id: mentor_voice, name: Mentor Voice, role: "Runs the weekly voice mentor session", kind: llm, tier: smart, triggers: [mentor.session], priority: 35, phase: "3b"}
   - {id: emotion_engine, name: Emotion Engine, role: "Maintains TRINETRA's simulated feelings (warmth, concern, pride, disappointment) and picks its mood", kind: rule, triggers: ["*"], priority: 85, phase: "2"}
   - {id: empathy_detector, name: Empathy Detector, role: "Reads your mood from text and voice", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 88, phase: "2"}
-  - {id: tone_voice_director, name: Tone & Voice Director, role: "Maps mood to voice pitch, speed and volume (SSML) and wording style", kind: rule, triggers: [notify.voice], priority: 96, phase: "3b"}
+  - {id: tone_voice_director, name: Tone & Voice Director, role: "Maps mood to voice pitch, speed and volume (SSML) and wording style", kind: rule, triggers: [notify.voice], priority: 96, phase: "3b", builtin: "app/core/voice.py — prosody per mood family + the app's angry voice effect"}

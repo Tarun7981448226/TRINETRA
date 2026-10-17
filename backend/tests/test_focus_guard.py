@@ -88,3 +88,46 @@ def test_late_night_says_sleep(client, monkeypatch):
 
 def test_needs_the_shortcut_key(client):
     assert client.get("/sc/opened", params={"key": "wrong"}).status_code == 401
+
+
+def sig(client, monkeypatch, when, path, **params):
+    monkeypatch.setattr(monitoring, "clock", lambda: when)
+    r = client.get(path, params={"key": KEY, **params})
+    assert r.status_code == 200 and r.text == "ok"
+    return [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") in ("focus", "place")]
+
+
+def test_focus_mode_on_offers_start_and_off_mid_block_asks(client, monkeypatch):
+    blocks(client)  # TUF DSA 10–12
+    msgs = sig(client, monkeypatch, at(10, 5), "/sc/focus", state="on")
+    assert msgs[-1]["meta"]["buttons"] == ["start"]
+    tid = msgs[-1]["meta"]["task_id"]
+    client.post(f"/tasks/{tid}/respond", json={"action": "start"})
+    msgs = sig(client, monkeypatch, at(11, 0), "/sc/focus", state="off")
+    assert msgs[-1]["meta"]["buttons"] == ["onit", "done", "skipped"] and "60 minutes" in msgs[-1]["content"]
+    assert len(sig(client, monkeypatch, at(11, 50), "/sc/focus", state="off")) == 2  # last 10 min: let it go
+
+
+def test_focus_on_pauses_free_time_checkins_and_counts_as_life(client, monkeypatch):
+    import asyncio
+
+    from app.core import scheduler
+    blocks(client)
+    sig(client, monkeypatch, at(12, 30), "/sc/focus", state="on")  # free gap 12–14, deep in something
+    with client.session_factory() as db:
+        assert not asyncio.run(scheduler.free_watch(db, client.app.state.orchestrator, at(13, 0)))
+        from app.agents.monitoring import focus_on
+        assert focus_on(db, at(13, 0)) and not focus_on(db, at(17, 0))  # stale after 4 h
+
+
+def test_places_against_the_plan(client, monkeypatch):
+    blocks(client)  # CSCI 570 class 14–17, Gym 18–19
+    msgs = sig(client, monkeypatch, at(14, 30), "/sc/place", name="home", event="arrive")
+    assert "CSCI 570 class" in msgs[-1]["content"] and msgs[-1]["meta"]["buttons"] == ["skipped"]
+    msgs = sig(client, monkeypatch, at(15, 0), "/sc/place", name="usc", event="leave")
+    assert msgs[-1]["meta"]["buttons"] == ["done", "skipped"]
+    msgs = sig(client, monkeypatch, at(18, 2), "/sc/place", name="gym", event="arrive")
+    assert msgs[-1]["meta"]["buttons"] == ["start"]
+    n = len(msgs)
+    assert len(sig(client, monkeypatch, at(10, 0), "/sc/place", name="usc", event="arrive")) == n  # nothing odd: quiet
+    assert client.get("/sc/place", params={"key": "nope", "name": "usc"}).status_code == 401
