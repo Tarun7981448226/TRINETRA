@@ -243,7 +243,9 @@ def test_quiz_cycle_with_spaced_repetition(client, llm_calls, monkeypatch):
     assert r["notes"]["coach"]["mode"] == "quiz" and "GCD(a, b)" in r["notes"]["coach"]["question"]
     r = client.post("/chat", json={"text": "because any number dividing both a and b also divides a minus a multiple of b"}).json()
     c = r["notes"]["coach"]
-    assert c["mode"] == "graded" and c["correct"] and c["next"] == (date.today().fromordinal(date.today().toordinal() + 3)).isoformat()
+    from app.core.timeutil import local  # TRINETRA's calendar (IST), not this machine's
+    today = local(datetime.now(timezone.utc)).date()
+    assert c["mode"] == "graded" and c["correct"] and c["next"] == (today + timedelta(days=3)).isoformat()
     r = client.post("/chat", json={"text": "quiz me"}).json()
     assert r["notes"]["coach"]["mode"] == "nothing_yet"  # GCD isn't due again for 3 days
     assert client.post("/chat", json={"text": "explain sliding window"}).json()["notes"]["coach"] == {"mode": "explain", "topic": "sliding window"}

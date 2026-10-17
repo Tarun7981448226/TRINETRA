@@ -429,6 +429,7 @@
     <div class="tbar"><i></i></div><span class="tip" id="eyeTip"></span>
   </div>
 <script src="/static/buddy.js"></script>
+<script src="/static/music.js"></script>
 <script>
   // Session expired or passcode changed → back to the login screen.
   const _fetch = window.fetch;
@@ -573,6 +574,7 @@
   function paintHear() { $("hear").classList.toggle("on", !!pending); }
   function heard() { localStorageSet("heardId", String(lastId)); }
   async function playClip(c) {
+    window.TrinetraMusic?.stopAll();  // it puts the instrument down to talk
     if (c.effect) { await playFurious(c.bytes.slice(0), c.effect, c); heard(); return; }
     if (furiousSource) { furiousSource.onended = null; furiousSource.stop?.(); }
     const p = audio(), done = () => eye.classList.remove("speaking");
@@ -610,6 +612,7 @@
 
   async function chat(text) {
     busy = true;
+    window.TrinetraMusic?.stopAll();  // you said something: the music / dance stops (a new "play …" starts the next one)
     const felt = TrinetraBuddy.empathize(text);  // "I'm so tired" → a caring face before it even answers
     if (felt) window.trinetraExpress?.([{ emotion: felt, weight: 1 }], 6000);
     const before = lastId;
@@ -621,16 +624,17 @@
       const d = await r.json();
       add(d.reply || "…", "tri", d.mood);
       if (d.notes?.perform?.length) window.trinetraPerform?.(d.notes.perform);
+      if (d.notes?.show) window.trinetraShow?.(d.notes.show);  // dance · play an instrument · a little move
       if (d.notes?.timetable_changes?.length) note("📅 " + d.notes.timetable_changes.join(" · "));
       if (d.notes?.remembered?.length) note("🧠 remembered: " + d.notes.remembered.join(" · "));
       $("mood").textContent = d.mood ? d.mood.split(" — ")[0].toLowerCase() : "";
       if (d.notes?.goal_created) note("🎯 goal saved: " + d.notes.goal_created.title);
       if (d.notes?.promises_saved?.length) note("🤝 I'll hold you to: " + d.notes.promises_saved.join(" · "));
-      if (!d.notes?.perform?.length) say(d.reply, d.mood);  // emotions on request: the face, not the voice
+      if (!d.notes?.perform?.length && !d.notes?.show) say(d.reply, d.mood);  // emotions on request: the face, not the voice
       refreshMode();
       // Agents may have attached something to this reply (e.g. a plan to approve) — show it now.
       const extra = await (await fetch(`/messages?after_id=${before}`)).json();
-      for (const m of extra) if (m.meta && m.role === "trinetra") add(m.content, "tri", m.mood, { ...m.meta, id: m.id });
+      for (const m of extra) if (m.meta && m.role === "trinetra" && !["show", "perform"].includes(m.meta.kind)) add(m.content, "tri", m.mood, { ...m.meta, id: m.id });
       if (d.notes?.deliberation?.findings?.length) note("🧠 checked: " + d.notes.deliberation.findings.join(" · "));
       await syncLastId(); heard();  // you were here for this reply: don't replay it next time the app opens
       return { ...d, extra };
@@ -1643,7 +1647,8 @@
     const has = (c) => orb.classList.contains(c);
     let performing = null;  // an emotion it's acting out right now ("show me your emotions")
     let expressing = null;  // the feeling of the sentence it's saying right now (follows the voice)
-    const awake = () => talk.active || has("listening") || has("speaking") || has("thinking") || !!performing;
+    let showing = null;  // a dance / an instrument / a little move in progress (static/music.js)
+    const awake = () => talk.active || has("listening") || has("speaking") || has("thinking") || !!performing || !!showing;
     const screenOpen = () => !!document.querySelector(".drawer.open, #planner.open");
     const later = (ms, fn) => setTimeout(fn, ms);
     const rand = (a, b) => a + Math.random() * (b - a);
@@ -1730,6 +1735,26 @@
       later(600 + list.length * each, () => { if (run === performRun) { performing = null; sync(); } });
     };
 
+    // a show: it comes out to the middle (room on its left for her when they dance) and stays put until it ends
+    window.trinetraShow = (s) => {
+      if (!window.TrinetraMusic) return;
+      TrinetraMusic.stopAll();  // the last one ends first, so its clean-up can't undo this one
+      if (s.show === "stop") return;
+      jumpOut();
+      const big = 1.7, size = orb.offsetWidth * big, dance = s.show === "dance";  // bigger, so you can see what it's playing
+      const top = document.querySelector("header").getBoundingClientRect().bottom + 6, bottom = $("form").getBoundingClientRect().top - size - 8;
+      const nx = Math.min(innerWidth - size - 6, Math.max(dance ? size * 1.08 : 6, (innerWidth - size) / 2 + (dance ? size * 0.55 : 0)));
+      if (!drag) move(nx, Math.max(top, top + (bottom - top) * 0.4), big, "jump");
+      holdUntil = Infinity;
+      const me = TrinetraMusic.show(buddy, s, {
+        mood: restingEmotion,
+        feel: (e) => { performing = e; sync(); },
+        onEnd: () => { if (showing === me) { showing = null; holdUntil = Date.now() + 1200; } },
+      });
+      showing = me;
+      if (s.show === "play") later(400, () => look(0, 30));  // eyes on the instrument
+    };
+
     function jumpOut() {
       if (out) return;
       out = true; orb.classList.remove("docked");
@@ -1795,6 +1820,7 @@
     orb.addEventListener("pointercancel", endDrag);
     orb.addEventListener("click", () => {
       if (dragged || pressedLong) { dragged = pressedLong = false; return; }
+      if (window.TrinetraMusic?.playing) { TrinetraMusic.stopAll(); return; }  // tap = stop the music / dance
       // caught: end the conversation (send what you'd said, or hush mid-sentence) — once its eye closes it flies home
       if (has("listening")) { const wasTalk = talk.active; talkEnd(); stopRec(!wasTalk || vadSpoke); return; }
       if (has("speaking")) { talkEnd(); player?.pause(); furiousSource?.stop?.(); return; }

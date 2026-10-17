@@ -38,11 +38,11 @@ async def data_collector(ctx: AgentContext) -> None:
 
 # "show me your emotions" → the character acts them out while the reply names each one
 ALL_EMOTIONS = ["happy", "excited", "proud", "caring", "shy", "surprised", "firm", "angry", "sad", "sleepy"]
-EMOTION_WORDS = {"happy": "happy|joy(ful)?|glad|smil\\w*", "excited": "excited|hyped?|pumped", "proud": "proud",
-                 "caring": "caring|kind|soft|love|loving|gentle|warm", "shy": "shy|blush\\w*|embarrass\\w*|cute",
-                 "surprised": "surprised|shocked|amazed|scared|confused|curious", "firm": "firm|serious|strict|stern",
-                 "angry": "angry|mad|furious|annoyed|rage", "sad": "sad|upset|down|crying|cry",
-                 "sleepy": "sleepy|tired|sleep|bored"}
+EMOTION_WORDS = {"happy": "happy|happiness|joy(ful)?|glad|smil\\w*", "excited": "excited|excitement|exciting|hyped?|pumped",
+                 "proud": "proud|pride", "caring": "caring|care|kind|kindness|soft|love|loving|gentle|warm",
+                 "shy": "shy|shyness|blush\\w*|embarrass\\w*|cute", "surprised": "surprised?|shocked|amazed|scared|confused|curious",
+                 "firm": "firm|serious|strict|stern", "angry": "angry|anger|mad|furious|annoyed|rage",
+                 "sad": "sad|sadness|upset|down|crying|cry", "sleepy": "sleepy|tired|sleep|bored"}
 EMOTION_LABEL = {"happy": "😊 Happy", "excited": "🤩 Excited", "proud": "😌 Proud", "caring": "🤗 Caring", "shy": "☺️ Shy",
                  "surprised": "😮 Surprised", "firm": "😐 Firm", "angry": "😠 Angry", "sad": "😢 Sad", "sleepy": "😴 Sleepy"}
 PERFORM_ALL = re.compile(r"\b(show|act|perform|do|express|display)\b.{0,30}\b(emotions?|feelings?|faces?|expressions?|moods?)\b", re.I)
@@ -50,6 +50,8 @@ PERFORM_ONE = re.compile(r"\b(show me|act|play|give me|do)\b.{0,20}?\b(" + "|".j
 
 
 def perform_request(text: str) -> list[str] | None:
+    from app.core.show import fix_typos
+    text = fix_typos(text)  # "show me exitement" → excitement
     hits = {e: m.start() for e, w in EMOTION_WORDS.items() if (m := re.search(rf"\b({w})\b", text, re.I))}
     named = sorted(hits, key=hits.get)  # in the order you said them
     if PERFORM_ALL.search(text):
@@ -67,6 +69,10 @@ async def router(ctx: AgentContext) -> None:
     ctx.notes["intent"] = next(
         (name for name, pat in INTENT_PATTERNS.items() if re.search(pat, text, re.I)), "chat"
     )
+    from app.core import show
+    if wanted := show.request(text):  # "dance", "play the guitar", "jump", "stop"
+        ctx.notes["show"] = wanted
+        return
     if perform := perform_request(text):
         ctx.notes["perform"] = perform
         return
@@ -172,6 +178,12 @@ async def core(ctx: AgentContext) -> AgentResult:
             f"\nThey just asked you to switch to {changed} mode. Switch instantly and show it in this very reply."
             if changed != "normal" else "\nThey asked you to go back to your normal self. Do it, warmly."
         )
+    if wanted := ctx.notes.get("show"):  # a dance, a tune, a little move: just its name, the character does the rest
+        from app.core import show
+        reply = show.label(wanted)
+        ctx.db.add(Message(role="user", content=text, channel=channel))
+        ctx.db.add(Message(role="trinetra", content=reply, channel=channel, mood=mood, meta={"kind": "show", "show": wanted}))
+        return AgentResult(reply=reply, mood=mood)
     if perform := ctx.notes.get("perform"):  # "show me your emotions": just the names, while the face acts them out
         reply = " · ".join(EMOTION_LABEL[e] for e in perform)
         ctx.db.add(Message(role="user", content=text, channel=channel))

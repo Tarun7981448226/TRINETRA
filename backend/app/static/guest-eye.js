@@ -24,7 +24,8 @@
   .orb { width: 72px; height: 72px; padding: 0; border: 0; background: none; cursor: pointer; display: block;
     -webkit-tap-highlight-color: transparent; position: relative; }
   .orb:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 50%; }
-  .float { width: 100%; height: 100%; }
+  .float { width: 100%; height: 100%; transition: transform .4s cubic-bezier(.3,1.4,.5,1); transform-origin: 100% 100%; }
+  .wrap.showing .float { transform: scale(1.25); }
   .buddy { width: 100%; height: 100%; }
   .orb { transition: transform 2.2s cubic-bezier(.45,.05,.35,1); }
   .nudge { position: absolute; right: 84px; bottom: 18px; white-space: nowrap; background: var(--panel); color: var(--text);
@@ -161,11 +162,32 @@
       } catch {}
       buddy = window.TrinetraBuddy.create($(".buddy"), { style: LOOK.style || "pixel", palette: LOOK.palette || "saffron" });
       sync();
+      loadMusic();
     };
     if (window.TrinetraBuddy) return ready();
     const sc = document.createElement("script"); sc.src = `${API}/guest/buddy.js`; sc.onload = ready;
     document.head.appendChild(sc);
   })();
+
+  // ---- shows: "dance" (she joins for 10 s), "play the guitar" (until stop / Esc / a tap), "jump" — music from static/music.js ----
+  let musicReady = null;
+  function loadMusic() {
+    return (musicReady ??= new Promise((ok) => {
+      if (window.TrinetraMusic) return ok();
+      const sc = document.createElement("script"); sc.src = `${API}/static/music.js`; sc.onload = ok; sc.onerror = ok;
+      document.head.appendChild(sc);
+    }));
+  }
+  const stopShow = () => window.TrinetraMusic?.stopAll();
+  async function runShow(s) {
+    await loadMusic();
+    if (!window.TrinetraMusic || !buddy) return;
+    if (s.show === "stop") return stopShow();
+    stopShow();  // the last one ends first, so its clean-up can't undo this one
+    wrap.classList.add("showing");
+    TrinetraMusic.show(buddy, s, { mood: LOOK.mood, feel: (e) => { performing = e; sync(); }, onEnd: () => wrap.classList.remove("showing") });
+    if (s.show === "play") later(300, () => buddy.look(0, 30));
+  }
 
   // ---- its little life: peeks, strolls, and watches your cursor when you come near ----
   function look(dx, dy) { buddy?.look(dx, dy); }
@@ -233,6 +255,7 @@
     return new Promise(async (resolve) => {
       if (muted || !token || !has("open")) return resolve(false);
       const mine = ++speakSeq;
+      stopShow();  // it puts the instrument down to talk
       wrap.classList.add("speaking");
       const done = () => { if (mine === speakSeq) wrap.classList.remove("speaking"); resolve(true); };
       try {
@@ -598,6 +621,7 @@
   function afterReply(d) {  // whatever TRINETRA said, plus what comes with it
     if (d.eject) { add(d.reply, "tri"); return throwOut(d.ban_hours || 24); }
     add(d.reply, "tri");
+    if (d.show) return runShow(d.show);  // just the name; the character performs it (no voice)
     if (d.perform?.length) return perform(d.perform);  // just the names, and the face acts them out (no voice)
     speak();
     if (muted) express(d.reply, d.reply.length * 55);
@@ -613,6 +637,7 @@
     const text = input.value.trim();
     if (!text || sendBtn.disabled) return;
     input.value = ""; add(text, "me");
+    stopShow();  // you said something: the music stops (a new "play …" starts the next one)
     root.querySelector(".roles")?.remove();
     const offered = root.querySelector(".choices");
     // "tour" anywhere, or a plain yes (the whole message) right after the offer — "okay bye" is not a yes
@@ -650,7 +675,7 @@
   const BAN = "trinetra-guest-removed";
   function throwOut(hours) {
     if (hours) store(localStorage, BAN, String(Date.now() + hours * 3600e3));
-    input.disabled = sendBtn.disabled = true;
+    input.disabled = sendBtn.disabled = true; stopShow();
     tourOn = false; tourRun++; saveTour(null); player?.pause();
     performing = "angry"; sync(); buddy?.shake();
     later(hours ? 1800 : 0, () => {
@@ -671,7 +696,7 @@
     later(260, () => (noteForm.hidden ? input : noteForm.elements.email).focus({ preventScroll: true }));
   }
   function close() {  // closing means quiet: cancel any voice still on its way, stop what's playing, pause the tour
-    speakSeq++;
+    speakSeq++; stopShow();
     player?.pause();
     if (tourOn && !tourPaused) { tourPaused = true; tourRun++; pauseBtn.textContent = "▶ Resume"; }
     saveTour(null);  // closing means the tour won't pick itself up on the next page (Resume still works if they reopen here)
@@ -679,7 +704,7 @@
     wrap.classList.remove("open", "speaking"); panel.classList.remove("on"); orb.setAttribute("aria-expanded", "false");
     look(0, 0); orb.focus({ preventScroll: true });
   }
-  orb.onclick = () => (has("open") ? close() : open());
+  orb.onclick = () => (window.TrinetraMusic?.playing ? stopShow() : has("open") ? close() : open());  // tapping it mid-show stops the show
   $(".close").onclick = close;
   root.addEventListener("keydown", (e) => { if (e.key === "Escape" && has("open")) close(); });
 

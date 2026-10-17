@@ -10,3 +10,4 @@ backend/Dockerfile
 .env
 .env.*
 ROADMAP.md
+/music
