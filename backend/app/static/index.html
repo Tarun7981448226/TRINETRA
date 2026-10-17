@@ -463,7 +463,7 @@
     for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * drive) / Math.tanh(drive); }
     return c;
   }
-  async function playFurious(bytes, level) {
+  async function playFurious(bytes, level, clip) {
     const ac = audioCtx();
     if (ac.state !== "running") await Promise.race([ac.resume(), new Promise((ok) => setTimeout(ok, 400))]);
     if (ac.state !== "running") throw new DOMException("no tap yet", "NotAllowedError");
@@ -483,8 +483,9 @@
     furiousSource?.stop?.(); if (player) player.onended = player.onpause = null; player?.pause();
     furiousSource = src;
     eye.classList.add("speaking");
-    src.onended = () => eye.classList.remove("speaking");
+    src.onended = () => { eye.classList.remove("speaking"); window.trinetraExpress?.(null); };
     src.start();
+    if (clip?.text) window.trinetraExpress?.(TrinetraBuddy.read(clip.text, clip.mood), buf.duration * 1000);
   }
   document.addEventListener("pointerdown", () => {
     const p = audio();
@@ -572,15 +573,19 @@
   function paintHear() { $("hear").classList.toggle("on", !!pending); }
   function heard() { localStorageSet("heardId", String(lastId)); }
   async function playClip(c) {
-    if (c.effect) { await playFurious(c.bytes.slice(0), c.effect); heard(); return; }
+    if (c.effect) { await playFurious(c.bytes.slice(0), c.effect, c); heard(); return; }
     if (furiousSource) { furiousSource.onended = null; furiousSource.stop?.(); }
     const p = audio(), done = () => eye.classList.remove("speaking");
     p.onended = p.onpause = null;
     p.pause();
     p.src = c.url;
     eye.classList.add("speaking");
-    p.onended = p.onpause = done;
-    try { await p.play(); heard(); } catch (e) { done(); throw e; }
+    p.onended = p.onpause = () => { done(); window.trinetraExpress?.(null); };
+    try {
+      await p.play(); heard();
+      const ms = isFinite(p.duration) && p.duration > 0 ? p.duration * 1000 : (c.text || "").length * 65;
+      if (c.text) window.trinetraExpress?.(TrinetraBuddy.read(c.text, c.mood), ms);
+    } catch (e) { done(); throw e; }
   }
 
   async function say(text, mood) {
@@ -592,8 +597,8 @@
         body: JSON.stringify({ text, mood }) });
       if (!r.ok) return eye.classList.remove("speaking");
       const effect = r.headers.get("X-Trinetra-Effect");
-      c = effect === "angry" || effect === "firm_angry" ? { effect, bytes: await r.arrayBuffer() }
-                                                        : { url: URL.createObjectURL(await r.blob()) };
+      c = effect === "angry" || effect === "firm_angry" ? { effect, bytes: await r.arrayBuffer(), text, mood }
+                                                        : { url: URL.createObjectURL(await r.blob()), text, mood };
       await playClip(c);
     } catch (e) {
       eye.classList.remove("speaking");
@@ -605,6 +610,8 @@
 
   async function chat(text) {
     busy = true;
+    const felt = TrinetraBuddy.empathize(text);  // "I'm so tired" → a caring face before it even answers
+    if (felt) window.trinetraExpress?.([{ emotion: felt, weight: 1 }], 6000);
     const before = lastId;
     add(text, "me");
     send.disabled = true; eye.classList.add("thinking");
@@ -1635,6 +1642,7 @@
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const has = (c) => orb.classList.contains(c);
     let performing = null;  // an emotion it's acting out right now ("show me your emotions")
+    let expressing = null;  // the feeling of the sentence it's saying right now (follows the voice)
     const awake = () => talk.active || has("listening") || has("speaking") || has("thinking") || !!performing;
     const screenOpen = () => !!document.querySelector(".drawer.open, #planner.open");
     const later = (ms, fn) => setTimeout(fn, ms);
@@ -1671,7 +1679,7 @@
         : has("sleep") ? "sleeping" : (has("gliding") || has("jump") || has("homing")) ? "walking"
         : has("watch") || has("peek") ? "watching" : "idle";
       buddy.setActivity(act);
-      buddy.setEmotion(performing || (has("angry") ? "angry" : has("happy") ? "proud" : flashEmotion || restingEmotion));
+      buddy.setEmotion(performing || expressing || (has("angry") ? "angry" : has("happy") ? "proud" : flashEmotion || restingEmotion));
       const cls = orb.className;
       if (has("shake") && !/\bshake\b/.test(prev)) buddy.shake();
       if (has("happy") && !/\bhappy\b/.test(prev)) buddy.celebrate();
@@ -1691,6 +1699,23 @@
     }
     feelings(); setInterval(feelings, 60000);
     window.trinetraFlash = (emo, ms = 3500) => { flashEmotion = emo; sync(); later(ms, () => { flashEmotion = null; sync(); }); };
+    // while it speaks: the face follows each sentence's feeling, timed to the voice ([{emotion, weight}], total ms)
+    let exprRun = 0;
+    window.trinetraExpress = (timeline, ms = 4000) => {
+      const run = ++exprRun;
+      if (!timeline?.length) { expressing = null; sync(); return; }
+      let t = 0;
+      for (const seg of timeline) {
+        later(t, () => {
+          if (run !== exprRun || performing) return;
+          if (seg.emotion === "angry" && expressing !== "angry") buddy.shake();
+          if ((seg.emotion === "excited" || seg.emotion === "proud") && expressing !== seg.emotion) buddy.celebrate();
+          expressing = seg.emotion === "neutral" ? null : seg.emotion; sync();
+        });
+        t += Math.max(600, seg.weight * ms);
+      }
+      later(t + 500, () => { if (run === exprRun) { expressing = null; sync(); } });
+    };
     // act out a list of emotions, one after another (it comes out of its slot so you can see it)
     let performRun = 0;
     window.trinetraPerform = (list, each = 2200) => {
@@ -1810,7 +1835,10 @@
         else if (n.classList.contains("firm") || n.classList.contains("annoyed")) window.trinetraFlash("firm");
         else if (n.classList.contains("gentle")) window.trinetraFlash("caring");
         if (n.classList.contains("proud")) flash("happy", 1600);
-        if (!voiceOn) flash("say", 2600);  // muted: still opens its eye to "say" it
+        if (!voiceOn) {  // muted: it still opens its eye to "say" it, and the face follows the words
+          flash("say", 2600);
+          window.trinetraExpress?.(TrinetraBuddy.read(n.textContent, n.classList.contains("angry") ? "ANGRY" : n.className), n.textContent.length * 55);
+        }
       }
     }).observe(log, { childList: true });
 

@@ -290,5 +290,52 @@
     return api;
   }
 
-  window.TrinetraBuddy = { create, PALETTES, EMOTIONS, ACTIVITIES };
+  // ---------- reading feelings from words: what the face should show while a line is spoken ----------
+  // Each sentence gets the emotion its words carry; the line's overall mood (from the server) is the default.
+  const CUES = [  // first match wins, strongest feelings first
+    ["angry", /\b(enough|what are you doing|seriously\?|again\?!|ignored (me|it)|three times|four times)\b|[A-Z]{4,}!/],
+    ["firm", /\b(no excuses|no more|you need to|you have to|must|right now|start (it|now)|focus|get back|stop|don'?t (skip|waste)|skipp?ed)\b/i],
+    ["sad", /\b(sorry|unfortunately|sad(ly)?|too bad|shame|disappoint\w*|i miss|tough (day|one)|hurts?)\b/i],
+    ["caring", /\b(rest( up)?|take care|it'?s (okay|ok|fine)|that'?s (okay|ok)|i'?m here|breathe|be kind to yourself|no pressure|get some sleep|go easy|you'?ve got this|proud of you for trying|past midnight|sleep block|bedtime|go to (bed|sleep)|still (doing )?up)\b/i],
+    ["proud", /\b(proud|nailed|crushed|killed it|well done|great job|good work|you did it|earned|impressive|shipped|faster|paper|award)\b/i],
+    ["excited", /\b(let'?s go|awesome|amazing|huge|incredible|can'?t wait|boom|woo+|hyped|internship)\b|!!/i],
+    ["surprised", /\b(wow|whoa|no way|really\?|oh!|interesting|didn'?t expect|guess what)\b/i],
+    ["happy", /\b(glad|happy|nice|love (that|it)|haha|fun|great|good to (see|hear|meet)|welcome|hey there|hello|hi there|nice to meet)\b/i],
+  ];
+  function moodBase(mood = "") {
+    const m = String(mood);
+    if (/^ANGRY/.test(m)) return "angry";
+    if (/angry|firm|disappointed|sharp/i.test(m)) return "firm";
+    if (/gentle|comfort|caring|warm|soft/i.test(m)) return "caring";
+    if (/proud/i.test(m)) return "proud";
+    if (/upbeat|hype|energ|excit|playful/i.test(m)) return "excited";
+    return "neutral";
+  }
+  // → [{ emotion, weight }] in speaking order (weight = share of the line's length, so it follows the voice)
+  function read(text, mood) {
+    const base = moodBase(mood), stern = base === "angry" || base === "firm";
+    const parts = String(text || "").split(/(?<=[.!?…])\s+|\n+/).map((p) => p.trim()).filter(Boolean);
+    const total = parts.reduce((n, p) => n + p.length, 0) || 1;
+    const out = [];
+    for (const p of parts) {
+      let e = (CUES.find(([, re]) => re.test(p)) || [base])[0];
+      if (stern && !["angry", "firm", "sad", "caring"].includes(e)) e = base;  // a telling-off doesn't turn cheerful
+      const w = p.length / total;
+      if (out.length && out[out.length - 1].emotion === e) out[out.length - 1].weight += w;
+      else out.push({ emotion: e, weight: w });
+    }
+    return out.length ? out : [{ emotion: base, weight: 1 }];
+  }
+  // what someone just said to it → the face while it thinks about the answer
+  function empathize(text) {
+    const t = String(text || "");
+    if (/\b(sad|down|tired|exhausted|stressed|anxious|lonely|hurt|failed|rejected|bad day|worried|scared)\b/i.test(t)) return "caring";
+    if (/\b(got (the|an|my)|passed|won|finished|did it|selected|offer|accepted)\b|!{2,}/i.test(t)) return "excited";
+    if (/\b(thanks?|thank you|love (it|you|this)|awesome|amazing|great)\b/i.test(t)) return "happy";
+    if (/\b(angry|annoyed|hate|frustrat\w*|pissed)\b/i.test(t)) return "caring";
+    if (/\b(wow|guess what|you won'?t believe)\b/i.test(t)) return "surprised";
+    return null;
+  }
+
+  window.TrinetraBuddy = { create, PALETTES, EMOTIONS, ACTIVITIES, read, empathize, moodBase };
 })();

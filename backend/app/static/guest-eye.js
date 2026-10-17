@@ -141,14 +141,14 @@
   const has = (c) => wrap.classList.contains(c);
 
   // ---- TRINETRA's character (drawn by buddy.js from the TRINETRA server) ----
-  let buddy = null, glad = false, performing = null;
+  let buddy = null, glad = false, performing = null, expressing = null;
   // Its look follows what Tarun picked in his app (🎨), unless this page pins one with data-style / data-palette.
   const LOOK = { style: me?.dataset.style, palette: me?.dataset.palette };
   function sync() {  // the widget's state → what the character is doing
     if (!buddy) return;
     buddy.setActivity(has("speaking") ? "speaking" : has("thinking") ? "thinking" : has("walking") ? "walking"
       : has("watch") || has("peek") || has("open") ? "watching" : "idle");
-    buddy.setEmotion(performing || (glad ? "happy" : LOOK.mood || "neutral"));  // resting mood = the app's (visitor-safe)
+    buddy.setEmotion(performing || expressing || (glad ? "happy" : LOOK.mood || "neutral"));  // resting mood = the app's (visitor-safe)
   }
   new MutationObserver(sync).observe(wrap, { attributes: true, attributeFilter: ["class"] });
   const cheer = () => buddy?.celebrate();
@@ -241,8 +241,10 @@
         const p = player || (player = new Audio());
         p.onended = p.onpause = null; p.pause();
         p.src = URL.createObjectURL(await r.blob());
-        p.onended = p.onpause = done;
+        p.onended = p.onpause = () => { done(); hush(); };
         await p.play();
+        const line = lastLine();
+        express(line, isFinite(p.duration) && p.duration > 0 ? p.duration * 1000 : line.length * 65);
       } catch { done(); }
     });
   }
@@ -390,7 +392,7 @@
     }
     return ahead.get(i);
   }
-  function playUrl(url) {  // resolves when it's finished (or straight away if it can't play)
+  function playUrl(url, words = "") {  // resolves when it's finished (or straight away if it can't play)
     return new Promise(async (resolve) => {
       if (muted || !url || !has("open")) return resolve(false);
       const mine = ++speakSeq;
@@ -398,8 +400,11 @@
       const done = () => { if (mine === speakSeq) wrap.classList.remove("speaking"); resolve(true); };
       const p = player || (player = new Audio());
       p.onended = p.onpause = null; p.pause();
-      p.src = url; p.onended = p.onpause = done;
-      try { await p.play(); } catch { done(); }
+      p.src = url; p.onended = p.onpause = () => { done(); hush(); };
+      try {
+        await p.play();
+        if (words) express(words, isFinite(p.duration) && p.duration > 0 ? p.duration * 1000 : words.length * 65, "proud and upbeat");
+      } catch { done(); }
     });
   }
   function duckVideo(sel) {  // the page's own video plays quietly under the voice, then gets its moment
@@ -434,7 +439,8 @@
       if (run !== tourRun) return;
     }
     const duck = st.video ? duckVideo(st.video) : null;
-    const spoke = await playUrl(pack.audio);
+    const spoke = await playUrl(pack.audio, st.text);
+    if (!spoke && run === tourRun) express(st.text, Math.min(11000, Math.max(3500, st.text.split(" ").length * 300)), "proud and upbeat");
     if (!spoke && run === tourRun) await wait(Math.min(11000, Math.max(3500, st.text.split(" ").length * 300)));  // muted: reading time
     if (duck) await duck.release();
     await wait(350);
@@ -561,6 +567,25 @@
     log.appendChild(card); log.scrollTop = log.scrollHeight;
     later(50, () => num.focus({ preventScroll: true }));
   }
+  // the face follows the feeling of each sentence it says, timed to the voice
+  let exprRun = 0;
+  function express(text, ms, mood = "") {
+    const run = ++exprRun;
+    if (!text || !window.TrinetraBuddy?.read) { expressing = null; sync(); return; }
+    let t = 0;
+    for (const seg of window.TrinetraBuddy.read(text, mood)) {
+      later(t, () => {
+        if (run !== exprRun || performing) return;
+        if (seg.emotion === "angry" && expressing !== "angry") buddy?.shake();
+        if ((seg.emotion === "excited" || seg.emotion === "proud") && expressing !== seg.emotion) buddy?.celebrate();
+        expressing = seg.emotion === "neutral" ? null : seg.emotion; sync();
+      });
+      t += Math.max(600, seg.weight * ms);
+    }
+    later(t + 500, () => { if (run === exprRun) { expressing = null; sync(); } });
+  }
+  const hush = () => { exprRun++; expressing = null; sync(); };
+  const lastLine = () => [...log.querySelectorAll(".msg.tri")].pop()?.textContent || "";
   function perform(list, each = 2200) {  // act out emotions one after another ("show me your emotions")
     list.forEach((emo, i) => later(400 + i * each, () => {
       performing = emo; sync();
@@ -571,6 +596,7 @@
   }
   function afterReply(d) {  // whatever TRINETRA said, plus what comes with it
     add(d.reply, "tri"); speak();
+    if (muted) express(d.reply, d.reply.length * 55);
     if (d.perform?.length) perform(d.perform);
     if (d.celebrate) { cheer(); beGlad(); }
     if (d.role_options) roleButtons(d.role_options);
@@ -596,6 +622,8 @@
       tourOn = false; tourRun++; saveTour(null); wrap.classList.remove("touring"); tourbar.hidden = true; makeRoom(false); player?.pause();
     }
     if (tourOn && !tourPaused) pauseBtn.click();  // a question mid-tour pauses it
+    const felt = window.TrinetraBuddy?.empathize?.(text);  // "I just got an offer!" → excited before it even answers
+    if (felt) { const run = ++exprRun; expressing = felt; sync(); later(9000, () => { if (run === exprRun) { expressing = null; sync(); } }); }
     thinking(true);
     try {
       let d;
