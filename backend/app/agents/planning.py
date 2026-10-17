@@ -346,7 +346,12 @@ async def daily_planner(ctx: AgentContext) -> AgentResult | None:
 
     plan = "; ".join(f"{local(t.planned_start):%H:%M} {t.title}" for t in blocks[:10])
     chains = [s for s in streaks.all_streaks(ctx.db) if s["current"] >= 2]
-    keep = " Streaks to keep alive tomorrow: " + ", ".join(f"{s['label']} {s['current']} days" for s in chains) + "." if chains else ""
+    from app.core import vision
+
+    dream = vision.line(ctx.db) if day.weekday() == 0 else ""  # Mondays: what the week is for
+    keep = (f" It's a new week: tie it to my vision in a few words ({dream})." if dream else "")
+    if chains:
+        keep += " Streaks to keep alive tomorrow: " + ", ".join(f"{s['label']} {s['current']} days" for s in chains) + "."
     work = " ".join(f"{ld['course']}: {ld['due']} topics due ({ld['section'] or 'catch-up'}), {ld['overdue']} overdue, "
                     f"~{round(ld['need_min'] / 60, 1)}h needed vs {round(ld['capacity_min'] / 60, 1)}h of blocks."
                     for ld in loads)

@@ -170,6 +170,9 @@
   .crs .bar { height: 8px; background: var(--bg); border-radius: 8px; overflow: hidden; margin: 6px 0; }
   .crs .bar i { display: block; height: 100%; background: var(--accent); }
   .crs .muted, .proof .muted { color: var(--muted); font-size: 12px; }
+  .vision label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: .06em; }
+  .vision textarea { width: 100%; min-height: 54px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font: inherit; }
+  .vision button { margin-top: 10px; }
   .streaks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6px; }
   .stk { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px 4px; text-align: center; }
   .stk b { display: block; font-size: 20px; } .stk span { display: block; font-size: 11px; } .stk small { color: var(--muted); font-size: 10px; }
@@ -766,10 +769,31 @@
   refreshMode();
 
   // ---- goals drawer ----
+  async function visionCard(box) {  // where all of this is going: 1 / 3 / 5 years (Save is a separate tap)
+    let v = { y1: "", y3: "", y5: "" };
+    try { v = await (await fetch("/vision")).json(); } catch {}
+    const card = document.createElement("div"); card.className = "goal vision";
+    const h = document.createElement("h3"); h.textContent = "🌅 My vision"; card.append(h);
+    const fields = {};
+    for (const [k, label] of [["y1", "In 1 year"], ["y3", "In 3 years"], ["y5", "In 5 years"]]) {
+      const l = document.createElement("label"); l.textContent = label;
+      const t = document.createElement("textarea"); t.maxLength = 600; t.value = v[k] || ""; t.placeholder = "Where do you want to be?";
+      fields[k] = t; card.append(l, t);
+    }
+    const save = document.createElement("button"); save.textContent = "💾 Save vision";
+    save.onclick = async () => {
+      save.disabled = true;
+      const r = await fetch("/vision", { method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(Object.entries(fields).map(([k, t]) => [k, t.value]))) });
+      save.textContent = r.ok ? "Saved ✅ — I'll remind you of it when you waver" : "Couldn't save — try again"; save.disabled = false;
+    };
+    card.append(save); box.append(card);
+  }
   async function loadGoals() {
     const box = $("goals"); box.innerHTML = "";
+    await visionCard(box);
     const goals = await (await fetch("/goals")).json();
-    if (!goals.length) { box.innerHTML = "<p>No goals yet. Tell me what you're chasing.</p>"; return; }
+    if (!goals.length) { box.insertAdjacentHTML("beforeend", "<p>No goals yet. Tell me what you're chasing.</p>"); return; }
     for (const g of goals) {
       const el = document.createElement("div"); el.className = "goal";
       const h = document.createElement("h3"); h.textContent = g.title;

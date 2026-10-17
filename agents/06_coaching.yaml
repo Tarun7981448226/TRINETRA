@@ -6,5 +6,5 @@ agents:
   - {id: lag_detector, name: Lag Detector, role: "Flags goals falling behind their required pace", kind: rule, triggers: [cron.morning, goal.updated], priority: 40, phase: "6"}
   - {id: focus_recommender, name: Focus Recommender, role: "Suggests what to work on right now for max impact", kind: llm, tier: fast, triggers: [user.asks_what_next, task.done], priority: 30, phase: "6"}
   - {id: skill_coach, name: Skill Coach, role: "Teaches and quizzes you on the skills your goals need", kind: llm, tier: smart, triggers: [coach.session], priority: 30, phase: "6"}
-  - {id: motivation_coach, name: Motivation Coach, role: "Reminds you of your 'why' at the moments you waver", kind: llm, tier: fast, triggers: [task.skipped, emotion.low_drive], priority: 35, phase: "3b"}
+  - {id: motivation_coach, name: Motivation Coach, role: "You skip an important block → your why (goal reason + vision), once a day; fuel, not guilt", kind: llm, tier: fast, triggers: [task.skipped], priority: 35, phase: "3b"}
   - {id: goal_decomposer, name: Goal Decomposer, role: "Breaks big goals into milestones and daily tasks", kind: llm, tier: smart, triggers: [user.message, voice.input], priority: 48, phase: "3b"}

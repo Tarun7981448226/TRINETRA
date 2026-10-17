@@ -530,6 +530,28 @@ def _course(db: Session, course_id: int) -> "Course":
     return c
 
 
+class VisionIn(BaseModel):
+    y1: str | None = Field(None, max_length=600)
+    y3: str | None = Field(None, max_length=600)
+    y5: str | None = Field(None, max_length=600)
+
+
+@router.get("/vision")
+def get_vision(db: Session = Depends(get_db)):
+    from app.core import vision
+
+    return vision.get(db)
+
+
+@router.put("/vision")
+def put_vision(body: VisionIn, db: Session = Depends(get_db)):
+    from app.core import vision
+
+    out = vision.put(db, **body.model_dump())
+    db.commit()
+    return out
+
+
 @router.get("/moods")
 def get_moods(days: int = 14, db: Session = Depends(get_db)):
     """Your mood per day (what TRINETRA read from your messages)."""

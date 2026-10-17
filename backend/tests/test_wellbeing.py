@@ -87,3 +87,39 @@ def test_moods_are_kept_and_stress_lightens_tomorrow(client, monkeypatch):
     assert "stressed 3 times" in prop["content"]
     client.post(prop["meta"]["respond"], json={"action": "approve"})
     assert low_id not in [t["id"] for t in client.get("/tasks").json()]
+
+
+def test_vision_is_kept_and_a_skip_gets_the_why_once_a_day(client, monkeypatch):
+    from app.config import get_settings
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "")
+    monkeypatch.setattr(get_settings(), "groq_api_key", "")
+    client.post("/chat", json={"text": "In 5 years I want to be an AI researcher shipping systems people use every day"})
+    assert "AI researcher" in client.get("/vision").json()["y5"]
+    assert client.put("/vision", json={"y1": "Summer 2027 AI/ML internship"}).json()["y5"]  # editing one keeps the rest
+    g = client.post("/goals", json={"title": "Land an AI/ML internship", "why": "so my parents never worry again"}).json()
+    ids = []
+    for n in range(2):
+        t = client.post("/tasks", json={"title": f"Resume work {n}", "priority": 5, "goal_id": g["id"],
+                                        "planned_start": "2026-10-20T15:00:00+00:00", "planned_end": "2026-10-20T16:00:00+00:00"}).json()
+        ids.append(t["id"])
+    for tid in ids:
+        client.post(f"/tasks/{tid}/respond", json={"action": "skip"})
+    whys = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "why"]
+    assert len(whys) == 1 and "parents" in whys[0]["content"]
+
+
+def test_profile_keeper_writes_one_current_profile_memory(client, llm_calls):
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    with client.session_factory() as db:
+        for i in range(8):
+            d = now - timedelta(days=i + 1)
+            db.add(Task(title="TUF DSA (1/2)", category="study", planned_start=d.replace(hour=15), planned_end=d.replace(hour=17),
+                        status="done" if i % 2 else "skipped"))
+        db.commit()
+    for _ in range(2):
+        client.post("/events", json={"type": "cron.nightly", "payload": {}, "source": "test"})
+    mems = [m for m in client.get("/memories").json() if m["content"].startswith("[auto-profile]")]
+    assert len(mems) == 1 and "Finishes 50% of planned blocks" in mems[0]["content"]
+    assert "Most skipped: TUF DSA (1/2) (4×)" in mems[0]["content"]

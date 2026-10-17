@@ -26,7 +26,7 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 6. ✅ Planning ahead: Daily Planner (9 pm briefing + catch-up proposal when TUF/ML need more time than the blocks), Replanner (a course block ended short → today's free time, once a day), Weekly Planner (Sunday: next week's load vs hours → weekend blocks), Explainer (what changed and why after you approve). Nothing is added without Approve
 7. ✅ Streaks (wake-up, TUF/DSA, gym, ML) on the 📚 screen + milestone cheers + "keep it alive" in the 9 pm briefing; water/stretch after 90 min of unbroken work (max 4/day), a real break after 3 h — meal times stay ping-free
 8. ✅ Mood Tracker (every mood read from your messages is kept: /moods, Sunday report) + Stress Monitor (9 pm: 9h+ day or 3+ stressed moods in 48h → offers to drop the least important block)
-9. ⬜ Motivation Coach + Vision Keeper (your "why", 1/3/5-year vision)
+9. ✅ Vision Keeper (1/3/5-year vision from what you say or the 🎯 screen; Monday briefings tie the week to it) + Motivation Coach (skip something important → your why, once a day) + Profile Keeper (nightly patterns → one memory the chat uses) + Tone Adapter (built in: every line in the current mood)
 
 **Stage C · Coaching & learning** (Phase 6)
 10. ⬜ Evening Daily Review (wins, misses, one lesson) · Lag Detector · Focus Recommender
