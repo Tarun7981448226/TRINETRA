@@ -155,6 +155,8 @@
   #askText { width: 100%; min-height: 84px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
     padding: 10px 14px; font: inherit; resize: vertical; margin-bottom: 10px; }
   #askSend { padding: 12px 20px; }
+  .vis .rl { display: inline-block; margin-top: 8px; color: var(--accent); font-size: 13px; }
+  .rlink { display: inline-flex; align-items: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); text-decoration: none; font-size: 14px; }
   /* ---- timetable dashboard ---- */
   #planner { position: fixed; inset: 0; background: var(--bg); display: none; flex-direction: column;
     padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); z-index: 5; }
@@ -311,6 +313,10 @@
   <div id="askDrawer" class="drawer"><section>
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>A visitor is asking</h2></div>
     <div id="askBox"></div>
+  </section></div>
+  <div id="replyDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>Reply to a visitor</h2></div>
+    <div id="replyBox"></div>
   </section></div>
   <div id="repDrawer" class="drawer"><section>
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>Weekly report</h2></div>
@@ -1082,7 +1088,8 @@
   // Opening a screen adds a history entry, so "back" always lands on the dashboard (the chat).
   const SCREENS = { timetable: ["planner", openPlanner], goals: ["goalDrawer", loadGoals],
                     report: ["repDrawer", loadReports], memory: ["drawer", loadMems], wake: ["wakeScreen", loadWake],
-                    visitors: ["visDrawer", loadVisitors], ask: ["askDrawer", loadAsk], character: ["charDrawer", loadCharacter] };
+                    visitors: ["visDrawer", loadVisitors], ask: ["askDrawer", loadAsk], reply: ["replyDrawer", loadReply],
+                    character: ["charDrawer", loadCharacter] };
   function closeScreens() {
     for (const [id] of Object.values(SCREENS)) $(id).classList.remove("open");
     $("plSheet").classList.remove("open"); $("nodeSheet").classList.remove("open");
@@ -1217,6 +1224,9 @@
         el.append(q);
       }
       for (const n of v.notes) { const nt = document.createElement("div"); nt.className = "nt"; nt.textContent = `📇 ${[n.email, n.phone].filter(Boolean).join(" · ")}: ${n.message}`; el.append(nt); }
+      for (const r of v.replies || []) { const nt = document.createElement("div"); nt.className = "nt"; nt.textContent = `↩️ you: ${r.text}${r.delivered ? " · seen" : ""}`; el.append(nt); }
+      const rl = document.createElement("a"); rl.className = "rl"; rl.href = `#reply/${v.id}`; rl.textContent = "↩️ Reply";
+      rl.onclick = (e) => { e.preventDefault(); go(`reply/${v.id}`); }; el.append(rl);
       box.append(el);
     }
   }
@@ -1247,6 +1257,47 @@
       if (!r.ok) send.disabled = false;
     };
     box.append(chips, txt, send);
+  }
+
+  // ---- writing back to a visitor: into their chat while they're on the site, or by text / email / call ----
+  async function loadReply(id) {
+    const box = $("replyBox"); box.innerHTML = "";
+    let v;
+    try { const r = await fetch(`/visitors/${id}`); if (!r.ok) throw 0; v = await r.json(); } catch { box.innerHTML = "<p>That visitor isn't here any more.</p>"; return; }
+    const q = document.createElement("div"); q.className = "askq";
+    const who = document.createElement("small");
+    who.textContent = (v.here_now ? "● on your portfolio now" : "has left the site") + (v.role && v.role !== "other" ? ` · ${v.role}` : "") + (v.company ? ` · ${v.company}` : "");
+    q.append(who, [v.name || "A visitor", v.phone, v.email].filter(Boolean).join(" · "));
+    box.append(q);
+    for (const r of v.replies) { const p = document.createElement("p"); p.className = "nt"; p.textContent = `You: ${r.text}${r.delivered ? " (they saw it)" : " (not seen yet)"}`; box.append(p); }
+    const first = (v.name || "").split(" ")[0];
+    const chips = document.createElement("div"); chips.className = "chips";
+    const txt = document.createElement("textarea"); txt.id = "askText"; txt.maxLength = 400; txt.placeholder = "Write back to them…";
+    for (const c of [`Thanks${first ? " " + first : ""}! I'll reach out soon.`, "Great to meet you! I'll call you tomorrow.",
+                     "Thanks for visiting! I'll email you today.", "Sure, let's talk this week."]) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = c;
+      b.onclick = () => { txt.value = c; txt.focus(); };  // fills the box; sending is a separate tap
+      chips.append(b);
+    }
+    box.append(chips, txt);
+    const row = document.createElement("div"); row.className = "chips";
+    const send = document.createElement("button"); send.id = "askSend"; send.textContent = v.here_now ? "Send to their chat" : "They've left the chat";
+    send.disabled = !v.here_now;
+    send.onclick = async () => {
+      if (!txt.value.trim()) { txt.focus(); return; }
+      send.disabled = true; send.textContent = "Sending…";
+      const r = await fetch(`/visitors/${id}/reply`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: txt.value.trim() }) });
+      send.textContent = r.ok ? "Sent ✅ (it pops up in their chat)" : "Couldn't send — try again";
+      if (!r.ok) send.disabled = false;
+    };
+    row.append(send);
+    const link = (label, href) => { const a = document.createElement("a"); a.className = "rlink"; a.textContent = label;
+      a.onclick = (e) => { e.preventDefault(); if (!txt.value.trim()) { txt.focus(); return; } location.href = href(encodeURIComponent(txt.value.trim())); };
+      row.append(a); };
+    const num = (v.phone || "").replace(/[^\d+]/g, "");
+    if (num) { link("💬 Text", (b) => `sms:${num}&body=${b}`); const c = document.createElement("a"); c.className = "rlink"; c.href = `tel:${num}`; c.textContent = "📞 Call"; row.append(c); }
+    if (v.email) link("✉️ Email", (b) => `mailto:${v.email}?subject=${encodeURIComponent("Thanks for visiting my portfolio")}&body=${b}`);
+    box.append(row);
   }
 
   // ---- how it looks (🎨 screen) — saved on the server, so every device and the portfolio match ----

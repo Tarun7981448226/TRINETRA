@@ -15,9 +15,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import llm, push
-from app.core.persona import guest_prompt, humanize
+from app.core.persona import guest_prompt, humanize, without_name
 from app.core.timeutil import from_db, now_local
-from app.db.models import GuestAsk, GuestNote, GuestVisit, KeyValue, Message
+from app.db.models import GuestAsk, GuestNote, GuestReply, GuestVisit, KeyValue, Message
 
 BRIEF = Path(__file__).resolve().parents[1] / "guest_brief.md"
 ASK_TIMEOUT = timedelta(seconds=60)
@@ -183,9 +183,10 @@ def save_contact(db: Session, v: GuestVisit, email: str | None, phone: str | Non
     db.add(GuestNote(visit_id=v.id, name=v.name, email=email or "", phone=phone, message=message[:1000]))
     contact = " and ".join(x for x in (phone, email) if x)
     push.send(db, "TRINETRA 📇", f"{_who(v)} left their contact on your portfolio: {contact}" +
-              (f" — “{message[:160]}”" if message and message != contact else ""), url="/#visitors", tag="visitor-contact")
+              (f" — “{message[:160]}”" if message and message != contact else "") + " Tap to reply.",
+              url=f"/#reply/{v.id}", tag="visitor-contact")
     v.topics = [*(v.topics or []), "left contact"][-12:]
-    return f"Got it{', ' + v.name if v.name else ''}. I've sent {contact} to Tarun just now, so expect to hear from him soon."
+    return f"Got it. I've sent {contact} to Tarun just now, so expect to hear from him soon."
 
 
 def _take_contact(db: Session, v: GuestVisit, text: str) -> str | None:
@@ -199,12 +200,32 @@ def _take_contact(db: Session, v: GuestVisit, text: str) -> str | None:
     return thanks + (" Thanks for stopping by!" if BYE.search(text) else " Anything else you'd like to know in the meantime?")
 
 
+def _sparing(v: GuestVisit, text: str) -> str:
+    """Their name now and then, not in every line: drop it if one of my last few lines already used it."""
+    if not v.name:
+        return text
+    names = {v.name, v.name.split()[0]}
+    recent = [m["text"] for m in (v.messages or []) if m["role"] == "trinetra"][-4:]
+    if not any(re.search(rf"\b{re.escape(n)}\b", r, re.I) for r in recent for n in names):
+        return text
+    for n in sorted(names, key=len, reverse=True):
+        text = without_name(text, n)
+    return text
+
+
 async def _say(v: GuestVisit, history: list[dict], fallback: str) -> str:
     try:
-        return humanize(await llm.complete([{"role": "system", "content": guest_prompt(brief(), v.name, v.company, v.role)}, *history],
+        text = humanize(await llm.complete([{"role": "system", "content": guest_prompt(brief(), v.name, v.company, v.role)}, *history],
                                            tier="fast", temperature=0.7, max_tokens=220), strip_name=False) or fallback
     except llm.LLMUnavailable:
-        return fallback
+        text = fallback
+    return _sparing(v, _short(text))
+
+
+def _short(text: str, keep: int = 3) -> str:
+    """Spoken and on a small panel: three sentences at most, however chatty the model was."""
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9“\"])", text.strip())
+    return " ".join(parts[:keep])
 
 
 async def chat(db: Session, v: GuestVisit, text: str) -> dict:
@@ -270,12 +291,12 @@ async def pitch(db: Session, v: GuestVisit, done) -> dict:
     who = ROLES.get(v.role, ROLES["other"])[0]
     history = [{"role": "user", "content": (
         f"The visitor{' ' + v.name if v.name else ''} is {who}{' at ' + v.company if v.company else ''}. In 2 short spoken "
-        "sentences: greet them warmly by name, then give them one concrete reason Tarun is worth their attention, picked "
+        "sentences (you already greeted them by name, so don't use it again): one concrete reason Tarun is worth their attention, picked "
         "for someone like them (recruiter / hiring manager → impact and shipped results; engineer → how he builds; "
         "researcher → the research and the paper; founder → products he's shipped; mentor → how fast he learns and what "
-        "he's aiming for; student → what he's learned). Mention that you're his AI mentor, built by him. No question at the end.")}]
-    reply = await _say(v, history, f"Nice to meet you{', ' + v.name if v.name else ''}! I'm Tarun's AI mentor, built by "
-                                   "him: I run his days, and I can show you the AI systems he's shipped.")
+        "he's aiming for; student → what he's learned). Don't introduce yourself again. Under 45 words. No question at the end.")}]
+    reply = await _say(v, history, "Here's the short version: Tarun ships real AI systems, from a face-recognition pipeline "
+                                   "he made twelve times faster to SKYNET, live in production.")
     if _important(v) and not (v.email or v.phone) and not _said(v, CONTACT_FORM_Q):
         return done(f"{reply} {CONTACT_FORM_Q}", contact_form=True)
     offer = not _said(v, TOUR_OFFER)
@@ -325,6 +346,32 @@ def ask_status(db: Session, v: GuestVisit, ask_id: int) -> dict:
     if ask.status == "timeout":
         return {"status": "timeout", "reply": FALLBACK, "wants_email": True}
     return {"status": "waiting"}
+
+
+def reply_to(db: Session, visit_id: int, text: str) -> GuestReply | None:
+    """Tarun writes back to a visitor from the app. It pops up in their chat while they're still on the site."""
+    v = db.get(GuestVisit, visit_id)
+    if v is None:
+        return None
+    r = GuestReply(visit_id=v.id, text=text.strip()[:400])
+    db.add(r)
+    v.topics = [*(v.topics or []), "you replied"][-12:]
+    db.commit()
+    return r
+
+
+def inbox(db: Session, v: GuestVisit) -> list[str]:
+    """Tarun's replies this visitor hasn't seen yet (marked seen now). Each becomes a line in their chat."""
+    rows = db.scalars(select(GuestReply).where(GuestReply.visit_id == v.id, GuestReply.delivered_at.is_(None))
+                      .order_by(GuestReply.id)).all()
+    lines = []
+    for r in rows:
+        r.delivered_at = datetime.now(timezone.utc)
+        lines.append(f"Message from Tarun: “{r.text}”")
+        _remember(v, "trinetra", lines[-1])
+    if rows:
+        db.commit()
+    return lines
 
 
 def answer_ask(db: Session, ask_id: int, text: str) -> GuestAsk | None:

@@ -148,7 +148,7 @@ def test_offers_the_tour_once_and_walks_every_stop(client, llm_calls):
     assert r["offer_tour"] and "No problem" in r["reply"] and "tour" in r["reply"]
     assert not client.post("/guest/chat", json={"token": token, "text": "cool"}).json().get("offer_tour")
     stops = [client.post(f"/guest/tour/{i}", json={"token": token}).json() for i in range(len(tour.STOPS))]
-    assert stops[0]["text"].startswith("Welcome, Priya.") and stops[-1]["target"] == "#contact"
+    assert stops[0]["text"].startswith("Welcome. This is Tarun") and stops[-1]["target"] == "#contact"
     assert all(s["page"] in ("/home", "/projects") and s["text"] and len(s["images"]) == 2 for s in stops)
     projects = [s for s in stops if s.get("diagram")]
     assert len(projects) >= 5 and all(len(s["diagram"]["steps"]) >= 4 and all(len(st) == 2 for st in s["diagram"]["steps"])
@@ -285,3 +285,46 @@ def test_asking_how_to_leave_details_shows_the_card(client, llm_calls):
     assert r["contact_form"] and len(llm_calls) == calls  # straight to the card, no model needed
     r = client.post("/guest/chat", json={"token": token, "text": "thanks for the tour bye"}).json()
     assert r["reply"].startswith("Thanks for stopping by, Charan") and not r.get("offer_tour")
+
+
+def test_name_now_and_then_and_off_topic_stays_simple(client, monkeypatch):
+    from app.config import get_settings
+    from app.core import llm
+
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "x")
+    prompts = []
+
+    async def chatty(messages, tier="smart", **kw):
+        prompts.append(messages[0]["content"])
+        return "Sathwik, that's 2! Anything about his work I can show you, Sathwik?"
+
+    monkeypatch.setattr(llm, "complete", chatty)
+    token = hello(client)
+    r = client.post("/guest/chat", json={"token": token, "text": "Sathwik"}).json()
+    assert r["reply"].startswith("Nice to meet you, Sathwik!")
+    client.post("/guest/role", json={"token": token, "role": "student"})
+    r = client.post("/guest/chat", json={"token": token, "text": "whats 1+1"}).json()
+    assert "Sathwik" not in r["reply"] and "2" in r["reply"]  # just greeted by name: not again so soon
+    assert "Don't staple a fact about Tarun" in prompts[-1]
+
+
+def test_tarun_replies_to_a_visitor_from_the_app(client, llm_calls, monkeypatch):
+    from app.core import push
+
+    pushed = []
+    monkeypatch.setattr(push, "send", lambda db, title, body, url="/", tag=None: pushed.append(url) or 1)
+    token = hello(client)
+    client.post("/guest/chat", json={"token": token, "text": "I'm Priya from Google"})
+    client.post("/guest/chat", json={"token": token, "text": "text me at +1 213 210 1143"})
+    vid = client.get("/visitors").json()[0]["id"]
+    assert f"/#reply/{vid}" in pushed  # the 📇 notification opens the reply screen
+    assert client.get("/guest/inbox", params={"token": token}).json() == {"lines": []}
+    r = client.post(f"/visitors/{vid}/reply", json={"text": "Sure, I'll reach out tomorrow!"}).json()
+    assert r["ok"] and r["here_now"]
+    lines = client.get("/guest/inbox", params={"token": token}).json()["lines"]
+    assert lines == ["Message from Tarun: “Sure, I'll reach out tomorrow!”"]
+    assert client.get("/guest/inbox", params={"token": token}).json()["lines"] == []  # delivered once
+    d = client.get(f"/visitors/{vid}").json()
+    assert d["phone"] == "+1 213 210 1143" and d["replies"] == [{"text": "Sure, I'll reach out tomorrow!", "delivered": True}]
+    assert client.post("/visitors/99999/reply", json={"text": "hi"}).status_code == 404
+    assert client.get("/guest/inbox", params={"token": "nope"}).json() == {"lines": []}

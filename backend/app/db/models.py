@@ -259,3 +259,15 @@ class AppOpen(Base):
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     spoke: Mapped[bool] = mapped_column(Boolean, default=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class GuestReply(Base):
+    """Tarun's reply to a portfolio visitor, written in the app; shown in their chat while they're on the site."""
+
+    __tablename__ = "guest_replies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    visit_id: Mapped[int] = mapped_column(ForeignKey("guest_visits.id"))
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

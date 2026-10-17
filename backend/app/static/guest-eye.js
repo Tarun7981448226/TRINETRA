@@ -47,6 +47,7 @@
   .msg { max-width: 86%; padding: 9px 13px; border-radius: 15px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
   .tri { align-self: flex-start; background: var(--panel); border-left: 3px solid var(--gold); border-bottom-left-radius: 4px; }
   .me { align-self: flex-end; background: #2b2a42; border-bottom-right-radius: 4px; }
+  .tri.tarun { border-left-color: #4ade80; background: #13261b; }
   .dots { align-self: flex-start; color: var(--muted); font-size: 13px; padding: 0 4px; }
   form { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
   form.note { flex-direction: column; }
@@ -252,7 +253,7 @@
   let token = store(sessionStorage, KEY), started = false;
   function add(text, who) {
     const el = document.createElement("div");
-    el.className = `msg ${who}`; el.textContent = text;
+    el.className = `msg ${who}` + (who === "tri" && text.startsWith("Message from Tarun:") ? " tarun" : ""); el.textContent = text;
     log.appendChild(el); log.scrollTop = log.scrollHeight;
     return el;
   }
@@ -647,6 +648,23 @@
     addEventListener("scroll", dodge, { passive: true }); addEventListener("resize", dodge);
     dodge(); later(1500, dodge);
   }
+
+  // Tarun can write back from his phone: his reply pops up in their chat while they're on the site
+  async function checkInbox() {
+    if (!token || document.hidden) return;
+    try {
+      const d = await (await fetch(`${API}/guest/inbox?token=${encodeURIComponent(token)}`)).json();
+      if (!d.lines?.length) return;
+      if (!has("open")) {
+        const fresh = !beginning;  // not shown on this page yet: opening it loads the whole chat, these lines included
+        open(); await beginning;
+        if (fresh) { cheer(); beGlad(); speak(); return; }
+      }
+      for (const line of d.lines) add(line, "tri");
+      cheer(); beGlad(); speak();
+    } catch {}
+  }
+  setInterval(checkInbox, 8000);
 
   // leaving the site: TRINETRA forgets them (2 minutes later, unless another page of the site picks the visit up)
   addEventListener("pagehide", () => {

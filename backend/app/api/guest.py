@@ -14,7 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import guest, tour, voice
-from app.db.models import GuestAsk, GuestNote, GuestVisit
+from app.db.models import GuestAsk, GuestNote, GuestReply, GuestVisit
+from app.core.timeutil import from_db
 from app.db.session import get_db
 
 STATIC = Path(__file__).resolve().parents[1] / "static"
@@ -143,6 +144,15 @@ def ask(ask_id: int, token: str, db: Session = Depends(get_db)):
     return guest.ask_status(db, _visit(db, token), ask_id)
 
 
+@public.get("/inbox")
+def inbox(token: str, db: Session = Depends(get_db)):
+    """Tarun's replies that haven't reached this visitor yet (the widget checks every few seconds)."""
+    v = guest.visit_for(db, token)
+    if v is None:
+        return {"lines": []}
+    return {"lines": guest.inbox(db, v)}
+
+
 class NoteIn(BaseModel):
     token: str = Field(max_length=64)
     email: str = Field(max_length=160, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -251,6 +261,7 @@ def visitors(limit: int = 50, db: Session = Depends(get_db)):
     ids = [v.id for v in visits]
     asks = db.scalars(select(GuestAsk).where(GuestAsk.visit_id.in_(ids))).all() if ids else []
     notes = db.scalars(select(GuestNote).where(GuestNote.visit_id.in_(ids))).all() if ids else []
+    replies = db.scalars(select(GuestReply).where(GuestReply.visit_id.in_(ids))).all() if ids else []
     return [{
         "id": v.id, "name": v.name, "company": v.company, "role": v.role, "email": v.email, "phone": v.phone,
         "topics": v.topics or [],
@@ -258,7 +269,35 @@ def visitors(limit: int = 50, db: Session = Depends(get_db)):
         "asks": [{"id": a.id, "question": a.question, "answer": a.answer, "status": a.status} for a in asks if a.visit_id == v.id],
         "notes": [{"email": n.email, "phone": n.phone, "message": n.message, "created_at": n.created_at}
                   for n in notes if n.visit_id == v.id],
+        "replies": [{"text": r.text, "delivered": r.delivered_at is not None} for r in replies if r.visit_id == v.id],
     } for v in visits]
+
+
+def _here_now(v: GuestVisit) -> bool:
+    return v.ended_at is None and datetime.now(timezone.utc) - from_db(v.last_seen) < guest.FORGET_AFTER
+
+
+@private.get("/{visit_id}")
+def visitor(visit_id: int, db: Session = Depends(get_db)):
+    v = db.get(GuestVisit, visit_id)
+    if v is None:
+        raise HTTPException(404, "no such visitor")
+    replies = db.scalars(select(GuestReply).where(GuestReply.visit_id == v.id).order_by(GuestReply.id)).all()
+    return {"id": v.id, "name": v.name, "company": v.company, "role": v.role, "email": v.email, "phone": v.phone,
+            "here_now": _here_now(v),
+            "replies": [{"text": r.text, "delivered": r.delivered_at is not None} for r in replies]}
+
+
+class ReplyIn(BaseModel):
+    text: str = Field(min_length=1, max_length=400)
+
+
+@private.post("/{visit_id}/reply")
+def reply(visit_id: int, body: ReplyIn, db: Session = Depends(get_db)):
+    r = guest.reply_to(db, visit_id, body.text)
+    if r is None:
+        raise HTTPException(404, "no such visitor")
+    return {"ok": True, "here_now": _here_now(db.get(GuestVisit, visit_id))}
 
 
 @private.get("/ask/{ask_id}")

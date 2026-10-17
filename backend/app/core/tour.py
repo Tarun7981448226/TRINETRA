@@ -12,7 +12,7 @@ CLOSE_PROJECT = '[data-expanded]:not([hidden]) [data-back]'  # back to the card 
 STOPS = [
     {"page": "/home", "target": "#top", "title": "Welcome",
      "images": ["/images/tarun-portrait.webp", "/images/tarun-graduation.webp"],
-     "text": "Welcome{name}. This is Tarun Deep Reddy, a Computer Science master's student at USC who builds AI that takes "
+     "text": "Welcome. This is Tarun Deep Reddy, a Computer Science master's student at USC who builds AI that takes "
              "repetitive work off people's plates. Let me show you around."},
     {"page": "/home", "target": "#about", "title": "About",
      "images": ["/images/tarun-graduation.webp", "/images/usc-campus-v2.webp"],
