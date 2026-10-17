@@ -879,6 +879,16 @@ async def sc_now(db: Session = Depends(get_db)):
     return _audio(await voice.speak(text, mood))
 
 
+@router.get("/sc/opened", dependencies=[Depends(require_shortcut_key)], response_class=Response)
+async def sc_opened(app: str = "", db: Session = Depends(get_db), core: Orchestrator = Depends(get_orchestrator)):
+    """Focus Guard: a distracting app was just opened. TRINETRA's voice when it should speak, else silence."""
+    result = await core.dispatch(IncomingEvent(type="shortcut.app_opened", payload={"app": app}, source="shortcut"), db)
+    db.commit()
+    if result.spoke != "distraction_watcher" or result.notes.get("silent") or not result.reply:
+        return _silence()
+    return _audio(await voice.speak(result.reply, result.mood))
+
+
 @router.get("/sc/report/audio", dependencies=[Depends(require_shortcut_key)], response_class=Response)
 async def sc_report_audio(part: int = 1, db: Session = Depends(get_db)):
     """Chapter `part` (1-6) of the latest ready weekly report, as audio."""

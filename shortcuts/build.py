@@ -76,6 +76,15 @@ def now() -> list:
     ]
 
 
+def focus_guard() -> list:  # run by the "App is opened" automation (Instagram, YouTube, …)
+    n = uid()
+    return [
+        get("/sc/opened", n),                  # a call-out in a focus block, "go to sleep" late at night, else silence
+        action("vibrate"),
+        play(out_ref(n, "Contents of URL")),
+    ]
+
+
 def weekly_report() -> list:
     acts = [action("setvolume", WFVolume=0.7)]
     for part in range(1, 7):                   # six ~5-minute chapters (silence if a chapter isn't there)
@@ -103,7 +112,8 @@ def shortcut(actions: list, color: int, glyph: int) -> dict:
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     for name, acts, color in (("Trinetra Wake-Up Call", wake_up(), 4282601983), ("Trinetra Time Check", now(), 4292093695),
-                              ("Trinetra Weekly Report", weekly_report(), 463140863)):
+                              ("Trinetra Weekly Report", weekly_report(), 463140863),
+                              ("Trinetra Focus Guard", focus_guard(), 4271458815)):
         raw = OUT / f"{name}.unsigned.shortcut"
         raw.write_bytes(plistlib.dumps(shortcut(acts, color, 59446), fmt=plistlib.FMT_BINARY))
         signed = OUT / f"{name}.shortcut"

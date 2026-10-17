@@ -12,6 +12,35 @@
 | 6 | ML brain: Neural Core ✅ (growing MLP, nightly retrain, completion prediction) · more models + coaching reports ⬜ | 🟡 |
 | 7 | Cloud LIVE ✅ (Vercel + Neon + Cloudflare cron, works with the Mac off) · remaining agents ⬜ | 🟡 |
 
+## 🗺️ Route map to 100% (set 2026-10-16) — 23 of 66 agents live, ~70% of the product
+Built in this order; each stage ships and gets tested on the iPhone before the next starts.
+
+**Stage A · Monitoring — "is he actually working?"** (Phase 5) ← *we are here*
+1. ✅ Focus Guard (live; needs the iPhone automation set up): opening Instagram/YouTube/etc. during a focus block → TRINETRA's voice calls it out (iOS app automation), firmer each time, logged
+2. ⬜ Escalation: ignored important reminders → push → voice → Time-Check-style call alert
+3. ⬜ Silence Detector: planned work but no sign of life for an hour → check-in
+4. ⬜ Proof of Work: GitHub commits / LeetCode as evidence a block really happened
+5. ⬜ Focus-mode + location signals (Shortcuts automations)
+
+**Stage B · Daily rhythm & wellbeing** (Phase 2/3b gaps)
+6. ⬜ Daily Planner (tomorrow's plan each night) + Replanner (when something slips)
+7. ⬜ Routine Tracker (streaks: wake-up, gym, DSA) · Meal/Break + Hydration nudges
+8. ⬜ Mood Tracker + Stress Monitor (overload from schedule density / your messages)
+9. ⬜ Motivation Coach + Vision Keeper (your "why", 1/3/5-year vision)
+
+**Stage C · Coaching & learning** (Phase 6)
+10. ⬜ Evening Daily Review (wins, misses, one lesson) · Lag Detector · Focus Recommender
+11. ⬜ Duration model / Time Estimator · Energy curve · Procrastination Detector · Pattern Miner
+12. ⬜ Skill Coach (quizzes for DSA / CSCI 570 / ML)
+
+**Stage D · Communications** (Phase 5b)
+13. ⬜ Gmail triage + drafts · Google Calendar sync
+14. ⬜ WhatsApp listener/replier (smart-mix: auto-send vs ask first) · Telegram
+
+**Stage E · Ship**
+15. ⬜ Private GitHub repo — local commit done, push waiting on Tarun's OK
+16. ⬜ Nightly backup to iCloud · old local DB → cloud · Mac desktop pet
+
 ## 🚩 Before shipping (remind at ~90%)
 - [ ] Nightly memory backup to `iCloud Drive/TRINETRA Backups/` (30 days kept)
 - [ ] Private GitHub repo for the code

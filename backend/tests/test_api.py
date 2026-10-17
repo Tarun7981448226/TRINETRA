@@ -14,7 +14,7 @@ def test_health(client):
 def test_agents_listing(client):
     body = client.get("/agents").json()
     assert body["total"] >= 64
-    assert body["active"] == 23
+    assert body["active"] == 24
 
 
 def test_chat_flows_through_agents_and_is_remembered(client, llm_calls):
@@ -86,5 +86,5 @@ def test_bad_task_times_rejected(client):
 def test_external_event_ingest(client):
     r = client.post("/events", json={"type": "shortcut.app_opened", "payload": {"app": "Instagram"}, "source": "shortcut"})
     assert r.status_code == 200
-    assert r.json()["ran"] == ["data_collector", "emotion_engine"]
+    assert r.json()["ran"] == ["data_collector", "emotion_engine", "distraction_watcher"]
     assert client.post("/events", json={"type": "BAD TYPE"}).status_code == 422

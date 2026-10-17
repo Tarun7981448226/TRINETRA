@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from enum import StrEnum
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -246,3 +246,16 @@ class GuestNote(Base):
     message: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     digested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AppOpen(Base):
+    """A distracting app opened on the iPhone (reported by the Focus Guard automation)."""
+
+    __tablename__ = "app_opens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    app: Mapped[str] = mapped_column(String(60), default="")
+    kind: Mapped[str] = mapped_column(String(20))  # focus / class / sleep / free
+    task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    spoke: Mapped[bool] = mapped_column(Boolean, default=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

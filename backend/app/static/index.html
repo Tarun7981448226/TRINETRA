@@ -1120,6 +1120,7 @@
     if (rows.length) lastId = Math.max(lastId, rows[rows.length - 1].id);
   }
 
+  const SPOKEN_ELSEWHERE = new Set(["wake", "shortcut"]);  // already played by a Shortcut / the wake screen
   let polling = false;
   async function poll() {
     if (busy || polling) return;
@@ -1131,7 +1132,7 @@
         add(m.content, m.role === "user" ? "me" : "tri", m.mood, m.meta && { ...m.meta, id: m.id });
         if (m.role === "trinetra") {
           $("mood").textContent = m.mood ? m.mood.split(" — ")[0].toLowerCase() : "";
-          if (m.channel !== "wake") say(m.content, m.mood);  // wake lines already played (Shortcut / wake screen)
+          if (!SPOKEN_ELSEWHERE.has(m.channel)) say(m.content, m.mood);
           if (document.hidden && m.channel === "reminder" && !pushOn && window.Notification?.permission === "granted") {
             new Notification("TRINETRA", { body: m.content });
           }
@@ -1145,7 +1146,7 @@
     for (const m of rows) { add(m.content, m.role === "user" ? "me" : "tri", m.mood, m.meta && { ...m.meta, id: m.id }); lastId = Math.max(lastId, m.id); }
     const heardId = +localStorageGet("heardId", "0"), last = rows[rows.length - 1];
     const fresh = last?.at && Date.now() - Date.parse(last.at) < 3 * 3600e3;
-    if (last && last.role === "trinetra" && last.channel !== "wake" && last.id > heardId && fresh) say(last.content, last.mood);
+    if (last && last.role === "trinetra" && !SPOKEN_ELSEWHERE.has(last.channel) && last.id > heardId && fresh) say(last.content, last.mood);
   }).catch(() => {}).finally(() => setInterval(poll, 5000));
   // back from the background (e.g. tapped a notification): check for new lines right away
   document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });

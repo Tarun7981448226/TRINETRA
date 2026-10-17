@@ -112,7 +112,7 @@ async def timetable_builder(ctx: AgentContext) -> None:
 # ---------- proactive messages (fired by the scheduler) ----------
 
 async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: str, meta: dict,
-                    keep_mood: bool = False) -> AgentResult:
+                    keep_mood: bool = False, channel: str = "reminder") -> AgentResult:
     """Compose a short proactive line in TRINETRA's voice; fall back to a template if the LLM is down."""
     if not keep_mood and ctx.notes.get("expression_label") not in (None, "calm"):
         mood = ctx.notes["expression"]  # after a string of skips, reminders get an edge
@@ -127,7 +127,7 @@ async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: st
             text = humanize(text) or fallback
         except llm.LLMUnavailable:
             pass
-    ctx.db.add(Message(role="trinetra", content=text, channel="reminder", mood=mood, meta=meta))
+    ctx.db.add(Message(role="trinetra", content=text, channel=channel, mood=mood, meta=meta))
     ctx.notes["proactive"] = {"text": text, "mood": mood, "meta": meta}  # the Push Agent delivers it
     return AgentResult(reply=text, mood=mood)
 
