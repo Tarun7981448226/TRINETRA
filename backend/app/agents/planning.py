@@ -4,7 +4,7 @@ import logging
 import re
 from datetime import date, datetime, time, timedelta
 
-from app.core import deliberation, llm, timetable
+from app.core import courses, deliberation, llm, timetable
 from app.core import mood as mood_modes
 from app.core.orchestrator import AgentContext, AgentResult, IncomingEvent
 from app.core.persona import humanize, system_prompt
@@ -154,6 +154,9 @@ async def reminder_dispatcher(ctx: AgentContext) -> AgentResult | None:
                   "respond": f"/tasks/{task.id}/respond"},
             keep_mood=True,  # bedtime is always caring, whatever the day's emotions were
         )
+    aim = ""
+    if tg := courses.target(ctx.db, task):
+        aim = " Today's target: " + "; ".join(i.title for i in tg[1]) + ". Name it."
     risk = ""
     if (p := ctx.notes.get("p_complete")) is not None and p < 0.5:
         risk = (f" My neural core says there's only a {round(p * 100)}% chance I'll actually do it — "
@@ -162,7 +165,7 @@ async def reminder_dispatcher(ctx: AgentContext) -> AgentResult | None:
         ctx,
         instruction=(
             f"Remind me that '{task.title}' starts {when} ({s:%H:%M}–{e:%H:%M}). "
-            "One or two short spoken sentences. Energise me to start on time." + risk
+            "One or two short spoken sentences. Energise me to start on time." + aim + risk
         ),
         fallback=f"{task.title} starts {when}, {s:%H:%M} to {e:%H:%M}. Let's go.",
         mood="focused and sharp",
@@ -237,6 +240,16 @@ async def checkin_agent(ctx: AgentContext) -> AgentResult | None:
     if task is None or task.status in (TaskStatus.DONE, TaskStatus.SKIPPED):
         return None
     started = task.status == TaskStatus.STARTED
+    if tg := courses.target(ctx.db, task):  # a course block: proof, not just "how did it go?"
+        aimed = "; ".join(i.title for i in tg[1]) or "the next part"
+        return await _speak_up(
+            ctx,
+            instruction=(f"The block '{task.title}' just ended. The target was: {aimed}. In one or two short sentences "
+                         "ask me what I actually got through and where I stopped — I'll tick it off in the app."),
+            fallback=f"Time's up on {task.title}. The target was {aimed}. What did you get through?",
+            mood="calm and caring",
+            meta={"kind": "proof", "task_id": task.id, "proof": f"/proof/{task.id}"},
+        )
     return await _speak_up(
         ctx,
         instruction=(
@@ -249,6 +262,31 @@ async def checkin_agent(ctx: AgentContext) -> AgentResult | None:
         meta={"kind": "checkin", "task_id": task.id, "buttons": ["done", "partly", "skipped"],
               "respond": f"/tasks/{task.id}/respond"},
     )
+
+
+@agent("proof_of_work_verifier")
+async def proof_of_work_verifier(ctx: AgentContext) -> AgentResult | None:
+    """You logged what a course block really produced. React like a mentor who checks the work."""
+    p = ctx.event.payload
+    task = ctx.db.get(Task, p.get("task_id"))
+    if task is None:
+        return None
+    done, aimed, note, nxt = p.get("finished") or [], p.get("aimed") or [], p.get("note") or "", p.get("next")
+    outcome = p.get("outcome")
+    facts = (f"Block '{task.title}'. Target: {'; '.join(aimed) or 'none set'}. Finished: {'; '.join(done) or 'nothing'}."
+             + (f" Where I stopped: {note}." if note else "") + (f" Next up: {nxt}." if nxt else ""))
+    how = {"all": ("proud", "I hit the whole target. Be proud of me in one or two sentences, and name what's next."),
+           "some": ("firm but encouraging", "I got part of it done. Acknowledge what I did, then be clear the rest "
+                    "carries over and has to be cleared next block. Two sentences."),
+           "none": ("firm and disappointed", "I got nothing on the target done. Two short sentences: honest, firm, "
+                    "no insults; ask what got in the way.")}[outcome]
+    return await _speak_up(
+        ctx, instruction=f"{facts} {how[1]}",
+        fallback={"all": f"Target cleared. Next up: {nxt}." if nxt else "Target cleared. Good work.",
+                  "some": "Some of it's done. The rest carries over to the next block.",
+                  "none": "Nothing on the target got done. What got in the way?"}[outcome],
+        mood=how[0], keep_mood=outcome == "all", channel="web",
+        meta={"kind": "proof_result", "task_id": task.id, "outcome": outcome})
 
 
 @agent("free_time_watcher")

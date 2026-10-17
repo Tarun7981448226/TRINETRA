@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile
@@ -512,6 +512,127 @@ async def respond(
     result = await core.dispatch(
         IncomingEvent("user.message", {"text": phrase.format(title=task.title), "button": True}, "web"), db
     )
+    return DispatchOut(**result.__dict__)
+
+
+# ---------- courses + proof of work (TUF DSA, the ML Specialization) ----------
+
+def _course(db: Session, course_id: int) -> "Course":
+    from app.core import courses
+    from app.db.models import Course
+
+    courses.ensure(db)
+    c = db.get(Course, course_id)
+    if c is None:
+        raise HTTPException(404, "no such course")
+    return c
+
+
+@router.get("/courses")
+def list_courses(db: Session = Depends(get_db)):
+    from app.core import courses
+    from app.db.models import Course
+
+    courses.ensure(db)
+    out = [courses.summary(db, c) for c in db.scalars(select(Course).order_by(Course.id)).all()]
+    db.commit()
+    return out
+
+
+class OutlineIn(BaseModel):
+    text: str = Field(min_length=1, max_length=40000)
+
+
+@router.put("/courses/{course_id}/outline")
+def course_outline(course_id: int, body: OutlineIn, db: Session = Depends(get_db)):
+    from app.core import courses
+
+    c = _course(db, course_id)
+    n = courses.set_outline(db, c, body.text)
+    if n == 0:
+        raise HTTPException(422, "no items found: one item per line, '# Section' for headers")
+    db.commit()
+    return courses.summary(db, c)
+
+
+class PositionIn(BaseModel):
+    item_id: int
+
+
+@router.post("/courses/{course_id}/position")
+def course_position(course_id: int, body: PositionIn, db: Session = Depends(get_db)):
+    from app.core import courses
+    from app.db.models import StudyItem
+
+    c = _course(db, course_id)
+    item = db.get(StudyItem, body.item_id)
+    if item is None or item.course_id != c.id:
+        raise HTTPException(404, "no such item in this course")
+    courses.set_position(db, c, item.id)
+    db.commit()
+    return courses.summary(db, c)
+
+
+class CourseSettingsIn(BaseModel):
+    per_block: int | None = Field(None, ge=1, le=20)
+    target_date: date | None = None
+
+
+@router.patch("/courses/{course_id}")
+def course_settings(course_id: int, body: CourseSettingsIn, db: Session = Depends(get_db)):
+    from app.core import courses
+
+    c = _course(db, course_id)
+    if body.per_block is not None:
+        c.per_block = body.per_block
+    if body.target_date is not None:
+        c.target_date = datetime.combine(body.target_date, datetime.min.time(), user_tz()).astimezone(timezone.utc)
+    db.commit()
+    return courses.summary(db, c)
+
+
+@router.get("/proof/{task_id}")
+def proof_form(task_id: int, db: Session = Depends(get_db)):
+    from app.core import courses
+
+    task = db.get(Task, task_id)
+    tg = courses.target(db, task) if task else None
+    if tg is None:
+        raise HTTPException(404, "not a course block")
+    c, aimed = tg
+    rest = [i for i in courses.items(db, c) if not i.done_at and i not in aimed][:6]
+    row = lambda i: {"id": i.id, "section": i.section, "title": i.title, "done": i.task_id == task.id}  # noqa: E731
+    db.commit()
+    return {"task": {"id": task.id, "title": task.title, "status": task.status}, "course": c.title,
+            "aimed": [row(i) for i in aimed], "more": [row(i) for i in rest],
+            "logged": task.status in (TaskStatus.DONE, TaskStatus.SKIPPED)}
+
+
+class ProofIn(BaseModel):
+    done_ids: list[int] = Field(default_factory=list, max_length=100)
+    note: str = Field(default="", max_length=300)
+
+
+@router.post("/proof/{task_id}", response_model=DispatchOut)
+async def proof_log(task_id: int, body: ProofIn, db: Session = Depends(get_db), core: Orchestrator = Depends(get_orchestrator)):
+    from app.core import courses
+
+    task = db.get(Task, task_id)
+    if task is None or courses.target(db, task) is None:
+        raise HTTPException(404, "not a course block")
+    res = courses.record(db, task, body.done_ids, body.note)
+    status = {"all": TaskStatus.DONE, "some": TaskStatus.DONE, "none": TaskStatus.SKIPPED}[res["outcome"]]
+    timetable.set_status(task, status)
+    if res["outcome"] == "some":
+        task.rating = 2
+    for m in db.scalars(select(Message).where(Message.meta.is_not(None)).order_by(Message.id.desc()).limit(30)):
+        if m.meta.get("task_id") == task.id and not m.meta.get("answered"):
+            m.meta = {**m.meta, "answered": res["outcome"]}
+    said = "✅ " + "; ".join(res["finished"]) if res["finished"] else "Nothing from the target."
+    db.add(Message(role="user", channel="web", content=f"📋 {task.title}: {said}" + (f" — stopped at: {res['note']}" if res["note"] else "")))
+    db.flush()
+    await core.dispatch(IncomingEvent(f"task.{status}", {"task_id": task.id, "title": task.title}), db)
+    result = await core.dispatch(IncomingEvent("proof.logged", {"task_id": task.id, **res}, "web"), db)
     return DispatchOut(**result.__dict__)
 
 

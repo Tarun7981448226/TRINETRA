@@ -271,3 +271,33 @@ class GuestReply(Base):
     text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Course(Base):
+    """Something you're working through in order (TUF DSA, the ML Specialization). Its blocks get daily targets."""
+
+    __tablename__ = "courses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(40), unique=True)
+    title: Mapped[str] = mapped_column(String(200))
+    block_match: Mapped[str] = mapped_column(String(200))  # regex on block titles: these blocks work on this course
+    goal_id: Mapped[int | None] = mapped_column(ForeignKey("goals.id"), nullable=True)
+    per_block: Mapped[int] = mapped_column(Integer, default=1)  # items to finish in one block
+    target_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    active_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # targets + proof start here
+    starter: Mapped[bool] = mapped_column(Boolean, default=True)  # still my starter outline, not your real syllabus
+
+
+class StudyItem(Base):
+    """One lecture / problem set / week of a course, in order."""
+
+    __tablename__ = "study_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    section: Mapped[str] = mapped_column(String(200), default="")
+    title: Mapped[str] = mapped_column(String(300))
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the block it was done in

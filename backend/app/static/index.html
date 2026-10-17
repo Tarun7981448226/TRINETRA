@@ -164,6 +164,26 @@
   #alertBox .go { background: #fff; color: #8b0f1c; font-weight: 700; }
   #alertBox .skip { background: transparent; color: #ffd6da; border: 1px solid #ffd6da66; }
   #alertBox .skip.confirm { background: #ffd6da22; border-color: #ffd6da; }
+  .crs { border-top: 1px solid var(--line); padding: 14px 0; font-size: 14px; }
+  .crs h3 { margin: 0 0 4px; font-size: 16px; }
+  .crs .starter { display: inline-block; font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; padding: 1px 6px; margin-bottom: 6px; }
+  .crs .bar { height: 8px; background: var(--bg); border-radius: 8px; overflow: hidden; margin: 6px 0; }
+  .crs .bar i { display: block; height: 100%; background: var(--accent); }
+  .crs .muted, .proof .muted { color: var(--muted); font-size: 12px; }
+  .crs .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .crs .acts button, .crs .list button, .proof button.sec { background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 7px 12px; font-size: 13px; font-weight: 500; }
+  .crs .list { max-height: 50vh; overflow-y: auto; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .crs .list button { text-align: left; } .crs .list button.done { color: var(--muted); text-decoration: line-through; }
+  .crs .list .sec-h { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-top: 8px; }
+  .crs .confirm, .proof .confirm { background: var(--bg); border: 1px solid var(--accent); border-radius: 12px; padding: 10px; margin-top: 8px; }
+  .crs textarea { width: 100%; min-height: 220px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font: 13px/1.4 ui-monospace, monospace; margin-top: 8px; }
+  .crs input[type=number] { width: 64px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+  .proof label { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 6px; font-size: 15px; }
+  .proof label input { flex: none; width: 20px; height: 20px; min-width: 0; padding: 0; margin: 1px 0 0; accent-color: var(--accent); }
+  .proof label span { flex: 1; text-align: left; }
+  .proof h4 { margin: 14px 0 6px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .proof textarea { width: 100%; min-height: 70px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font: inherit; }
+  .proof .log { margin-top: 12px; padding: 14px 20px; width: 100%; }
   .vis .rl { display: inline-block; margin-top: 8px; color: var(--accent); font-size: 13px; }
   .rlink { display: inline-flex; align-items: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); text-decoration: none; font-size: 14px; }
   /* ---- timetable dashboard ---- */
@@ -287,6 +307,7 @@
       <button class="icon" id="bellBtn" title="Notifications on this device">🔔</button>
       <button class="icon" id="repBtn" title="Weekly report">📊</button>
       <button class="icon" id="goalBtn" title="My goals">🎯</button>
+      <button class="icon" id="crsBtn" title="My courses: TUF + ML">📚</button>
       <button class="icon" id="dayBtn" title="My timetable">📅</button>
       <button class="icon" id="memBtn" title="What I remember">🧠</button>
       <button class="icon" id="visBtn" title="Portfolio visitors">👥</button>
@@ -322,6 +343,15 @@
   <div id="askDrawer" class="drawer"><section>
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>A visitor is asking</h2></div>
     <div id="askBox"></div>
+  </section></div>
+  <div id="crsDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>My courses</h2></div>
+    <p>Each TUF / ML block gets a target from here, and at the end you tick what you really finished.</p>
+    <div id="courses"></div>
+  </section></div>
+  <div id="proofDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>What did you get through?</h2></div>
+    <div id="proofBox"></div>
   </section></div>
   <div id="alertScreen" class="drawer"><section>
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>🚨 Red alert</h2></div>
@@ -471,6 +501,12 @@
     log.appendChild(el);
     const respondUrl = meta?.respond || (meta?.task_id ? `/tasks/${meta.task_id}/respond` : null)
                        || (meta?.kind === "plan_proposal" && meta.id ? `/proposals/${meta.id}/respond` : null);
+    if (meta?.kind === "proof" && meta.task_id) {
+      const row = document.createElement("div"); row.className = "btns" + (meta.answered ? " answered" : "");
+      const b = document.createElement("button"); b.textContent = meta.answered ? "📋 Logged" : "📋 Tick what I finished";
+      b.onclick = () => go(`proof/${meta.task_id}`);
+      row.append(b); log.appendChild(row);
+    }
     if (meta?.buttons && respondUrl) {
       const row = document.createElement("div");
       row.className = "btns" + (meta.answered ? " answered" : "");
@@ -1104,7 +1140,7 @@
   const SCREENS = { timetable: ["planner", openPlanner], goals: ["goalDrawer", loadGoals],
                     report: ["repDrawer", loadReports], memory: ["drawer", loadMems], wake: ["wakeScreen", loadWake],
                     visitors: ["visDrawer", loadVisitors], ask: ["askDrawer", loadAsk], reply: ["replyDrawer", loadReply],
-                    alert: ["alertScreen", loadAlert],
+                    alert: ["alertScreen", loadAlert], courses: ["crsDrawer", loadCourses], proof: ["proofDrawer", loadProof],
                     character: ["charDrawer", loadCharacter] };
   function closeScreens() {
     for (const [id] of Object.values(SCREENS)) $(id).classList.remove("open");
@@ -1130,6 +1166,7 @@
   $("repBtn").onclick = () => go("report");
   $("memBtn").onclick = () => go("memory");
   $("visBtn").onclick = () => go("visitors");
+  $("crsBtn").onclick = () => go("courses");
   $("chrBtn").onclick = () => go("character");
   {  // deep link (e.g. a notification opens /#report): put the dashboard underneath so Back works
     const n = location.hash.slice(1);
@@ -1276,6 +1313,95 @@
       if (!r.ok) send.disabled = false;
     };
     box.append(chips, txt, send);
+  }
+
+  // ---- 📚 courses: syllabus, where I am, pace (proof of work for TUF + the ML Specialization) ----
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const jsonReq = (url, method, body) => fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  async function loadCourses() {
+    const box = $("courses"); box.innerHTML = "";
+    let rows = [];
+    try { rows = await (await fetch("/courses")).json(); } catch { box.textContent = "I can't reach my brain right now."; return; }
+    for (const c of rows) {
+      const card = el("div", "crs");
+      card.append(el("h3", null, c.title));
+      if (c.starter) card.append(el("span", "starter", "Starter outline: replace it with your real syllabus"));
+      const bar = el("div", "bar"), fill = el("i"); fill.style.width = `${c.total ? (100 * c.done / c.total) : 0}%`; bar.append(fill);
+      card.append(bar, el("div", null, `${c.done} of ${c.total} done` + (c.now_at ? ` · now at: ${c.now_at.title}` : " · finished 🎉")));
+      const pace = [];
+      if (c.target_date) pace.push(`target ${c.target_date}`);
+      if (c.need_per_block != null) pace.push(`~${c.blocks_left} blocks left → need ${c.need_per_block} a block (plan: ${c.per_block})` + (c.on_pace ? " ✅" : " ⚠️ behind"));
+      pace.push(`${c.this_week} done this week`);
+      if (c.active_from) pace.push(`targets start ${c.active_from}`);
+      card.append(el("div", "muted", pace.join(" · ")));
+      const acts = el("div", "acts"), panel = el("div");
+      const bWhere = el("button", null, "📍 Set where I am"), bEdit = el("button", null, "✏️ Edit syllabus"), bPace = el("button", null, "⚙️ Per block");
+      bWhere.onclick = () => { panel.innerHTML = ""; panel.append(whereList(c)); };
+      bEdit.onclick = () => { panel.innerHTML = ""; panel.append(editor(c)); };
+      bPace.onclick = () => { panel.innerHTML = ""; panel.append(perBlock(c)); };
+      acts.append(bWhere, bEdit, bPace); card.append(acts, panel); box.append(card);
+    }
+  }
+  function whereList(c) {  // tap the item you're on → a confirm (one tap never changes data)
+    const list = el("div", "list"); let sec = null;
+    for (const it of c.items) {
+      if (it.section !== sec) { sec = it.section; if (sec) list.append(el("div", "sec-h", sec)); }
+      const b = el("button", it.done ? "done" : null, it.title);
+      b.onclick = () => {
+        list.querySelector(".confirm")?.remove();
+        const conf = el("div", "confirm", `You're at “${it.title}”: everything before it gets marked done, this and after stay to do. `);
+        const yes = el("button", null, "✅ Yes, I'm here"), no = el("button", null, "Cancel");
+        yes.onclick = async () => { yes.disabled = true; const r = await jsonReq(`/courses/${c.id}/position`, "POST", { item_id: it.id }); if (r.ok) loadCourses(); else yes.textContent = "Couldn't save — try again"; };
+        no.onclick = () => conf.remove();
+        conf.append(el("br"), yes, " ", no); b.after(conf);
+      };
+      list.append(b);
+    }
+    return list;
+  }
+  function editor(c) {
+    const wrap = el("div"); let sec = null; const lines = [];
+    for (const it of c.items) { if (it.section !== sec) { sec = it.section; if (sec) lines.push(`# ${sec}`); } lines.push(it.title); }
+    const ta = el("textarea"); ta.value = lines.join("\n");
+    const hint = el("div", "muted", "One item per line (a lecture, a problem set, a week). “# Name” starts a section. Items you've finished keep their tick if the name stays the same.");
+    const save = el("button", null, "💾 Save syllabus");
+    save.onclick = async () => { save.disabled = true; const r = await jsonReq(`/courses/${c.id}/outline`, "PUT", { text: ta.value }); if (r.ok) loadCourses(); else { save.disabled = false; save.textContent = "Nothing to save — check the list"; } };
+    wrap.append(hint, ta, save);
+    return wrap;
+  }
+  function perBlock(c) {
+    const wrap = el("div", "confirm", "Items to finish in one block: ");
+    const n = el("input"); n.type = "number"; n.min = 1; n.max = 20; n.value = c.per_block;
+    const save = el("button", null, "Save");
+    save.onclick = async () => { const r = await jsonReq(`/courses/${c.id}`, "PATCH", { per_block: +n.value }); if (r.ok) loadCourses(); };
+    wrap.append(n, " ", save);
+    return wrap;
+  }
+  async function loadProof(taskId) {
+    const box = $("proofBox"); box.innerHTML = ""; box.className = "proof";
+    let f;
+    try { const r = await fetch(`/proof/${taskId}`); if (!r.ok) throw 0; f = await r.json(); } catch { box.textContent = "That block isn't a course block."; return; }
+    box.append(el("div", "muted", `${f.task.title} · ${f.course}` + (f.logged ? " · already logged (you can update it)" : "")));
+    const ticks = [];
+    const item = (it) => { const l = el("label"), cb = el("input"); cb.type = "checkbox"; cb.checked = it.done; cb.value = it.id; ticks.push(cb); l.append(cb, el("span", null, it.title)); return l; };
+    box.append(el("h4", null, "Today's target"));
+    for (const it of f.aimed) box.append(item(it));
+    if (!f.aimed.length) box.append(el("div", "muted", "No target: the course is finished."));
+    if (f.more.length) {
+      const more = el("button", "sec", "Did more? Show what's next");
+      more.onclick = () => { more.remove(); box.insertBefore(el("h4", null, "Also finished"), note.previousSibling); for (const it of f.more) box.insertBefore(item(it), note.previousSibling); };
+      box.append(more);
+    }
+    box.append(el("h4", null, "Where did you stop?"));
+    const note = el("textarea"); note.placeholder = "e.g. halfway through Second Largest, lecture 4 at 12:30"; note.maxLength = 300;
+    const save = el("button", "log", "📋 Log it");
+    save.onclick = async () => {
+      save.disabled = true; save.textContent = "Logging…";
+      const r = await jsonReq(`/proof/${taskId}`, "POST", { done_ids: ticks.filter((t) => t.checked).map((t) => +t.value), note: note.value });
+      if (!r.ok) { save.disabled = false; save.textContent = "Couldn't log — try again"; return; }
+      history.back(); await poll();
+    };
+    box.append(note, save);
   }
 
   // ---- 🚨 red alert: an important block, a reminder and three follow-ups ignored ----
