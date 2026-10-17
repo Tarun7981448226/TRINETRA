@@ -51,9 +51,10 @@ MOOD_EXTRA = {  # music words → the mood it plays in (on top of the emotion wo
 LAB = [  # the portfolio's lab (TRINETRA HQ): orders for the team
     ("assemble", re.compile(r"^\s*((team|everyone|agents),?\s*)?(assemble|line up|fall in)[\s.!]*$|^\s*(please\s+)?(assemble|line up) (the |your )?(team|agents|squad)[\s.!]*$", re.I)),
     ("roles", re.compile(r"\bwhat (do|does) (your |all your |the )?(agents?|bots?)( all)? do\b|\bwho does what\b|\b(your )?agents'? (tasks|jobs|roles)\b", re.I)),
-    (None, re.compile(r"\b(open|show|visit|take me to|go to)( me)? (the |your )(lab|hq|headquarters|agents)\b", re.I)),
+    ("how", re.compile(r"\bhow (does|do) (your |the )?(brain|agents|team) work\b", re.I)),
+    (None, re.compile(r"\b(open|show|visit|take me to|go to)( me)? (the |your )(lab|hq|headquarters|agents|brain)\b", re.I)),
 ]
-LAB_LABEL = {"assemble": "🧍 Assemble", "roles": "❓ Who does what", None: "🧪 Lab"}
+LAB_LABEL = {"assemble": "🧍 Assemble", "roles": "❓ Who does what", "how": "📘 How the brain works", None: "🧠 Brain"}
 PLAY = re.compile(r"\b(play|playing|plays|jam|strum|perform|bang|hit|rock out|pick up)\b", re.I)
 MUSIC = re.compile(r"\b(music|songs?|tunes?|melody|something|anything|beats?)\b|\bsing\b", re.I)
 DANCE = re.compile(r"\b(dance|dancing|dances|boogie|groove|bust a move|shake it|party time)\b", re.I)
@@ -136,7 +137,7 @@ def label(show: dict) -> str:
     if kind == "dance":
         return "💃 Dance"
     if kind == "lab":
-        return LAB_LABEL.get(show.get("cmd"), "🧪 Lab")
+        return LAB_LABEL.get(show.get("cmd"), "🧠 Brain")
     if kind == "act":
         return ACTION_LABEL[show["action"]]
     name = INSTRUMENT_LABEL.get(show.get("instrument") or "", "🎶 Music")

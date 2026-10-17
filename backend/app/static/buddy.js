@@ -126,7 +126,7 @@
   }
 
   // ---------- the fuzzy blob ----------
-  function fuzzySVG(s) {
+  function fuzzySVG(s, part = "all") {  // part: "all" · "body" (no face: rasterised once) · "face" (the face alone, drawn live)
     let [body, shade, dark] = PALETTES[s.palette] || PALETTES.saffron;
     if (s.emotion === "angry") { body = mix(body, "#ff3b2f", 0.22); shade = mix(shade, "#b3241b", 0.22); }
     const shine = (PALETTES[s.palette] || [])[3] ?? 0.38;  // reds wash out to pink with a strong white shine
@@ -170,7 +170,9 @@
     else if (["firm", "angry"].includes(emo)) face += `<path d="M44 72 Q50 67 56 72" stroke="${dark}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
     const glow = act === "listening" ? GEM_RED : (act === "speaking" || act === "thinking") ? GEM_HOT : GEM;
     const gemOn = !dozing;
-    return `<svg class="tb-svg" viewBox="0 0 100 100" aria-hidden="true">
+    if (part === "face") return face;
+    if (part === "key") return [s.palette, emo === "angry", gemOn ? glow : "off", s.suit ? `${s.suit.jacket}${s.suit.tie}${s.suit.badge}` : "", s.girl].join("|");
+    return `<svg class="tb-svg" viewBox="0 0 100 100" aria-hidden="true"${part === "body" ? ' xmlns="http://www.w3.org/2000/svg" width="160" height="160"' : ""}>
       <defs>
         <radialGradient id="${u}b" cx="36%" cy="28%" r="75%"><stop offset="0" stop-color="${hi}"/><stop offset=".55" stop-color="${body}"/><stop offset="1" stop-color="${shade}"/></radialGradient>
         <filter id="${u}f" x="-15%" y="-15%" width="130%" height="130%">
@@ -189,7 +191,7 @@
         ${s.suit ? `<path d="M15 76 C19 85 33 87 50 87 C67 87 81 85 85 76 C76 80 68 81 62 80 L50 87 L38 80 C32 81 24 80 15 76 Z" fill="${s.suit.jacket}"/>
           <path d="M38 80 L50 87 L62 80 Z" fill="#f4f4f4"/><path d="M48.4 80.6 L51.6 80.6 L52.6 85 L50 87.4 L47.4 85 Z" fill="${s.suit.tie}"/>
           ${s.suit.badge ? `<circle cx="70" cy="81" r="1.8" fill="${s.suit.badge}"/>` : ""}` : ""}
-        <g class="tb-face">${face}</g>
+        ${part === "body" ? "" : `<g class="tb-face">${face}</g>`}
         ${s.girl ? `<path d="M66 25 L55 17 L56 32 Z M66 25 L77 17 L76 32 Z" fill="${BOW}" stroke="${mix(BOW, "#000000", 0.25)}" stroke-width="1"/><circle cx="66" cy="25" r="3.2" fill="${BOW_KNOT}"/>` : ""}
       </g></svg>`;
   }
@@ -306,6 +308,20 @@
   const WHITE = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];  // pitch class → white key in the octave
   const whiteOf = (m) => Math.floor(m / 12) * 7 + WHITE[m % 12];
 
+  // ---------- fast fuzzy: the furry body drawn ONCE into an image (cached per look), the face drawn live on top ----------
+  // Safari renders SVG fur filters on the CPU on every frame: 67 live fuzzy dolls ran at 9 fps, as images at 60.
+  const BODIES = new Map();
+  function bodyURL(s) {
+    const key = fuzzySVG(s, "key");
+    let url = BODIES.get(key);
+    if (!url) {
+      const svg = fuzzySVG({ ...s, uid: `tbr${BODIES.size}x` }, "body");
+      url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+      BODIES.set(key, url);
+    }
+    return url;
+  }
+
   // ---------- styles (injected once per document / shadow root) ----------
   const CSS = `
   .tb-root { position: relative; width: 100%; height: 100%; font-size: 14px; user-select: none; -webkit-user-select: none; }
@@ -348,6 +364,10 @@
   @keyframes tb-ripple { 0% { opacity: .55; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.35); } }
   .tb-spark { color: #ffd27a; font-size: .9em; animation: tb-spark 1.1s ease-out forwards; }
   @keyframes tb-spark { 0% { opacity: 0; transform: translate(0, 0) scale(.4); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(1.1); } }
+  .tb-rbox { position: relative; width: 100%; height: 100%; }
+  .tb-rbox > .tb-body { position: absolute; inset: 0; transform-origin: 50% 88%; }
+  .tb-rimg, .tb-rface { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; pointer-events: none; }
+  .tb-root.tb-still .tb-body { animation: none !important; }
   /* the shadow: on the ground, never rotates — it shrinks while the body is in the air, slides with a sway */
   .tb-shadow { position: absolute; left: 18%; width: 64%; top: 88.5%; height: 6%; border-radius: 50%; pointer-events: none;
     background: radial-gradient(closest-side, rgba(0, 0, 0, .34), rgba(0, 0, 0, .12) 70%, rgba(0, 0, 0, 0));
@@ -420,7 +440,7 @@
     const s = {
       uid: `tb${++n}x`, style: opts.style === "fuzzy" ? "fuzzy" : "pixel", palette: PALETTES[opts.palette] ? opts.palette : "saffron",
       emotion: "neutral", activity: "idle", lookX: 0, lookY: 0, blinking: false, talkFrame: 0, stepFrame: 0,
-      girl: !!opts.bow, arms: null, prop: null, moveCls: null, forceAct: null, held: null,
+      raster: !!opts.raster, girl: !!opts.bow, arms: null, prop: null, moveCls: null, forceAct: null, held: null,
       suit: opts.suit ? { jacket: "#2b3142", tie: "#3a7bd5", ...(opts.suit === true ? {} : opts.suit) } : null,
     };
     const still = opts.static || matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -434,12 +454,22 @@
     const flags = new Set();  // short-lived classes: beat, strum, flip
     const cls = () => {
       const act = s.forceAct || s.activity;
-      root.className = `tb-root tb-${s.style} tb-${act} tb-e-${s.emotion}` + (root._extra || "") + (s.moveCls ? ` tb-m-${s.moveCls}` : "")
+      root.className = `tb-root tb-${s.style} tb-${act} tb-e-${s.emotion}` + (opts.static ? " tb-still" : "") + (root._extra || "") + (s.moveCls ? ` tb-m-${s.moveCls}` : "")
         + (s.prop ? ` tb-p-${s.prop}` : "") + [...flags].map((f) => ` tb-${f}`).join("");
     };
+    let rimg = null, rface = null;  // raster mode: the body image stays, only the face redraws
     const draw = () => {
       const view = s.forceAct ? { ...s, activity: s.forceAct } : s;
-      art.innerHTML = s.style === "fuzzy" ? fuzzySVG(view) : pixelSVG(view);
+      if (s.style === "fuzzy" && s.raster) {
+        if (!rimg || !art.contains(rimg)) {
+          art.innerHTML = `<div class="tb-svg tb-rbox"><div class="tb-body"><img class="tb-rimg" alt="" draggable="false">` +
+            `<svg class="tb-rface" viewBox="0 0 100 100" aria-hidden="true"><g class="tb-face"></g></svg></div></div>`;
+          rimg = art.querySelector(".tb-rimg"); rface = art.querySelector(".tb-face");
+        }
+        const url = bodyURL(view);
+        if (rimg.getAttribute("src") !== url) rimg.setAttribute("src", url);
+        rface.innerHTML = fuzzySVG(view, "face");
+      } else { rimg = null; art.innerHTML = s.style === "fuzzy" ? fuzzySVG(view) : pixelSVG(view); }
       cls();
     };
     const flash = (f, ms) => { flags.add(f); cls(); setTimeout(() => { flags.delete(f); cls(); }, ms); };

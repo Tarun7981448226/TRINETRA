@@ -131,7 +131,7 @@
       <textarea name="message" placeholder="Your message for Tarun (optional)" maxlength="1000" aria-label="Message for Tarun"></textarea>
       <button class="send" type="submit">Leave it for Tarun</button></form>
   </section>
-  <div class="nudge">Hi, I'm Tarun's AI. Click to visit my lab 👋</div>
+  <div class="nudge">Hi, I'm Tarun's AI. Click to see my brain 🧠</div>
   <button class="orb" type="button" aria-label="Talk to TRINETRA, Tarun's AI mentor" aria-expanded="false"><div class="float"><div class="buddy"></div></div></button>
 </div>`;
 
@@ -163,7 +163,7 @@
       buddy = window.TrinetraBuddy.create($(".buddy"), { style: LOOK.style || "pixel", palette: LOOK.palette || "saffron" });
       sync();
       loadMusic();
-      if (WORLD_ON) later(4000, loadWorld);  // ready before they click
+      if (BRAIN_ON) later(4000, loadWorld);  // ready before they click
     };
     if (window.TrinetraBuddy) return ready();
     const sc = document.createElement("script"); sc.src = `${API}/guest/buddy.js`; sc.onload = ready;
@@ -184,7 +184,7 @@
     await loadMusic();
     if (!window.TrinetraMusic || !buddy) return;
     if (s.show === "stop") return stopShow();
-    if (s.show === "lab") { stopShow(); return openWorld(s.cmd); }  // "assemble" / "what do your agents do" → the big screen
+    if (s.show === "lab") { stopShow(); return openWorld(s.cmd); }  // "assemble" / "what do your agents do" → the Brain
     stopShow();  // the last one ends first, so its clean-up can't undo this one
     wrap.classList.add("showing");
     TrinetraMusic.show(buddy, s, { mood: LOOK.mood, feel: (e) => { performing = e; sync(); },
@@ -192,26 +192,26 @@
     if (s.show === "play") later(300, () => buddy.look(0, 30));
   }
 
-  // ---- its world (static/world.js): a click on the doll opens the big screen — TRINETRA HQ (the real 66 agents, 10 teams,
-  //      managers reporting to TRINETRA), the lake and home — inside the portfolio. 💬 there opens the chat. ----
-  let worldReady = null, bigWorld = null;
-  const WORLD_ON = me?.dataset.world !== "off";
+  // ---- its brain (static/brain.js): a click on the doll opens TRINETRA's Brain inside the portfolio — the real 66 agents in 10
+  //      teams, placed in the brain regions that match their jobs, managers reporting to TRINETRA at the thalamus. 💬 there = chat ----
+  let brainReady = null, bigBrain = null;
+  const BRAIN_ON = me?.dataset.world !== "off";
   function loadWorld() {
-    return (worldReady ??= new Promise((ok) => {
-      if (window.TrinetraWorld) return ok();
-      const sc = document.createElement("script"); sc.src = `${API}/static/world.js`; sc.onload = ok; sc.onerror = ok; document.head.appendChild(sc);
+    return (brainReady ??= new Promise((ok) => {
+      if (window.TrinetraBrain) return ok();
+      const sc = document.createElement("script"); sc.src = `${API}/static/brain.js`; sc.onload = ok; sc.onerror = ok; document.head.appendChild(sc);
     }));
   }
   async function openWorld(cmd) {
-    if (!WORLD_ON) return open();
+    if (!BRAIN_ON) return open();
     nudge.classList.remove("on");
     await loadWorld();
-    if (!window.TrinetraWorld) return open();
-    if (bigWorld) { if (cmd) bigWorld.go("lab").then(() => setTimeout(() => bigWorld?.order(cmd), 900)); return; }
-    bigWorld = TrinetraWorld.open(wrap, {
+    if (!window.TrinetraBrain) return open();
+    if (bigBrain) { if (cmd) bigBrain.ready.then(() => bigBrain?.order(cmd)); return; }  // after the team has loaded
+    bigBrain = TrinetraBrain.open(wrap, {
       agents: fetch(`${API}/guest/agents`).then((r) => (r.ok ? r.json() : null)),
-      look: { style: LOOK.style || "pixel", palette: LOOK.palette || "saffron" }, place: "lab", cmd,
-      onChat: () => later(50, open), onClose: () => { bigWorld = null; },
+      look: { style: LOOK.style || "pixel", palette: LOOK.palette || "saffron" }, cmd,
+      onChat: () => later(50, open), onClose: () => { bigBrain = null; },
     });
   }
 
@@ -730,7 +730,7 @@
     wrap.classList.remove("open", "speaking"); panel.classList.remove("on"); orb.setAttribute("aria-expanded", "false");
     look(0, 0); orb.focus({ preventScroll: true });
   }
-  // tap mid-show = stop the show; chat open = close it; otherwise its world opens (the lab), and 💬 there starts the chat
+  // tap mid-show = stop the show; chat open = close it; otherwise its Brain opens, and 💬 there starts the chat
   orb.onclick = () => (window.TrinetraMusic?.playing ? stopShow() : has("open") ? close() : openWorld());
   $(".close").onclick = close;
   root.addEventListener("keydown", (e) => { if (e.key === "Escape" && has("open")) close(); });

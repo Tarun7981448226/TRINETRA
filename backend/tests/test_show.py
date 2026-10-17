@@ -46,14 +46,14 @@ def test_music_files_present():
 
 def test_world_and_shadow_assets(client):
     """The portfolio world script is public, and the shadow lives outside the moving body (so it never rotates)."""
-    r = client.get("/static/world.js")
-    assert r.status_code == 200 and "TrinetraWorld" in r.text and "America/Los_Angeles" in r.text
-    for place in ('"lab"', '"lake"', '"home"', '"sleep"'):
-        assert place in r.text
+    r = client.get("/static/brain.js")
+    assert r.status_code == 200 and "TrinetraBrain" in r.text and "thalamus" in r.text.lower()
+    for team in ("command", "time_planning", "reminders", "monitoring", "learning", "coaching", "wellbeing", "memory", "communications", "mentor_emotion"):
+        assert f"{team}: [" in r.text, team  # every council has a brain region
     buddy = client.get("/static/buddy.js").text
     assert '<div class="tb-shadow"></div><div class="tb-mover">' in buddy  # sibling of the mover, not inside it
     assert 'ellipse cx="8" cy="13.6"' not in buddy and 'ellipse cx="50" cy="89"' not in buddy
-    assert "setSuit(" in buddy and "hold(act)" in buddy
+    assert "setSuit(" in buddy and "hold(act)" in buddy and "bodyURL(" in buddy  # fuzzy dolls rasterised for speed
     assert "loadWorld" in client.get("/guest/eye.js").text
 
 
