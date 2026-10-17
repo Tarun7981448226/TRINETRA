@@ -89,9 +89,16 @@ def propose(db: Session, ops: list[dict], why: str, mood: str = "focused and sha
     """A schedule proposal message with Approve / Reject (nothing changes until you approve)."""
     if not ops:
         return None
-    lines = [f"• {o['title']}: {date.fromisoformat(o['date']):%a %d %b} {o['start']}, {o['duration_min']} min" for o in ops]
+    def line(o: dict) -> str:
+        if o.get("op") == "delete":
+            t = db.get(Task, o["id"])
+            return f"• Drop {t.title} ({local(t.planned_start):%a %H:%M})" if t else "• Drop a block"
+        return f"• {o['title']}: {date.fromisoformat(o['date']):%a %d %b} {o['start']}, {o['duration_min']} min"
+
+    lines = [line(o) for o in ops]
     msg = Message(role="trinetra", channel="reminder", mood=mood,
-                  content=f"{why}\nHere's what I'd add:\n" + "\n".join(lines),
+                  content=f"{why}\n" + ("Here's what I'd change:\n" if any(o.get("op") == "delete" for o in ops)
+                                         else "Here's what I'd add:\n") + "\n".join(lines),
                   meta={"kind": "schedule_proposal", "ops": ops, "original_ops": ops, "buttons": ["approve", "reject"],
                         "why": why})
     db.add(msg)

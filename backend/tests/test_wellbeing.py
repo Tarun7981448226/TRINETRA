@@ -63,3 +63,27 @@ def test_long_unbroken_work_gets_water_then_a_real_break(client, llm_calls, monk
     assert fired == [(120, "hydrate"), (180, "break"), (270, "hydrate")]  # the watch runs while a block is on
     kinds = [(m["meta"] or {}).get("nudge") for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "wellbeing"]
     assert kinds == ["hydrate", "break", "hydrate"]
+
+
+def test_moods_are_kept_and_stress_lightens_tomorrow(client, monkeypatch):
+    from app.config import get_settings
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "")  # the offline mood reader: keyword based
+    monkeypatch.setattr(get_settings(), "groq_api_key", "")
+    for text in ("I'm so stressed about the exam", "feeling overwhelmed with everything", "honestly exhausted today, so tired"):
+        client.post("/chat", json={"text": text})
+    days = client.get("/moods").json()
+    assert sum(d["count"] for d in days) == 3 and days[-1]["low"] == 3
+    tomorrow = DAY
+    with client.session_factory() as db:
+        done_block(db, "CSCI 570 class", tomorrow, 14, hours=3, status="planned")
+        low = done_block(db, "NumPy & Pandas", tomorrow, 22, hours=1, status="planned")
+        low.priority = 2
+        db.commit()
+        low_id = low.id
+    client.post("/events", json={"type": "plan.nightly", "payload": {"date": tomorrow.isoformat()}, "source": "test"})
+    prop = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "schedule_proposal"][-1]
+    assert prop["meta"]["ops"] == [{"op": "delete", "id": low_id}] and "Drop NumPy & Pandas" in prop["content"]
+    assert "stressed 3 times" in prop["content"]
+    client.post(prop["meta"]["respond"], json={"action": "approve"})
+    assert low_id not in [t["id"] for t in client.get("/tasks").json()]

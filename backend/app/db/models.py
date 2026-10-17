@@ -305,3 +305,15 @@ class StudyItem(Base):
     optional: Mapped[bool] = mapped_column(Boolean, default=False)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the block it was done in
+
+
+class MoodEntry(Base):
+    """How you felt, read from what you wrote (or said) — the Mood Tracker's log."""
+
+    __tablename__ = "mood_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    mood: Mapped[str] = mapped_column(String(30))
+    intensity: Mapped[float] = mapped_column(Float, default=0.0)
+    source: Mapped[str] = mapped_column(String(20), default="chat")

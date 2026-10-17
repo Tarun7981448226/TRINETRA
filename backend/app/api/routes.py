@@ -530,6 +530,22 @@ def _course(db: Session, course_id: int) -> "Course":
     return c
 
 
+@router.get("/moods")
+def get_moods(days: int = 14, db: Session = Depends(get_db)):
+    """Your mood per day (what TRINETRA read from your messages)."""
+    from collections import Counter, defaultdict
+
+    from app.db.models import MoodEntry
+
+    since = datetime.now(timezone.utc) - timedelta(days=min(days, 90))
+    by_day: dict = defaultdict(list)
+    for m in db.scalars(select(MoodEntry).where(MoodEntry.at >= since).order_by(MoodEntry.at)).all():
+        by_day[local(m.at).date().isoformat()].append(m.mood)
+    return [{"date": d, "main": Counter(ms).most_common(1)[0][0], "count": len(ms),
+             "low": sum(x in ("sad", "low", "tired", "stressed", "anxious", "lonely", "overwhelmed", "hurt", "frustrated")
+                        for x in ms)} for d, ms in sorted(by_day.items())]
+
+
 @router.get("/streaks")
 def get_streaks(db: Session = Depends(get_db)):
     from app.core import streaks

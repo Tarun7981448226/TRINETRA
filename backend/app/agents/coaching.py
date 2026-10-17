@@ -38,6 +38,14 @@ def analyse_week(db, monday: date) -> dict:
                              "forecast_finish": finish,
                              "late_by_days": (date.fromisoformat(finish) - date.fromisoformat(target)).days
                              if finish and target else None})
+    from collections import Counter
+
+    from app.db.models import MoodEntry
+
+    moods = db.scalars(select(MoodEntry).where(MoodEntry.at >= start, MoodEntry.at < end)).all()
+    out["moods"] = {"logged": len(moods), "counts": dict(Counter(m.mood for m in moods).most_common(6)),
+                    "low": sum(m.mood in ("sad", "low", "tired", "stressed", "anxious", "lonely", "overwhelmed", "hurt",
+                                          "frustrated") for m in moods)}
     return out
 
 
