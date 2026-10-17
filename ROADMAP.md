@@ -39,13 +39,13 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 
 **Stage E · Ship**
 15. ⬜ Private GitHub repo — local commit done, push waiting on Tarun's OK
-16. ⬜ Nightly backup to iCloud · old local DB → cloud · Mac desktop pet
+16. ✅ Nightly backup to iCloud (03:30, deploy/install-backup.sh; 30 days kept; GET /export) · ✅ old local trinetra.db checked: only 8 test messages from 16 Oct, nothing to migrate · ⬜ Mac desktop pet (later)
 
 ## 🚩 Before shipping (remind at ~90%)
-- [ ] Nightly memory backup to `iCloud Drive/TRINETRA Backups/` (30 days kept)
+- [x] Nightly memory backup to `iCloud Drive/TRINETRA Backups/` (30 days kept) — live since 2026-10-17
 - [ ] Private GitHub repo for the code
-- [ ] Migrate local `trinetra.db` → cloud Postgres (keep everything TRINETRA learned)
-- [ ] iCloud as archive for voice notes / journals / reports
+- [x] Migrate local `trinetra.db` → cloud Postgres — checked: only 8 test messages, nothing to keep
+- [x] iCloud as archive for journals / reports (they're in the nightly export; voice is generated on the fly, never stored)
 
 ## Wake-up, nagging & weekly report (2026-10-16)
 - ✅ 6am wake-up via iOS Shortcut "TRINETRA Wake": TRINETRA's voice, 3 medium math questions, angrier on the 06:10/06:20 re-runs; lock-screen nags every 5 min until solved; every morning logged

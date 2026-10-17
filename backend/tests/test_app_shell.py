@@ -152,3 +152,12 @@ def test_messages_carry_time_and_app_waits_for_a_tap_to_speak(client):
     assert rows and all(datetime.fromisoformat(m["at"]).tzinfo for m in rows)
     page = client.get("/").text
     assert 'id="hear"' in page and "heardId" in page  # iPhone: blocked lines wait for the first tap
+
+
+def test_export_has_everything_but_device_keys_and_needs_the_passcode(client, locked):
+    from app.config import get_settings
+    assert client.get("/export").status_code == 401
+    r = client.get("/export", headers={"Authorization": f"Bearer {get_settings().trinetra_passcode}"})
+    assert r.status_code == 200
+    t = r.json()["tables"]
+    assert "messages" in t and "journal_entries" in t and "study_items" in t and "push_subscriptions" not in t

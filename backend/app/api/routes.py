@@ -559,6 +559,21 @@ async def journal_write(body: JournalIn, db: Session = Depends(get_db), core: Or
     return {"id": e.id, "reply": result.reply}
 
 
+@router.get("/export")
+def export_all(db: Session = Depends(get_db)):
+    """Everything TRINETRA knows, as JSON — for the nightly iCloud backup (deploy/backup.sh). Passcode-protected."""
+    from app.db.models import Base
+
+    skip = {"push_subscriptions"}  # device keys: useless in a backup, and better not copied around
+    out = {"exported_at": datetime.now(timezone.utc).isoformat(), "tables": {}}
+    for table in Base.metadata.sorted_tables:
+        if table.name in skip:
+            continue
+        rows = db.execute(table.select()).mappings().all()
+        out["tables"][table.name] = [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in r.items()} for r in rows]
+    return out
+
+
 @router.get("/insights")
 def get_insights(db: Session = Depends(get_db)):
     """What your history says: real durations, peak/slump hours, what you push off, day-level links."""
