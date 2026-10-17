@@ -170,6 +170,10 @@
   .crs .bar { height: 8px; background: var(--bg); border-radius: 8px; overflow: hidden; margin: 6px 0; }
   .crs .bar i { display: block; height: 100%; background: var(--accent); }
   .crs .muted, .proof .muted { color: var(--muted); font-size: 12px; }
+  .streaks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6px; }
+  .stk { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px 4px; text-align: center; }
+  .stk b { display: block; font-size: 20px; } .stk span { display: block; font-size: 11px; } .stk small { color: var(--muted); font-size: 10px; }
+  .stk.on { border-color: var(--accent); } .stk.risk { border-color: #ff8a65; } .stk.risk small { color: #ff8a65; }
   .crs .behind { color: var(--firm, #ff8a65); font-size: 13px; margin-top: 4px; }
   .crs .sprints { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-top: 8px; }
   .crs .spr { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px; text-align: center; font-size: 11px; }
@@ -1326,6 +1330,16 @@
     const box = $("courses"); box.innerHTML = "";
     let rows = [];
     try { rows = await (await fetch("/courses")).json(); } catch { box.textContent = "I can't reach my brain right now."; return; }
+    try {
+      const st = await (await fetch("/streaks")).json();
+      const row = el("div", "streaks");
+      for (const x of st) {
+        const chip = el("div", "stk" + (x.today ? " on" : x.at_risk ? " risk" : ""));
+        chip.append(el("b", null, `${x.current ? "🔥 " : ""}${x.current}`), el("span", null, x.label), el("small", null, x.at_risk ? "do it today" : `best ${x.best}`));
+        row.append(chip);
+      }
+      box.append(row);
+    } catch {}
     for (const c of rows) {
       const card = el("div", "crs");
       card.append(el("h3", null, c.title));

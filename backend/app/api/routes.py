@@ -530,6 +530,13 @@ def _course(db: Session, course_id: int) -> "Course":
     return c
 
 
+@router.get("/streaks")
+def get_streaks(db: Session = Depends(get_db)):
+    from app.core import streaks
+
+    return streaks.all_streaks(db)
+
+
 @router.get("/courses")
 def list_courses(db: Session = Depends(get_db)):
     from app.core import courses

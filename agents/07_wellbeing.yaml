@@ -2,7 +2,7 @@ council: wellbeing
 description: The caretaker — protects your body and mind. Can veto plans that hurt you.
 agents:
   - {id: sleep_guardian, name: Sleep Guardian, role: "Protects sleep; vetoes plans that cut it", kind: rule, triggers: [plan.proposed], priority: 70, phase: "4"}
-  - {id: health_hydration, name: Health & Hydration, role: "Water, posture and movement reminders", kind: rule, triggers: [cron.hourly], priority: 20, phase: "2"}
-  - {id: meal_break_agent, name: Meal & Break Agent, role: "Makes sure you eat and take real breaks", kind: rule, triggers: [cron.hourly, plan.proposed], priority: 25, phase: "2"}
+  - {id: health_hydration, name: Health & Hydration, role: "After 90 min of unbroken work: water, stand up, stretch (max 4 a day)", kind: rule, triggers: [wellbeing.nudge], priority: 20, phase: "2"}
+  - {id: meal_break_agent, name: Meal & Break Agent, role: "After 3 h of unbroken work: a real 10-minute break (meal times stay ping-free, as you chose)", kind: rule, triggers: [wellbeing.nudge], priority: 25, phase: "2"}
   - {id: stress_monitor, name: Stress Monitor, role: "Detects overload from schedule density and your messages", kind: rule, triggers: [user.message, cron.evening], priority: 65, phase: "3b"}
   - {id: mood_tracker, name: Mood Tracker, role: "Records mood and energy check-ins over time", kind: rule, triggers: [checkin.mood, user.message], priority: 60, phase: "3b"}

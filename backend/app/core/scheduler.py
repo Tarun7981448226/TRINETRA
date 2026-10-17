@@ -254,6 +254,61 @@ async def silence_watch(db: Session, core: Orchestrator, now: datetime) -> bool:
     return True
 
 
+HYDRATE_AFTER, BREAK_AFTER = timedelta(minutes=90), timedelta(minutes=180)
+HYDRATE_MAX = 4  # a day
+CHAIN_GAP = timedelta(minutes=15)  # a gap shorter than this isn't a real break
+
+
+async def wellbeing_watch(db: Session, core: Orchestrator, now: datetime) -> str | None:
+    """Long unbroken stretches of work: water + stretch at 90 min, a real break at 3 h."""
+    from app.core.timeutil import user_tz
+
+    local_now = now.astimezone(user_tz())
+    if local_now.time() >= FREE_QUIET_FROM or local_now.time() < time(6, 0):
+        return None
+    cur = db.scalars(select(Task).where(Task.status == TaskStatus.STARTED, Task.planned_start <= now,
+                                        Task.planned_end > now, Task.category != "sleep")).first()
+    if cur is None:
+        return None
+    # walk back through back-to-back blocks you started / finished: that's one unbroken stretch
+    since = from_db(cur.actual_start or cur.planned_start)
+    earlier = db.scalars(select(Task).where(Task.status.in_([TaskStatus.STARTED, TaskStatus.DONE]),
+                                            Task.planned_end <= from_db(cur.planned_start) + CHAIN_GAP,
+                                            Task.planned_end > now - timedelta(hours=10), Task.id != cur.id,
+                                            Task.category != "sleep").order_by(Task.planned_end.desc())).all()
+    edge = from_db(cur.planned_start)
+    for t in earlier:
+        if edge - from_db(t.planned_end) > CHAIN_GAP:
+            break
+        since, edge = min(since, from_db(t.actual_start or t.planned_start)), from_db(t.planned_start)
+    worked = now - since
+    get = lambda k: (r := db.get(KeyValue, k)) and r.value  # noqa: E731
+    def put(k, v):
+        r = db.get(KeyValue, k)
+        if r is None:
+            db.add(KeyValue(key=k, value=v))
+        else:
+            r.value = v
+    last_break = datetime.fromisoformat(get("wb:last_break")) if get("wb:last_break") else None
+    if worked >= BREAK_AFTER and (last_break is None or last_break < since or now - last_break >= BREAK_AFTER):
+        put("wb:last_break", now.isoformat())
+        put("wb:last_hydrate", now.isoformat())
+        kind = "break"
+    else:
+        last_h = datetime.fromisoformat(get("wb:last_hydrate")) if get("wb:last_hydrate") else None
+        ref = max(since, last_h) if last_h else since
+        count_key = f"wb:hydrate_count:{local_now.date().isoformat()}"
+        count = int(get(count_key) or 0)
+        if worked < HYDRATE_AFTER or now - ref < HYDRATE_AFTER or count >= HYDRATE_MAX:
+            return None
+        put("wb:last_hydrate", now.isoformat())
+        put(count_key, str(count + 1))
+        kind = "hydrate"
+    await core.dispatch(IncomingEvent("wellbeing.nudge", {"kind": kind, "minutes": round(worked.total_seconds() / 60)},
+                                      "scheduler"), db)
+    return kind
+
+
 PLAN_AT = time(21, 0)  # local: tomorrow's briefing (and any catch-up proposal)
 
 
@@ -309,11 +364,12 @@ async def heartbeat(db: Session, core: Orchestrator, now: datetime | None = None
     woke = await wake_watch(db, now)
     free = await free_watch(db, core, now)
     silence = await silence_watch(db, core, now)
+    wellbeing = await wellbeing_watch(db, core, now)
     forgotten = guest.sweep(db, now)
     digest = guest.digest(db, now)
     db.commit()
     return {"fired": fired, "routines_extended": extended, "nightly": nightly_ran, "planned_tomorrow": planned, "weekly": weekly_ran,
-            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "visitors_forgotten": forgotten, "visitor_digest": bool(digest)}
+            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "visitor_digest": bool(digest)}
 
 
 async def run_forever(session_factory: sessionmaker, core: Orchestrator) -> None:

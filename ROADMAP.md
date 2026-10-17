@@ -24,7 +24,7 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 
 **Stage B · Daily rhythm & wellbeing** (Phase 2/3b gaps)
 6. ✅ Planning ahead: Daily Planner (9 pm briefing + catch-up proposal when TUF/ML need more time than the blocks), Replanner (a course block ended short → today's free time, once a day), Weekly Planner (Sunday: next week's load vs hours → weekend blocks), Explainer (what changed and why after you approve). Nothing is added without Approve
-7. ⬜ Routine Tracker (streaks: wake-up, gym, DSA) · Meal/Break + Hydration nudges
+7. ✅ Streaks (wake-up, TUF/DSA, gym, ML) on the 📚 screen + milestone cheers + "keep it alive" in the 9 pm briefing; water/stretch after 90 min of unbroken work (max 4/day), a real break after 3 h — meal times stay ping-free
 8. ⬜ Mood Tracker + Stress Monitor (overload from schedule density / your messages)
 9. ⬜ Motivation Coach + Vision Keeper (your "why", 1/3/5-year vision)
 

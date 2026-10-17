@@ -342,14 +342,18 @@ async def daily_planner(ctx: AgentContext) -> AgentResult | None:
     if not blocks:
         return None
     loads = _course_loads(ctx.db, day)
+    from app.core import streaks
+
     plan = "; ".join(f"{local(t.planned_start):%H:%M} {t.title}" for t in blocks[:10])
+    chains = [s for s in streaks.all_streaks(ctx.db) if s["current"] >= 2]
+    keep = " Streaks to keep alive tomorrow: " + ", ".join(f"{s['label']} {s['current']} days" for s in chains) + "." if chains else ""
     work = " ".join(f"{ld['course']}: {ld['due']} topics due ({ld['section'] or 'catch-up'}), {ld['overdue']} overdue, "
                     f"~{round(ld['need_min'] / 60, 1)}h needed vs {round(ld['capacity_min'] / 60, 1)}h of blocks."
                     for ld in loads)
     out = await _speak_up(
         ctx, instruction=(f"Brief me on tomorrow ({day:%A}) in two or three short spoken sentences, like a mentor at "
                           f"9 pm: the shape of the day, the one thing that matters most, and to sleep on time. Plan: {plan}. "
-                          f"{work}"),
+                          f"{work}{keep}"),
         fallback=f"Tomorrow starts with {blocks[0].title} at {local(blocks[0].planned_start):%-I:%M}. " + (
             f"{loads[0]['due']} TUF topics are due." if loads else "Sleep on time."),
         mood="calm and caring", meta={"kind": "daily_plan", "date": day.isoformat()})

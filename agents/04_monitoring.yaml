@@ -8,4 +8,4 @@ agents:
   - {id: focus_session_monitor, name: Focus Session Monitor, role: "Tracks focus timers and Focus-mode toggles", kind: rule, triggers: [shortcut.focus, focus.*], priority: 40, phase: "5"}
   - {id: silence_detector, name: Silence Detector, role: "An hour of silence in a block you started → a light 'still on it?'", kind: rule, triggers: [silence.check], priority: 30, phase: "5"}
   - {id: proof_of_work_verifier, name: Proof-of-Work Verifier, role: "Daily targets for TUF DSA + the ML Specialization; at block end you tick what you finished, and it reacts", kind: rule, triggers: [proof.logged], priority: 35, phase: "5"}
-  - {id: routine_tracker, name: Routine Tracker, role: "Tracks habits and streaks (wake time, gym, reading)", kind: rule, triggers: [task.done, task.skipped, cron.evening], priority: 30, phase: "2"}
+  - {id: routine_tracker, name: Routine Tracker, role: "Streaks (wake-up, TUF/DSA, gym, ML): celebrates 3, 7, 14, 30… days; the 9 pm briefing warns when one is at risk", kind: rule, triggers: [task.done, wake.done, proof.logged], priority: 30, phase: "2"}
