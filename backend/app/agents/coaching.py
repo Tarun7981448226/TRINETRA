@@ -45,6 +45,9 @@ def analyse_week(db, monday: date) -> dict:
     from app.db.models import MoodEntry
 
     moods = db.scalars(select(MoodEntry).where(MoodEntry.at >= start, MoodEntry.at < end)).all()
+    from app.ml import insights
+
+    out["insights"] = {k: v for k, v in insights.load(db).items() if k in ("energy", "procrastination", "patterns", "durations")}
     out["moods"] = {"logged": len(moods), "counts": dict(Counter(m.mood for m in moods).most_common(6)),
                     "low": sum(m.mood in ("sad", "low", "tired", "stressed", "anxious", "lonely", "overwhelmed", "hurt",
                                           "frustrated") for m in moods)}
@@ -123,7 +126,10 @@ async def motivation_coach(ctx: AgentContext) -> AgentResult | None:
     return await _speak_up(
         ctx, instruction=(f"I just skipped '{task.title}'. Remind me why it matters, in two short spoken sentences — "
                           f"fuel, not guilt. Goal: {goal.title if goal else 'none'}. My why: {why or 'not written'}. "
-                          f"My vision: {dream or 'not written'}."),
+                          f"My vision: {dream or 'not written'}."
+                          + (f" Note: I skip this one a lot ({ctx.notes['habitual_skip']['rate']}% of the time"
+                             + (f" on {ctx.notes['habitual_skip']['day']}s" if ctx.notes['habitual_skip']['day'] else "")
+                             + ") — name the pattern gently." if ctx.notes.get("habitual_skip") else "")),
         fallback=f"Remember why you're doing this: {why or (goal.title if goal else dream)}. One skip is fine; two is a pattern.",
         mood="warm and caring, but firm", keep_mood=True, channel="web", meta={"kind": "why"})
 
@@ -175,6 +181,15 @@ async def profile_keeper(ctx: AgentContext) -> None:
         parts.append("Streaks: " + ", ".join(f"{x['label']} {x['current']} (best {x['best']})" for x in s) + ".")
     if moods:
         parts.append("Most common moods lately: " + ", ".join(m for m, _ in moods.most_common(3)) + ".")
+    from app.ml import insights
+
+    ins = insights.load(ctx.db)
+    if e := ins.get("energy"):
+        parts.append(f"Sharpest {e['peak']} ({e['peak_rate']}% done), weakest {e['slump']} ({e['slump_rate']}%).")
+    if pr := ins.get("procrastination"):
+        parts.append("Pushes off: " + ", ".join(f"{p['block']}{' on ' + p['day'] + 's' if p['day'] else ''} ({p['rate']}%)" for p in pr[:2]) + ".")
+    for pt in (ins.get("patterns") or [])[:2]:
+        parts.append(pt["text"])
     content = AUTO + " ".join(p for p in parts if p) + f" (last 28 days, updated {local(now):%d %b})"
     old = ctx.db.scalars(select(Memory).where(Memory.content.like(AUTO + "%"))).all()
     for m in old:

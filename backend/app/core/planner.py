@@ -93,6 +93,9 @@ def propose(db: Session, ops: list[dict], why: str, mood: str = "focused and sha
         if o.get("op") == "delete":
             t = db.get(Task, o["id"])
             return f"• Drop {t.title} ({local(t.planned_start):%a %H:%M})" if t else "• Drop a block"
+        if o.get("op") == "move":
+            t = db.get(Task, o["id"])
+            return f"• {t.title if t else 'Block'}: {date.fromisoformat(o['date']):%a %d %b} {o['start']}, {o['duration_min']} min"
         return f"• {o['title']}: {date.fromisoformat(o['date']):%a %d %b} {o['start']}, {o['duration_min']} min"
 
     lines = [line(o) for o in ops]

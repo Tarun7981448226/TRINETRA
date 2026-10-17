@@ -1,11 +1,11 @@
 council: learning
 description: The ML brain — learns how you really work.
 agents:
-  - {id: feature_engineer, name: Feature Engineer, role: "Turns raw events into features (time-of-day, load, streaks, mood)", kind: ml, triggers: [cron.nightly], priority: 60, phase: "6"}
+  - {id: feature_engineer, name: Feature Engineer, role: "Turns raw blocks into features (time of day, day load, recent done-rate, skip streak, weekday, category)", kind: ml, triggers: [cron.nightly], priority: 60, phase: "6", builtin: "app/ml/neural_core.py features() — feeds the Neural Core every night"}
   - {id: completion_predictor, name: Completion Predictor, role: "Neural core: predicts the chance you will actually complete a block", kind: ml, triggers: [task.due, plan.proposed], priority: 55, phase: "2"}
-  - {id: duration_model, name: Duration Model, role: "Learns how long each kind of task really takes you", kind: ml, triggers: [task.done], priority: 30, phase: "6"}
-  - {id: energy_curve_model, name: Energy Curve Model, role: "Finds your peak focus and slump hours", kind: ml, triggers: [cron.nightly], priority: 50, phase: "6"}
-  - {id: procrastination_detector, name: Procrastination Detector, role: "Spots which tasks you push, when and why", kind: ml, triggers: [task.skipped, task.rescheduled, cron.nightly], priority: 40, phase: "6"}
-  - {id: pattern_miner, name: Pattern Miner, role: "Finds hidden links (sleep vs. focus, gym vs. mood)", kind: ml, triggers: [cron.weekly], priority: 40, phase: "6"}
+  - {id: duration_model, name: Duration Model, role: "Learns how long each kind of block really takes you (actual vs planned, per kind)", kind: ml, triggers: [task.done], priority: 30, phase: "6"}
+  - {id: energy_curve_model, name: Energy Curve Model, role: "Nightly: done-rate by time of day → your peak and slump hours", kind: ml, triggers: [cron.nightly], priority: 50, phase: "6"}
+  - {id: procrastination_detector, name: Procrastination Detector, role: "Nightly: the blocks you skip most and on which day; flags a skip that fits the pattern", kind: ml, triggers: [task.skipped, cron.nightly], priority: 40, phase: "6"}
+  - {id: pattern_miner, name: Pattern Miner, role: "Weekly: day-level links (gym days, first-ring mornings, low moods) vs how much gets done", kind: ml, triggers: [cron.weekly], priority: 40, phase: "6"}
   - {id: model_trainer, name: Model Trainer, role: "Retrains the neural core nightly, growing its layers as data grows", kind: ml, triggers: [cron.nightly], priority: 55, phase: "2"}
   - {id: progress_scorer, name: Progress Scorer, role: "Scores goal progress from completed work", kind: rule, triggers: [task.done, milestone.done, cron.weekly], priority: 45, phase: "3b"}

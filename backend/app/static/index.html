@@ -170,6 +170,7 @@
   .crs .bar { height: 8px; background: var(--bg); border-radius: 8px; overflow: hidden; margin: 6px 0; }
   .crs .bar i { display: block; height: 100%; background: var(--accent); }
   .crs .muted, .proof .muted { color: var(--muted); font-size: 12px; }
+  .learned p { margin: 6px 0; font-size: 14px; }
   .vision label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: .06em; }
   .vision textarea { width: 100%; min-height: 54px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font: inherit; }
   .vision button { margin-top: 10px; }
@@ -972,10 +973,25 @@
   async function loadWake() { renderWake(await (await fetch("/wake/state")).json()); }
 
   // ---- weekly reports ----
+  async function learnedCard(box) {  // what the history says (energy, real durations, what you push off, links)
+    let ins = {};
+    try { ins = await (await fetch("/insights")).json(); } catch {}
+    const lines = [];
+    if (ins.energy?.peak) lines.push(`⚡ Sharpest ${ins.energy.peak} (${ins.energy.peak_rate}% done) · weakest ${ins.energy.slump} (${ins.energy.slump_rate}%)`);
+    for (const [k, d] of Object.entries(ins.durations || {})) if (d.n >= 5 && Math.abs(d.ratio - 1) >= 0.15) lines.push(`⏱ ${k} blocks really take ${d.ratio}× what's planned (${d.n} blocks)`);
+    for (const p of (ins.procrastination || []).slice(0, 3)) lines.push(`🐢 You push off ${p.block}${p.day ? ` on ${p.day}s` : ""}: ${p.missed} of ${p.of}`);
+    for (const p of (ins.patterns || []).slice(0, 3)) lines.push(`🔗 ${p.text}`);
+    const card = document.createElement("div"); card.className = "goal learned";
+    const h = document.createElement("h3"); h.textContent = "🧪 What I've learned about you"; card.append(h);
+    if (!lines.length) { const p = document.createElement("p"); p.textContent = "Not enough history yet. Give me a couple of weeks of real blocks."; card.append(p); }
+    for (const l of lines) { const p = document.createElement("p"); p.textContent = l; card.append(p); }
+    box.append(card);
+  }
   async function loadReports() {
     const box = $("reports"); box.innerHTML = "";
+    await learnedCard(box);
     const reps = await (await fetch("/reports")).json();
-    if (!reps.length) { box.innerHTML = "<p>Your first report arrives Sunday at 11:30pm.</p>"; return; }
+    if (!reps.length) { box.insertAdjacentHTML("beforeend", "<p>Your first report arrives Sunday at 11:30pm.</p>"); return; }
     for (const r of reps) {
       const m = r.metrics || {}, c = m.compare?.change_vs_last_week || {};
       const el = document.createElement("div"); el.className = "rp-week";

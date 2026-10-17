@@ -353,7 +353,7 @@ def apply(db: Session, ops: list[dict]) -> list[str]:
                     old = local(task.planned_start)
                     day = parse_date(op.get("date")) or old.date()
                     start = parse_time(op.get("start")) or old.time()
-                    minutes = (local(task.planned_end) - old).total_seconds() / 60
+                    minutes = float(op.get("duration_min") or (local(task.planned_end) - old).total_seconds() / 60)
                     end = end_time(day, start, parse_time(op.get("end")), minutes)
                     s, e = datetime.combine(day, start), datetime.combine(day, end)
                     timetable.move(task, s, e if e > s else e + timedelta(days=1))

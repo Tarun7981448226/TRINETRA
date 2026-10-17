@@ -8,4 +8,4 @@ agents:
   - {id: daily_planner, name: Daily Planner, role: "9 pm: tomorrow at a glance + a catch-up proposal when TUF/ML need more time than the blocks give", kind: llm, tier: fast, triggers: [plan.nightly], priority: 40, phase: "2"}
   - {id: weekly_planner, name: Weekly Planner, role: "Sunday: next week's course load vs the timetable's hours; proposes weekend blocks if it doesn't fit", kind: llm, tier: fast, triggers: [cron.weekly], priority: 40, phase: "2"}
   - {id: calendar_sync, name: Calendar Sync, role: "Two-way sync with Google Calendar via n8n", kind: rule, triggers: [calendar.changed, task.created, task.updated], priority: 30, phase: "5b"}
-  - {id: time_estimator, name: Time Estimator, role: "Corrects your duration guesses using your real history", kind: ml, triggers: [task.created], priority: 48, phase: "6"}
+  - {id: time_estimator, name: Time Estimator, role: "A new block planned shorter/longer than you really need → offers the realistic length (you approve)", kind: ml, triggers: [task.created], priority: 48, phase: "6"}

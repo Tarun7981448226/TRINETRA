@@ -536,6 +536,14 @@ class VisionIn(BaseModel):
     y5: str | None = Field(None, max_length=600)
 
 
+@router.get("/insights")
+def get_insights(db: Session = Depends(get_db)):
+    """What your history says: real durations, peak/slump hours, what you push off, day-level links."""
+    from app.ml import insights
+
+    return insights.load(db)
+
+
 @router.get("/vision")
 def get_vision(db: Session = Depends(get_db)):
     from app.core import vision
