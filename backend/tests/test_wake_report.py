@@ -217,3 +217,45 @@ def test_ordinary_blocks_and_started_blocks_get_no_red_alert(client, llm_calls, 
         out = asyncio.run(scheduler.tick(db, client.app.state.orchestrator,
                                          datetime(2026, 10, 20, 18, 50, tzinfo=timezone.utc)))
     assert not [f for f in out if "escalate" in f]
+
+
+def _started_block(client, start, hours=3):
+    t = client.post("/tasks", json={"title": "ORION build", "planned_start": start.isoformat(),
+                                    "planned_end": (start + timedelta(hours=hours)).isoformat()}).json()
+    with client.session_factory() as db:
+        task = db.get(Task, t["id"])
+        task.status, task.actual_start, task.reminded_at = "started", start, start
+        db.commit()
+    return t
+
+
+def _watch(client, start, minutes):
+    asked = []
+    with client.session_factory() as db:
+        for minute in range(0, minutes):
+            if asyncio.run(scheduler.silence_watch(db, client.app.state.orchestrator, start + timedelta(minutes=minute))):
+                asked.append(minute)
+            db.commit()
+    return asked
+
+
+def test_silence_in_a_started_block_gets_a_light_check_twice_at_most(client, llm_calls, monkeypatch):
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    start = datetime(2026, 10, 20, 18, 0, tzinfo=timezone.utc)
+    t = _started_block(client, start)
+    assert _watch(client, start, 180) == [60, 120]  # an hour quiet → ask; again an hour later; never in the last 15 min
+    m = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "silence"][-1]
+    assert m["meta"]["buttons"] == ["onit", "done", "skipped"] and m["meta"]["task_id"] == t["id"]
+    r = client.post(f"/tasks/{t['id']}/respond", json={"action": "onit"})
+    assert r.status_code == 200 and client.get("/tasks").json()[0]["status"] == "started"  # still on it
+
+
+def test_talking_counts_as_a_sign_of_life(client, llm_calls, monkeypatch):
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    start = datetime.now(timezone.utc) - timedelta(minutes=50)
+    _started_block(client, start)
+    client.post("/chat", json={"text": "working through the proofs"})  # 50 min in: resets the hour
+    with client.session_factory() as db:
+        core = client.app.state.orchestrator
+        assert not asyncio.run(scheduler.silence_watch(db, core, start + timedelta(minutes=70)))
+        assert asyncio.run(scheduler.silence_watch(db, core, start + timedelta(minutes=115)))

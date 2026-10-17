@@ -211,6 +211,26 @@ async def escalation_agent(ctx: AgentContext) -> AgentResult | None:
     )
 
 
+@agent("silence_detector")
+async def silence_detector(ctx: AgentContext) -> AgentResult | None:
+    """Started a block, then an hour of silence. Not a scolding: a light "still on it?"."""
+    task = ctx.db.get(Task, ctx.event.payload.get("task_id"))
+    if task is None or task.status != TaskStatus.STARTED:
+        return None
+    quiet = int(ctx.event.payload.get("quiet_min") or 60)
+    left = max(0, round((local(task.planned_end) - now_local()).total_seconds() / 60))
+    return await _speak_up(
+        ctx,
+        instruction=(f"I started '{task.title}' and I've been silent for about {quiet} minutes; {left} minutes of the "
+                     "block are left. In one short spoken sentence, check I'm still on it. Light, not a scolding: "
+                     "silence might just mean I'm deep in the work."),
+        fallback=f"Quiet for an hour. Still on {task.title}?",
+        mood="calm and attentive",
+        meta={"kind": "silence", "task_id": task.id, "buttons": ["onit", "done", "skipped"],
+              "respond": f"/tasks/{task.id}/respond"},
+    )
+
+
 @agent("checkin_agent")
 async def checkin_agent(ctx: AgentContext) -> AgentResult | None:
     task = ctx.db.get(Task, ctx.event.payload.get("task_id"))

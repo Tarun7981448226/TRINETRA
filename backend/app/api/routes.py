@@ -477,11 +477,12 @@ QUICK_ACTIONS = {
     "skip": (TaskStatus.SKIPPED, "⏭ Skipped: {title}"),
     "skipped": (TaskStatus.SKIPPED, "⏭ Skipped: {title}"),
     "snooze": (None, "⏰ Snooze {title} for 10 minutes."),
+    "onit": (TaskStatus.STARTED, "👍 Still on {title}."),
 }
 
 
 class RespondIn(BaseModel):
-    action: str = Field(pattern="^(start|done|partly|skip|skipped|snooze)$")
+    action: str = Field(pattern="^(start|done|partly|skip|skipped|snooze|onit)$")
 
 
 @router.post("/tasks/{task_id}/respond", response_model=DispatchOut)

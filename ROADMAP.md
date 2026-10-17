@@ -18,7 +18,7 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 **Stage A · Monitoring — "is he actually working?"** (Phase 5) ← *we are here*
 1. ✅ Focus Guard (live; needs the iPhone automation set up): opening Instagram/YouTube/etc. during a focus block → TRINETRA's voice calls it out (iOS app automation), firmer each time, logged
 2. ✅ Escalation: important block (priority 4–5) ignored through all 3 follow-ups → 🚨 red alert push + full-screen alarm in the app, twice (free, no new service)
-3. ⬜ Silence Detector: planned work but no sign of life for an hour → check-in
+3. ✅ Silence Detector: a started block + an hour with no word from you → a light "still on it?" (👍 On it · ✅ Done · ⏭ Stopped), at most twice
 4. ⬜ Proof of Work: GitHub commits / LeetCode as evidence a block really happened
 5. ⬜ Focus-mode + location signals (Shortcuts automations)
 

@@ -7,6 +7,7 @@
   portfolio visitors       → forgotten when idle; 21:30 digest of what they left
 """
 import asyncio
+import json
 import logging
 from datetime import datetime, time, timedelta, timezone
 
@@ -213,6 +214,39 @@ async def free_watch(db: Session, core: Orchestrator, now: datetime) -> bool:
     return True
 
 
+SILENCE_AFTER = timedelta(minutes=60)  # in a block you started, an hour with no word from you…
+SILENCE_TAIL = timedelta(minutes=15)   # …unless it's about to end anyway (the "how did it go?" comes then)
+SILENCE_MAX = 2                        # at most twice per block
+
+
+async def silence_watch(db: Session, core: Orchestrator, now: datetime) -> bool:
+    """You started a block and then went quiet for an hour: a light "still on it?"."""
+    task = db.scalars(select(Task).where(
+        Task.status == TaskStatus.STARTED, Task.notify == "full", Task.category != "sleep",
+        Task.planned_start <= now, Task.planned_end > now + SILENCE_TAIL).order_by(Task.planned_start)).first()
+    if task is None:
+        return False
+    key = f"silence:{task.id}"
+    row = db.get(KeyValue, key)
+    seen = json.loads(row.value) if row and row.value else {"n": 0, "at": None}
+    if seen["n"] >= SILENCE_MAX:
+        return False
+    last_word = db.scalar(select(func.max(Message.created_at)).where(Message.role == "user"))
+    signs = [from_db(t) for t in (task.actual_start, last_word) if t] + \
+            ([datetime.fromisoformat(seen["at"])] if seen["at"] else []) + [from_db(task.planned_start)]
+    quiet = now - max(signs)
+    if quiet < SILENCE_AFTER:
+        return False
+    seen = {"n": seen["n"] + 1, "at": now.isoformat()}
+    if row is None:
+        db.add(KeyValue(key=key, value=json.dumps(seen)))
+    else:
+        row.value = json.dumps(seen)
+    await core.dispatch(IncomingEvent("silence.check", {"task_id": task.id, "title": task.title,
+                                                        "quiet_min": round(quiet.total_seconds() / 60)}, "scheduler"), db)
+    return True
+
+
 NIGHTLY_HOUR = 3  # local time: the brain retrains while you sleep
 
 
@@ -249,11 +283,12 @@ async def heartbeat(db: Session, core: Orchestrator, now: datetime | None = None
     weekly_ran = await weekly(db, core)
     woke = await wake_watch(db, now)
     free = await free_watch(db, core, now)
+    silence = await silence_watch(db, core, now)
     forgotten = guest.sweep(db, now)
     digest = guest.digest(db, now)
     db.commit()
     return {"fired": fired, "routines_extended": extended, "nightly": nightly_ran, "weekly": weekly_ran,
-            "wake_nag": woke, "free_checkin": free, "visitors_forgotten": forgotten, "visitor_digest": bool(digest)}
+            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "visitors_forgotten": forgotten, "visitor_digest": bool(digest)}
 
 
 async def run_forever(session_factory: sessionmaker, core: Orchestrator) -> None:
