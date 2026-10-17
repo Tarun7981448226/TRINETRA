@@ -5,7 +5,7 @@
 
    const b = TrinetraBuddy.create(el, { style: "pixel", palette: "saffron" });
    b.setEmotion("proud"); b.setActivity("speaking"); b.look(dx, dy); b.celebrate();
-   Emotions:   neutral happy proud angry firm caring surprised sleepy
+   Emotions:   neutral happy proud excited angry firm caring surprised sad sleepy
    Activities: idle listening thinking speaking sleeping walking watching
    Works in a normal page or inside a Shadow DOM (it brings its own CSS). Original design — TRINETRA's own. */
 (() => {
@@ -21,9 +21,9 @@
     night: ["#5b6cff", "#3a47c9", "#f1f3ff"],
     mono: ["#d9d9df", "#a9a9b3", "#141418"],
   };
-  const EMOTIONS = ["neutral", "happy", "proud", "angry", "firm", "caring", "surprised", "sleepy"];
+  const EMOTIONS = ["neutral", "happy", "proud", "excited", "angry", "firm", "caring", "surprised", "sad", "sleepy"];
   const ACTIVITIES = ["idle", "listening", "thinking", "speaking", "sleeping", "walking", "watching"];
-  const PINK = "#ff8fa3", GEM = "#ffd27a", GEM_HOT = "#fff1c2", GEM_RED = "#ff5b4f";
+  const PINK = "#ff8fa3", TEAR = "#7cc7ff", GEM = "#ffd27a", GEM_HOT = "#fff1c2", GEM_RED = "#ff5b4f";
 
   const mix = (a, b, t) => {  // blend two #rrggbb colours
     const p = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
@@ -55,18 +55,25 @@
     const closed = () => D([[4, 5], [5, 5], [10, 5], [11, 5]]);
     const open = (dx = ox, dy = oy) => { D(sq(4 + dx, 4 + dy)); D(sq(10 + dx, 4 + dy)); };
     const act = s.activity, emo = s.emotion;
-    if (act === "sleeping" || emo === "sleepy") closed();
+    const dozing = act === "sleeping" || (emo === "sleepy" && ["idle", "sleeping"].includes(act));  // talking / watching: eyes open
+    const shine = () => D([[4 + ox, 4 + oy], [10 + ox, 4 + oy]], "W");  // a glint in each eye
+    if (dozing) closed();
     else if (s.blinking) closed();
     else if (act === "thinking") open(1, -1);
     else if (act === "listening") open(ox, 0);
-    else if (emo === "happy" || emo === "proud") D([[3, 5], [4, 4], [5, 5], [10, 5], [11, 4], [12, 5]]);
+    else if (emo === "happy") D([[3, 5], [4, 4], [5, 5], [10, 5], [11, 4], [12, 5]]);
+    else if (emo === "proud") { open(); shine(); }
+    else if (emo === "excited") { D([[3, 3], [4, 3], [5, 3], [3, 4], [4, 4], [5, 4], [3, 5], [4, 5], [5, 5], [10, 3], [11, 3], [12, 3], [10, 4], [11, 4], [12, 4], [10, 5], [11, 5], [12, 5]]); D([[3, 3], [10, 3]], "W"); }
+    else if (emo === "sad") { open(ox, 1); D([[3, 3], [4, 2], [12, 3], [11, 2]]); D([[4, 7], [4, 8]], "T"); }
     else if (emo === "angry") D([[4, 5], [5, 5], [10, 5], [11, 5], [3, 3], [4, 3], [5, 4], [12, 3], [11, 3], [10, 4]]);
     else if (emo === "firm") { open(ox, 0); D([[4, 2], [5, 2], [10, 2], [11, 2]]); }
     else open();
     if (emo === "caring" && act !== "sleeping") D([[2, 6], [3, 6], [12, 6], [13, 6]], "P");
     if (act === "speaking") D(s.talkFrame ? [[7, 7], [8, 7], [7, 8], [8, 8]] : [[7, 8], [8, 8]]);
     else if (emo === "surprised" || act === "listening" && emo === "surprised") D([[7, 7], [8, 7], [7, 8], [8, 8]]);
-    else if (["happy", "proud", "caring"].includes(emo) && act !== "sleeping") D([[6, 7], [9, 7], [7, 8], [8, 8]]);
+    else if (emo === "excited" && !dozing) D([[6, 7], [7, 7], [8, 7], [9, 7], [6, 8], [9, 8], [7, 9], [8, 9]]);
+    else if (["happy", "proud", "caring"].includes(emo) && !dozing) D([[6, 7], [9, 7], [7, 8], [8, 8]]);
+    else if (emo === "sad" && !dozing) D([[7, 8], [8, 8], [6, 9], [9, 9]]);
     else if (["firm", "angry"].includes(emo)) D([[6, 8], [9, 8], [7, 7], [8, 7]]);
     return out;
   }
@@ -87,9 +94,9 @@
       rects += cell(x, y, ch === "S" ? shade : body);
     }));
     const glow = s.activity === "listening" ? GEM_RED : (s.activity === "speaking" || s.activity === "thinking") ? GEM_HOT : GEM;
-    const gemOn = s.activity !== "sleeping" && s.emotion !== "sleepy";
+    const gemOn = s.activity !== "sleeping" && !(s.emotion === "sleepy" && s.activity === "idle");
     rects += `<rect class="tb-gem" x="7" y="2" width="2" height="1.04" fill="${gemOn ? glow : shade}" ${gemOn ? `filter="url(#${s.uid}g)"` : ""}/>`;
-    for (const [x, y, k] of pixelFace(s)) rects += cell(x, y, k === "P" ? PINK : dark);
+    for (const [x, y, k] of pixelFace(s)) rects += cell(x, y, k === "P" ? PINK : k === "W" ? "#ffffff" : k === "T" ? TEAR : dark);
     return `<svg class="tb-svg" viewBox="-0.5 -2 17 17" shape-rendering="crispEdges" aria-hidden="true">
       <defs><filter id="${s.uid}g" x="-200%" y="-300%" width="500%" height="700%"><feGaussianBlur stdDeviation=".45" result="b"/>
         <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
@@ -112,9 +119,16 @@
     const arc = (cx, cy, up) => `<path d="M${cx - 5} ${cy} Q${cx} ${cy + (up ? -6 : 4)} ${cx + 5} ${cy}" stroke="${dark}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`;
     let face = "";
     const L = 38 + lx, R = 62 + lx, Y = 56 + ly;
-    if (act === "sleeping" || emo === "sleepy" || s.blinking) face += arc(L, Y, false) + arc(R, Y, false);
+    const dozing = act === "sleeping" || (emo === "sleepy" && ["idle", "sleeping"].includes(act));  // talking / watching: eyes open
+    const glint = (cx, cy) => `<circle cx="${cx + 1.6}" cy="${cy + 1.8}" r=".9" fill="#fff" opacity=".9"/>`;
+    if (dozing || s.blinking) face += arc(L, Y, false) + arc(R, Y, false);
     else if (act === "thinking") face += eye(41, 52) + eye(65, 52);
-    else if (emo === "happy" || emo === "proud") face += arc(L, Y + 1, true) + arc(R, Y + 1, true);
+    else if (emo === "happy") face += arc(L, Y + 1, true) + arc(R, Y + 1, true);
+    else if (emo === "proud") face += eye(L, Y) + eye(R, Y) + glint(L, Y) + glint(R, Y);
+    else if (emo === "excited") face += eye(L, Y - 1, 5.6, 8) + eye(R, Y - 1, 5.6, 8) + glint(L, Y - 1) + glint(R, Y - 1);
+    else if (emo === "sad") face += eye(L, Y + 2, 4.4, 6) + eye(R, Y + 2, 4.4, 6)
+      + `<path d="M30 47 L43 43 M70 47 L57 43" stroke="${dark}" stroke-width="2.4" stroke-linecap="round"/>`
+      + `<path d="M${L - 3} ${Y + 8} q-1.6 3.4 0 5.4 q1.6 -2 0 -5.4z" fill="${TEAR}" opacity=".9"/>`;
     else if (emo === "surprised") face += eye(L, Y, 5.4, 7.8) + eye(R, Y, 5.4, 7.8);
     else if (emo === "firm") face += eye(L, Y + 1, 4.6, 4.6) + eye(R, Y + 1, 4.6, 4.6);
     else face += eye(L, Y) + eye(R, Y);
@@ -124,10 +138,12 @@
       <ellipse cx="29" cy="66" rx="6" ry="3.2" fill="${PINK}" opacity=".55"/><ellipse cx="71" cy="66" rx="6" ry="3.2" fill="${PINK}" opacity=".55"/>`;
     if (act === "speaking") face += `<ellipse cx="50" cy="70" rx="4.4" ry="${s.talkFrame ? 3.8 : 1.4}" fill="${dark}"/>`;
     else if (emo === "surprised") face += `<ellipse cx="50" cy="71" rx="3.2" ry="3.8" fill="${dark}"/>`;
+    else if (emo === "excited" && !dozing) face += `<path d="M42 67 Q50 79 58 67 Z" fill="${dark}"/><path d="M45 72 Q50 76 55 72" stroke="${PINK}" stroke-width="2" fill="none"/>`;
+    else if (emo === "sad" && !dozing) face += `<path d="M44 73 Q50 67 56 73" stroke="${dark}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
     else if (["happy", "proud", "caring"].includes(emo)) face += `<path d="M44 68 Q50 74 56 68" stroke="${dark}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
     else if (["firm", "angry"].includes(emo)) face += `<path d="M44 72 Q50 67 56 72" stroke="${dark}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
     const glow = act === "listening" ? GEM_RED : (act === "speaking" || act === "thinking") ? GEM_HOT : GEM;
-    const gemOn = act !== "sleeping" && emo !== "sleepy";
+    const gemOn = !dozing;
     return `<svg class="tb-svg" viewBox="0 0 100 100" aria-hidden="true">
       <defs>
         <radialGradient id="${u}b" cx="36%" cy="28%" r="75%"><stop offset="0" stop-color="${hi}"/><stop offset=".55" stop-color="${body}"/><stop offset="1" stop-color="${shade}"/></radialGradient>
@@ -163,6 +179,10 @@
   .tb-e-proud .tb-svg { filter: drop-shadow(0 0 .22em rgba(255, 210, 122, .7)); }
   .tb-proudspark { position: absolute; color: #ffd27a; font-size: .55em; pointer-events: none; display: none; animation: tb-twinkle 1.6s ease-in-out infinite; }
   .tb-e-proud .tb-proudspark { display: block; }
+  .tb-e-excited .tb-svg { animation: tb-bounce .42s ease-in-out infinite; filter: drop-shadow(0 0 .2em rgba(255, 241, 194, .7)); }
+  .tb-e-excited .tb-proudspark { display: block; }
+  .tb-e-sad .tb-svg { transform: translateY(.06em) scaleY(.96); filter: saturate(.7) brightness(.92); transition: transform .4s, filter .4s; }
+  @keyframes tb-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.12em) scale(1.03, .97); } }
   .tb-proudspark.a { left: 4%; top: 2%; } .tb-proudspark.b { right: 2%; top: 14%; animation-delay: .8s; font-size: .4em; }
   @keyframes tb-twinkle { 50% { opacity: .2; transform: scale(.6) rotate(20deg); } }
   .tb-root.tb-hop .tb-svg { animation: tb-hop .42s ease-in-out 3; }

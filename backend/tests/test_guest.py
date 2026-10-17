@@ -215,9 +215,9 @@ def test_goodbye_is_a_goodbye_and_important_people_are_asked_for_contact(client,
 
 
 def test_look_is_shared_with_the_portfolio(client):
-    assert client.get("/guest/look").json() == {"style": "pixel", "palette": "saffron", "saved": False}
+    assert client.get("/guest/look").json() == {"style": "pixel", "palette": "saffron", "saved": False, "mood": "neutral"}
     assert client.post("/look", json={"style": "fuzzy", "palette": "berry"}).status_code == 200
-    assert client.get("/guest/look").json() == {"style": "fuzzy", "palette": "berry", "saved": True}
+    assert client.get("/guest/look").json() == {"style": "fuzzy", "palette": "berry", "saved": True, "mood": "neutral"}
     assert client.get("/look").json()["style"] == "fuzzy"
     assert client.post("/look", json={"style": "dragon", "palette": "berry"}).status_code == 422
     assert client.post("/guest/look", json={"style": "pixel", "palette": "mint"}).status_code == 405  # visitors can't change it
@@ -328,3 +328,18 @@ def test_tarun_replies_to_a_visitor_from_the_app(client, llm_calls, monkeypatch)
     assert d["phone"] == "+1 213 210 1143" and d["replies"] == [{"text": "Sure, I'll reach out tomorrow!", "delivered": True}]
     assert client.post("/visitors/99999/reply", json={"text": "hi"}).status_code == 404
     assert client.get("/guest/inbox", params={"token": "nope"}).json() == {"lines": []}
+
+
+def test_show_me_your_emotions_acts_them_out_here_and_in_the_app(client, llm_calls):
+    from app.core import emotion
+    token = hello(client)
+    r = client.post("/guest/chat", json={"token": token, "text": "show me your emotions"}).json()
+    assert r["perform"][:3] == ["happy", "excited", "proud"] and len(r["perform"]) == 9
+    r = client.post("/chat", json={"text": "Hey, show me all your emotions."}).json()
+    assert r["notes"]["perform"][-1] == "sleepy"
+    with client.session_factory() as db:  # the portfolio rests in the app's mood, but never shows his frustration
+        st = emotion.load(db)
+        st.frustration, st.pride = 0.9, 0.1
+        emotion.save(db, st)
+        db.commit()
+    assert client.get("/guest/look").json()["mood"] == "neutral"

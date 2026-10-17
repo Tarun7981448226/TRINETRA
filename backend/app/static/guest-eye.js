@@ -141,26 +141,24 @@
   const has = (c) => wrap.classList.contains(c);
 
   // ---- TRINETRA's character (drawn by buddy.js from the TRINETRA server) ----
-  let buddy = null, glad = false;
+  let buddy = null, glad = false, performing = null;
   // Its look follows what Tarun picked in his app (🎨), unless this page pins one with data-style / data-palette.
   const LOOK = { style: me?.dataset.style, palette: me?.dataset.palette };
   function sync() {  // the widget's state → what the character is doing
     if (!buddy) return;
     buddy.setActivity(has("speaking") ? "speaking" : has("thinking") ? "thinking" : has("walking") ? "walking"
       : has("watch") || has("peek") || has("open") ? "watching" : "idle");
-    buddy.setEmotion(glad ? "happy" : "neutral");
+    buddy.setEmotion(performing || (glad ? "happy" : LOOK.mood || "neutral"));  // resting mood = the app's (visitor-safe)
   }
   new MutationObserver(sync).observe(wrap, { attributes: true, attributeFilter: ["class"] });
   const cheer = () => buddy?.celebrate();
   const beGlad = (ms = 3500) => { glad = true; sync(); later(ms, () => { glad = false; sync(); }); };
   (function loadBuddy() {
     const ready = async () => {
-      if (!LOOK.style || !LOOK.palette) {
-        try {
-          const l = await (await fetch(`${API}/guest/look`)).json();
-          LOOK.style ||= l.style; LOOK.palette ||= l.palette;
-        } catch {}
-      }
+      try {  // the look (unless this page pins one) and the resting mood, shared with Tarun's app
+        const l = await (await fetch(`${API}/guest/look`)).json();
+        LOOK.style ||= l.style; LOOK.palette ||= l.palette; LOOK.mood = l.mood;
+      } catch {}
       buddy = window.TrinetraBuddy.create($(".buddy"), { style: LOOK.style || "pixel", palette: LOOK.palette || "saffron" });
       sync();
     };
@@ -563,8 +561,17 @@
     log.appendChild(card); log.scrollTop = log.scrollHeight;
     later(50, () => num.focus({ preventScroll: true }));
   }
+  function perform(list, each = 2200) {  // act out emotions one after another ("show me your emotions")
+    list.forEach((emo, i) => later(400 + i * each, () => {
+      performing = emo; sync();
+      if (emo === "angry" || emo === "firm") buddy?.shake();
+      if (emo === "happy" || emo === "excited" || emo === "proud") buddy?.celebrate();
+    }));
+    later(400 + list.length * each, () => { performing = null; sync(); });
+  }
   function afterReply(d) {  // whatever TRINETRA said, plus what comes with it
     add(d.reply, "tri"); speak();
+    if (d.perform?.length) perform(d.perform);
     if (d.celebrate) { cheer(); beGlad(); }
     if (d.role_options) roleButtons(d.role_options);
     if (d.contact_form) contactCard();

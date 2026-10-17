@@ -36,6 +36,26 @@ async def data_collector(ctx: AgentContext) -> None:
     ctx.db.add(Event(type=ctx.event.type, source=ctx.event.source, payload=ctx.event.payload))
 
 
+# "show me your emotions" → the character acts them out while the reply names each one
+ALL_EMOTIONS = ["happy", "excited", "proud", "caring", "surprised", "firm", "angry", "sad", "sleepy"]
+EMOTION_WORDS = {"happy": "happy|joy(ful)?|glad", "excited": "excited|hyped?|pumped", "proud": "proud",
+                 "caring": "caring|kind|soft|love|loving|gentle", "surprised": "surprised|shocked|amazed",
+                 "firm": "firm|serious|strict|stern", "angry": "angry|mad|furious|annoyed", "sad": "sad|upset|down|crying",
+                 "sleepy": "sleepy|tired|sleep"}
+PERFORM_ALL = re.compile(r"\b(show|act|perform|do|express|display)\b.{0,30}\b(emotions?|feelings?|faces?|expressions?|moods?)\b", re.I)
+PERFORM_ONE = re.compile(r"\b(show me|act|play|give me|do)\b.{0,20}?\b(" + "|".join(EMOTION_WORDS.values()) + r")\b", re.I)
+
+
+def perform_request(text: str) -> list[str] | None:
+    hits = {e: m.start() for e, w in EMOTION_WORDS.items() if (m := re.search(rf"\b({w})\b", text, re.I))}
+    named = sorted(hits, key=hits.get)  # in the order you said them
+    if PERFORM_ALL.search(text):
+        return named if named and not re.search(r"\ball\b|\bevery", text, re.I) else ALL_EMOTIONS
+    if PERFORM_ONE.search(text) and named and len(text) < 80:
+        return named
+    return None
+
+
 @agent("router")
 async def router(ctx: AgentContext) -> None:
     """Cheap, instant intent tagging — no LLM call needed."""
@@ -44,6 +64,9 @@ async def router(ctx: AgentContext) -> None:
     ctx.notes["intent"] = next(
         (name for name, pat in INTENT_PATTERNS.items() if re.search(pat, text, re.I)), "chat"
     )
+    if perform := perform_request(text):
+        ctx.notes["perform"] = perform
+        return
     if demo := mood_modes.detect_demo(text):
         ctx.notes["demo"] = {"mode": demo[0], "target": demo[1]}
         return  # a one-off show — the lasting mode stays as it is
@@ -113,6 +136,10 @@ async def core(ctx: AgentContext) -> AgentResult:
     if promises := ctx.notes.get("promises_saved"):
         context += (f"\nYou noted their promise(s): {promises}. Tell them briefly you'll check in at the deadline "
                     "and hold them to it. You did NOT add anything to their timetable — don't say you did.")
+    if perform := ctx.notes.get("perform"):
+        context += ("\nRight now your character is ACTING OUT these emotions on screen, in this order: "
+                    + ", ".join(perform) + ". Give one short, vivid line per emotion, in exactly that order, each starting "
+                    "with the emotion's name (e.g. 'Happy — …'). One line each, no intro, no outro.")
     if coach := ctx.notes.get("coach"):
         mode = coach["mode"]
         if mode == "quiz":

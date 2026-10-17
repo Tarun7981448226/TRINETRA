@@ -276,6 +276,16 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
     if (introducing and v.name) or answering_role:
         return await pitch(db, v, done)
 
+    # 5b. "Show me your emotions" → the character acts them out while the reply names each one.
+    from app.agents.command import perform_request
+    if perform := perform_request(text):
+        history = [{"role": "user", "content": (
+            "Your character is acting out these emotions on screen right now, in this order: " + ", ".join(perform)
+            + ". Give one short, playful line per emotion, in that order, each starting with the emotion's name "
+            "(e.g. 'Happy — …'). No intro, no outro.")}]
+        reply = await _say(v, history, "\n".join(f"{e.capitalize()} — that's this one." for e in perform))
+        return done(reply.replace(". ", ".\n") if "\n" not in reply else reply, perform=perform)
+
     # 6. A normal question about Tarun / TRINETRA.
     v.topics = [*(v.topics or []), _topic(text)][-12:]
     history = [{"role": "assistant" if m["role"] == "trinetra" else "user", "content": m["text"]} for m in v.messages[-10:]]

@@ -90,8 +90,13 @@ def buddy_js():
 
 @public.get("/look")
 def public_look(db: Session = Depends(get_db)):
-    """What the portfolio character should look like (read-only for visitors)."""
-    return _look(db)
+    """What the portfolio character should look like (read-only for visitors), and its resting mood — the same as in
+    Tarun's app, but only the visitor-safe ones (proud / caring / neutral; never his frustration)."""
+    from app.core import emotion
+
+    f = emotion.decay(emotion.load(db))
+    mood = "proud" if f.pride >= 0.5 else "caring" if f.concern >= 0.5 else "neutral"
+    return {**_look(db), "mood": mood}
 
 
 @public.post("/hello")

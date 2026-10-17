@@ -613,6 +613,7 @@
         body: JSON.stringify({ text, channel: "web" }) });
       const d = await r.json();
       add(d.reply || "…", "tri", d.mood);
+      if (d.notes?.perform?.length) window.trinetraPerform?.(d.notes.perform);
       if (d.notes?.timetable_changes?.length) note("📅 " + d.notes.timetable_changes.join(" · "));
       if (d.notes?.remembered?.length) note("🧠 remembered: " + d.notes.remembered.join(" · "));
       $("mood").textContent = d.mood ? d.mood.split(" — ")[0].toLowerCase() : "";
@@ -1633,7 +1634,8 @@
     const orb = eye, tip = $("eyeTip"), slot = $("eyeSlot"), tbar = orb.querySelector(".tbar");
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const has = (c) => orb.classList.contains(c);
-    const awake = () => talk.active || has("listening") || has("speaking") || has("thinking");
+    let performing = null;  // an emotion it's acting out right now ("show me your emotions")
+    const awake = () => talk.active || has("listening") || has("speaking") || has("thinking") || !!performing;
     const screenOpen = () => !!document.querySelector(".drawer.open, #planner.open");
     const later = (ms, fn) => setTimeout(fn, ms);
     const rand = (a, b) => a + Math.random() * (b - a);
@@ -1669,7 +1671,7 @@
         : has("sleep") ? "sleeping" : (has("gliding") || has("jump") || has("homing")) ? "walking"
         : has("watch") || has("peek") ? "watching" : "idle";
       buddy.setActivity(act);
-      buddy.setEmotion(has("angry") ? "angry" : has("happy") ? "proud" : flashEmotion || restingEmotion);
+      buddy.setEmotion(performing || (has("angry") ? "angry" : has("happy") ? "proud" : flashEmotion || restingEmotion));
       const cls = orb.className;
       if (has("shake") && !/\bshake\b/.test(prev)) buddy.shake();
       if (has("happy") && !/\bhappy\b/.test(prev)) buddy.celebrate();
@@ -1689,6 +1691,19 @@
     }
     feelings(); setInterval(feelings, 60000);
     window.trinetraFlash = (emo, ms = 3500) => { flashEmotion = emo; sync(); later(ms, () => { flashEmotion = null; sync(); }); };
+    // act out a list of emotions, one after another (it comes out of its slot so you can see it)
+    let performRun = 0;
+    window.trinetraPerform = (list, each = 2200) => {
+      const run = ++performRun;
+      jumpOut();
+      list.forEach((emo, i) => later(600 + i * each, () => {
+        if (run !== performRun) return;
+        performing = emo; sync();
+        if (emo === "angry" || emo === "firm") buddy.shake();
+        if (emo === "happy" || emo === "excited" || emo === "proud") buddy.celebrate();
+      }));
+      later(600 + list.length * each, () => { if (run === performRun) { performing = null; sync(); } });
+    };
 
     function jumpOut() {
       if (out) return;
