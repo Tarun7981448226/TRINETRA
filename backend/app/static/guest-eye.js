@@ -28,6 +28,13 @@
   .wrap.showing .float { transform: scale(1.25); }
   .buddy { width: 100%; height: 100%; }
   .orb { transition: transform 2.2s cubic-bezier(.45,.05,.35,1); }
+  .world { position: absolute; right: 0; bottom: 0; width: 240px; height: 150px; border-radius: 16px; overflow: hidden; display: none;
+    border: 1px solid rgba(255,255,255,.18); box-shadow: 0 10px 30px rgba(0,0,0,.35); cursor: pointer; background: #0f0e16; outline: none; }
+  .world:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+  .wrap.inworld .world { display: block; animation: world-in .35s ease-out; }
+  .wrap.inworld .orb { visibility: hidden; pointer-events: none; }
+  .wrap.inworld .nudge { right: 0; bottom: 160px; }
+  @keyframes world-in { from { opacity: 0; transform: scale(.9); transform-origin: 100% 100%; } }
   .nudge { position: absolute; right: 84px; bottom: 18px; white-space: nowrap; background: var(--panel); color: var(--text);
     border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.35);
     opacity: 0; transform: translateX(8px); transition: opacity .4s, transform .4s; pointer-events: none; }
@@ -113,6 +120,8 @@
     .orb { width: 62px; height: 62px; }
     .panel { position: fixed; left: 16px; right: 16px; width: auto; bottom: calc(var(--lift, 16px) + 74px); max-height: calc(100vh - var(--lift, 16px) - 104px); }
     .nudge { right: 72px; bottom: 14px; }
+    .world { width: 176px; height: 110px; border-radius: 13px; }
+    .wrap.inworld .nudge { right: 0; bottom: 120px; }
     .wrap.touring .panel { max-height: 52vh; }
   }
   @media (prefers-reduced-motion: reduce) { .orb { transition: none; } }
@@ -132,6 +141,7 @@
       <button class="send" type="submit">Leave it for Tarun</button></form>
   </section>
   <div class="nudge">Hi, I'm Tarun's AI. Click me 👋</div>
+  <div class="world" role="button" tabindex="0" aria-label="TRINETRA's world. Click to chat with Tarun's AI, double-click to knock"></div>
   <button class="orb" type="button" aria-label="Talk to TRINETRA, Tarun's AI mentor" aria-expanded="false"><div class="float"><div class="buddy"></div></div></button>
 </div>`;
 
@@ -149,7 +159,7 @@
     if (!buddy) return;
     buddy.setActivity(has("speaking") ? "speaking" : has("thinking") ? "thinking" : has("walking") ? "walking"
       : has("watch") || has("peek") || has("open") ? "watching" : "idle");
-    buddy.setEmotion(performing || expressing || (glad ? "happy" : LOOK.mood || "neutral"));  // resting mood = the app's (visitor-safe)
+    buddy.setEmotion(performing || expressing || (glad ? "happy" : worldFeel || LOOK.mood || "neutral"));  // resting mood = the app's (visitor-safe)
   }
   new MutationObserver(sync).observe(wrap, { attributes: true, attributeFilter: ["class"] });
   const cheer = () => buddy?.celebrate();
@@ -163,6 +173,7 @@
       buddy = window.TrinetraBuddy.create($(".buddy"), { style: LOOK.style || "pixel", palette: LOOK.palette || "saffron" });
       sync();
       loadMusic();
+      loadWorld();
     };
     if (window.TrinetraBuddy) return ready();
     const sc = document.createElement("script"); sc.src = `${API}/guest/buddy.js`; sc.onload = ready;
@@ -185,25 +196,60 @@
     if (s.show === "stop") return stopShow();
     stopShow();  // the last one ends first, so its clean-up can't undo this one
     wrap.classList.add("showing");
-    TrinetraMusic.show(buddy, s, { mood: LOOK.mood, feel: (e) => { performing = e; sync(); }, onEnd: () => wrap.classList.remove("showing") });
+    TrinetraMusic.show(buddy, s, { mood: LOOK.mood, feel: (e) => { performing = e; sync(); },
+      onEnd: () => { wrap.classList.remove("showing"); later(400, enterWorld); } });
     if (s.show === "play") later(300, () => buddy.look(0, 30));
   }
+
+  // ---- its world (static/world.js): lab 9–5, lake 5–8, home 8–12, asleep 12–9 (Tarun's LA time) while the chat is closed ----
+  let world = null, worldFeel = null;
+  const worldEl = $(".world"), buddyEl = $(".buddy"), WORLD_ON = me?.dataset.world !== "off";  // buddyEl moves between world and corner
+  function loadWorld() {
+    if (!WORLD_ON) return;
+    const go = () => {
+      if (!window.TrinetraWorld || world) return;
+      world = TrinetraWorld.create(worldEl, { me: { el: buddyEl, api: buddy }, style: LOOK.style || "pixel",
+        feel: (e) => { worldFeel = e; sync(); } });
+      enterWorld();
+    };
+    if (window.TrinetraWorld) return go();
+    const sc = document.createElement("script"); sc.src = `${API}/static/world.js`; sc.onload = go; document.head.appendChild(sc);
+  }
+  function enterWorld() {  // the character goes home to its world (only while the chat is closed and nothing's playing)
+    if (!world || has("open") || window.TrinetraMusic?.playing || has("inworld")) return;
+    nudge.classList.remove("on");
+    world.attach(); wrap.classList.add("inworld"); sync();
+  }
+  function leaveWorld() {  // it steps out of the world into the corner to chat
+    if (!world || !has("inworld")) return;
+    world.detach(); worldFeel = null;
+    $(".float").appendChild(buddyEl); wrap.classList.remove("inworld"); sync();
+  }
+  let clickTimer = null;
+  worldEl.addEventListener("click", () => {  // one click = chat; a double-click = knock (wait a moment to tell them apart)
+    clearTimeout(clickTimer); clickTimer = later(420, () => open());
+  });
+  worldEl.addEventListener("dblclick", (e) => { e.preventDefault(); clearTimeout(clickTimer); world?.knock(); });
+  worldEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+    else if (e.key.toLowerCase() === "k") world?.knock();
+  });
 
   // ---- its little life: peeks, strolls, and watches your cursor when you come near ----
   function look(dx, dy) { buddy?.look(dx, dy); }
   function stroll() {  // now and then a short, calm walk along the bottom edge and back
     later(rand(14000, 24000), stroll);
-    if (has("open") || has("watch") || still) return;
+    if (has("open") || has("watch") || has("inworld") || still) return;
     const away = -rand(60, 130);
     wrap.classList.add("walking"); look(-40, 0); orb.style.transform = `translateX(${away}px)`;
     later(2300, () => { look(40, 0); orb.style.transform = ""; });
     later(4600, () => { wrap.classList.remove("walking"); look(0, 0); });
   }
   later(9000, stroll);
-  const center = () => { const b = orb.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };
+  const center = () => { const b = (buddy?.el || orb).getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };
   function peek() {
     later(rand(9000, 18000), peek);
-    if (has("open") || has("watch") || still) return;
+    if (has("open") || has("watch") || has("inworld") || still) return;
     wrap.classList.add("peek"); look(-60, -20);
     later(700, () => look(60, -20)); later(1400, () => look(0, 0)); later(1900, () => wrap.classList.remove("peek"));
   }
@@ -687,6 +733,7 @@
 
   // ---- open / close ----
   function open() {
+    clearTimeout(clickTimer); leaveWorld();
     unlockAudio();
     nudge.classList.remove("on");
     wrap.classList.remove("walking"); orb.style.transform = "";
@@ -702,7 +749,8 @@
     saveTour(null);  // closing means the tour won't pick itself up on the next page (Resume still works if they reopen here)
     document.documentElement.style.paddingRight = "";
     wrap.classList.remove("open", "speaking"); panel.classList.remove("on"); orb.setAttribute("aria-expanded", "false");
-    look(0, 0); orb.focus({ preventScroll: true });
+    look(0, 0);
+    if (world) later(350, enterWorld); else orb.focus({ preventScroll: true });
   }
   orb.onclick = () => (window.TrinetraMusic?.playing ? stopShow() : has("open") ? close() : open());  // tapping it mid-show stops the show
   $(".close").onclick = close;
@@ -713,10 +761,11 @@
     const base = () => (innerWidth <= 520 ? 16 : 20);
     const dodge = () => {
       let lift = base();
-      const eyeW = orb.offsetWidth, right = innerWidth - base(), left = right - eyeW;
+      const box = has("inworld") ? worldEl : orb;  // the world window is wider and taller than the little doll
+      const eyeW = box.offsetWidth, eyeH = box.offsetHeight, right = innerWidth - base(), left = right - eyeW;
       for (const el of document.querySelectorAll(AVOID)) {
         const r = el.getBoundingClientRect();
-        const underEye = r.width && r.right > left - 8 && r.left < right + 8 && r.bottom > innerHeight - base() - eyeW - 8 && r.top < innerHeight;
+        const underEye = r.width && r.right > left - 8 && r.left < right + 8 && r.bottom > innerHeight - base() - eyeH - 8 && r.top < innerHeight;
         if (underEye) lift = Math.max(lift, innerHeight - r.top + 12);
       }
       wrap.style.bottom = lift + "px"; wrap.style.setProperty("--lift", lift + "px");
@@ -724,6 +773,7 @@
     wrap.style.transition = "bottom .35s ease";
     addEventListener("scroll", dodge, { passive: true }); addEventListener("resize", dodge);
     dodge(); later(1500, dodge);
+    new MutationObserver(() => later(20, dodge)).observe(wrap, { attributes: true, attributeFilter: ["class"] });
   }
 
   // Tarun can write back from his phone: his reply pops up in their chat while they're on the site

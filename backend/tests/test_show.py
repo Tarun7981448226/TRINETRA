@@ -42,3 +42,16 @@ def test_music_files_present():
     model = json.loads((static / "music/model.json").read_text())
     assert model["melody"]["maj"]["o2"] and model["chords"]["min"]["o1"]
     assert (static / "music/samples/guitar/60.mp3").exists() and (static / "music.js").exists()
+
+
+def test_world_and_shadow_assets(client):
+    """The portfolio world script is public, and the shadow lives outside the moving body (so it never rotates)."""
+    r = client.get("/static/world.js")
+    assert r.status_code == 200 and "TrinetraWorld" in r.text and "America/Los_Angeles" in r.text
+    for place in ('"lab"', '"lake"', '"home"', '"sleep"'):
+        assert place in r.text
+    buddy = client.get("/static/buddy.js").text
+    assert '<div class="tb-shadow"></div><div class="tb-mover">' in buddy  # sibling of the mover, not inside it
+    assert 'ellipse cx="8" cy="13.6"' not in buddy and 'ellipse cx="50" cy="89"' not in buddy
+    assert "setSuit(" in buddy and "hold(act)" in buddy
+    assert "loadWorld" in client.get("/guest/eye.js").text

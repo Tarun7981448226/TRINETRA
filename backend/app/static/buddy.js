@@ -99,9 +99,18 @@
       }
       rects += cell(x, y, ch === "S" ? shade : body);
     }));
+    const suit = s.suit, J = suit?.jacket, sleeve = (x) => (suit ? J : x === 0 ? shade : body);
+    if (suit) {  // a suit: jacket over the lower body and sleeves, white collar, a tie (gold for the boss) and a badge
+      const on = (x, y, c) => (rects += cell(x, y, c));
+      for (const [x0, x1, y] of [[1, 4, 9], [11, 14, 9], [2, 13, 10]]) for (let x = x0; x <= x1; x++) on(x, y, J);
+      for (const [x, y] of [[0, 6], [1, 6], [0, 7], [1, 7], [14, 6], [15, 6], [14, 7], [15, 7]])
+        if (!((x < 8 && /^(up|lup)$/.test(s.arms)) || (x >= 8 && /^(up|rup)$/.test(s.arms)))) on(x, y, J);
+      on(6, 10, "#f4f4f4"); on(9, 10, "#f4f4f4"); on(7, 10, suit.tie); on(8, 10, suit.tie); on(7, 11, mix(suit.tie, "#000000", 0.25));
+      if (suit.badge) on(12, 9, suit.badge);
+    }
     const UP = [[0, 5], [0, 4], [0, 3], [0, 2], [1, 1], [1, 0], [1, -1], [2, -1]];  // an arm raised beside the head, hand up top
-    if (/^(up|lup)$/.test(s.arms)) for (const [x, y] of UP) rects += cell(x, y, x === 0 ? shade : body);
-    if (/^(up|rup)$/.test(s.arms)) for (const [x, y] of UP) rects += cell(15 - x, y, x === 0 ? shade : body);
+    if (/^(up|lup)$/.test(s.arms)) for (const [x, y] of UP) rects += cell(x, y, sleeve(x));
+    if (/^(up|rup)$/.test(s.arms)) for (const [x, y] of UP) rects += cell(15 - x, y, sleeve(x));
     if (s.girl) {  // a bow on her head
       for (const [x, y] of [[8, -1], [9, -1], [11, -1], [12, -1], [8, 0], [9, 0], [11, 0], [12, 0]]) rects += cell(x, y, BOW);
       rects += cell(10, 0, BOW_KNOT) + cell(10, -1, BOW);
@@ -113,7 +122,6 @@
     return `<svg class="tb-svg" viewBox="-0.5 -2 17 17" shape-rendering="crispEdges" aria-hidden="true">
       <defs><filter id="${s.uid}g" x="-200%" y="-300%" width="500%" height="700%"><feGaussianBlur stdDeviation=".45" result="b"/>
         <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-      <ellipse cx="8" cy="13.6" rx="5.5" ry=".7" fill="#000" opacity=".25" shape-rendering="auto"/>
       <g class="tb-body">${rects}</g></svg>`;
   }
 
@@ -175,10 +183,12 @@
         </filter>
         <filter id="${u}g" x="-150%" y="-150%" width="400%" height="400%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       </defs>
-      <ellipse cx="50" cy="89" rx="30" ry="4" fill="#000" opacity=".28"/>
       <g class="tb-body">
         <path filter="url(#${u}f)" fill="url(#${u}b)" d="M14 70 C9 46 26 21 50 21 C74 21 91 46 86 70 C84 83 70 87 50 87 C30 87 16 83 14 70 Z"/>
         <path d="M50 30 l3.2 4.4 -3.2 4.4 -3.2 -4.4 z" fill="${gemOn ? glow : shade}" ${gemOn ? `filter="url(#${u}g)"` : ""}/>
+        ${s.suit ? `<path d="M15 76 C19 85 33 87 50 87 C67 87 81 85 85 76 C76 80 68 81 62 80 L50 87 L38 80 C32 81 24 80 15 76 Z" fill="${s.suit.jacket}"/>
+          <path d="M38 80 L50 87 L62 80 Z" fill="#f4f4f4"/><path d="M48.4 80.6 L51.6 80.6 L52.6 85 L50 87.4 L47.4 85 Z" fill="${s.suit.tie}"/>
+          ${s.suit.badge ? `<circle cx="70" cy="81" r="1.8" fill="${s.suit.badge}"/>` : ""}` : ""}
         <g class="tb-face">${face}</g>
         ${s.girl ? `<path d="M66 25 L55 17 L56 32 Z M66 25 L77 17 L76 32 Z" fill="${BOW}" stroke="${mix(BOW, "#000000", 0.25)}" stroke-width="1"/><circle cx="66" cy="25" r="3.2" fill="${BOW_KNOT}"/>` : ""}
       </g></svg>`;
@@ -338,6 +348,23 @@
   @keyframes tb-ripple { 0% { opacity: .55; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.35); } }
   .tb-spark { color: #ffd27a; font-size: .9em; animation: tb-spark 1.1s ease-out forwards; }
   @keyframes tb-spark { 0% { opacity: 0; transform: translate(0, 0) scale(.4); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(1.1); } }
+  /* the shadow: on the ground, never rotates — it shrinks while the body is in the air, slides with a sway */
+  .tb-shadow { position: absolute; left: 18%; width: 64%; top: 88.5%; height: 6%; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(0, 0, 0, .34), rgba(0, 0, 0, .12) 70%, rgba(0, 0, 0, 0));
+    transition: translate .22s cubic-bezier(.3, 1.4, .5, 1), scale .22s, opacity .22s; }
+  .tb-fuzzy > .tb-shadow { left: 20%; width: 60%; top: 86%; }
+  .tb-e-excited > .tb-shadow { animation: tb-shadow-bob .42s ease-in-out infinite; }
+  .tb-root.tb-hop > .tb-shadow { animation: tb-shadow-up .42s ease-in-out 3; }
+  .tb-root.tb-m-hop > .tb-shadow { animation: tb-shadow-up .5s ease-out; }
+  .tb-root.tb-m-jump > .tb-shadow { animation: tb-shadow-up .55s ease-out 3; }
+  .tb-m-sway-l > .tb-shadow { translate: -14% 0; }
+  .tb-m-sway-r > .tb-shadow { translate: 14% 0; }
+  .tb-m-step-in > .tb-shadow { translate: -25% 0; }
+  .tb-partner .tb-m-step-in > .tb-shadow { translate: 25% 0; }
+  .tb-m-dip > .tb-shadow { scale: 1.12 1; }
+  .tb-m-leave > .tb-shadow { translate: -110% 0; opacity: 0; transition: translate .6s, opacity .6s; }
+  @keyframes tb-shadow-up { 40% { scale: .55; opacity: .45; } 80% { scale: 1.08 1; } }
+  @keyframes tb-shadow-bob { 50% { scale: .9; opacity: .8; } }
   /* shows: holding an instrument, dancing, little moves */
   .tb-mover { position: absolute; inset: 0; transform-origin: 50% 88%; transition: transform .22s cubic-bezier(.3, 1.4, .5, 1), opacity .5s; }
   .tb-propbox { position: absolute; inset: 0; pointer-events: none; transform-origin: 40% 70%; transition: transform .09s; }
@@ -393,12 +420,13 @@
     const s = {
       uid: `tb${++n}x`, style: opts.style === "fuzzy" ? "fuzzy" : "pixel", palette: PALETTES[opts.palette] ? opts.palette : "saffron",
       emotion: "neutral", activity: "idle", lookX: 0, lookY: 0, blinking: false, talkFrame: 0, stepFrame: 0,
-      girl: !!opts.bow, arms: null, prop: null, moveCls: null, forceAct: null,
+      girl: !!opts.bow, arms: null, prop: null, moveCls: null, forceAct: null, held: null,
+      suit: opts.suit ? { jacket: "#2b3142", tie: "#3a7bd5", ...(opts.suit === true ? {} : opts.suit) } : null,
     };
     const still = opts.static || matchMedia("(prefers-reduced-motion: reduce)").matches;
     const root = document.createElement("div");
     root.className = "tb-root";
-    root.innerHTML = `<div class="tb-mover"><div class="tb-art"></div><div class="tb-propbox"></div></div><span class="tb-z">z z</span><span class="tb-dots">…</span>` +
+    root.innerHTML = `<div class="tb-shadow"></div><div class="tb-mover"><div class="tb-art"></div><div class="tb-propbox"></div></div><span class="tb-z">z z</span><span class="tb-dots">…</span>` +
       `<span class="tb-proudspark a">✦</span><span class="tb-proudspark b">✦</span>`;
     container.replaceChildren(root);
     const art = root.querySelector(".tb-art"), propbox = root.querySelector(".tb-propbox");
@@ -426,7 +454,7 @@
     if (!still) {
       const blinkLoop = () => {
         timers[0] = setTimeout(() => {
-          if (!["sleeping", "listening"].includes(s.activity) && s.emotion !== "sleepy") {
+          if (!["sleeping", "listening"].includes(s.forceAct || s.activity) && s.emotion !== "sleepy") {
             s.blinking = true; draw(); setTimeout(() => { s.blinking = false; draw(); }, 130);
           }
           blinkLoop();
@@ -434,8 +462,9 @@
       };
       blinkLoop();
       timers[1] = setInterval(() => {  // talking mouth and walking feet
-        if (s.activity === "speaking") { s.talkFrame ^= 1; draw(); }
-        else if (s.activity === "walking") { s.stepFrame = s.stepFrame === 1 ? 2 : 1; draw(); }
+        const act = s.forceAct || s.activity;  // a held activity animates too
+        if (act === "speaking") { s.talkFrame ^= 1; draw(); }
+        else if (act === "walking") { s.stepFrame = s.stepFrame === 1 ? 2 : 1; draw(); }
       }, 150);
     }
     const ro = window.ResizeObserver ? new ResizeObserver(fit) : null;
@@ -448,6 +477,12 @@
       setStyle(v) { if (v !== s.style) { s.style = v === "fuzzy" ? "fuzzy" : "pixel"; draw(); } return api; },
       setPalette(v) { if (PALETTES[v] && v !== s.palette) { s.palette = v; draw(); } return api; },
       setEmotion(v) { v = EMOTIONS.includes(v) ? v : "neutral"; if (v !== s.emotion) { s.emotion = v; draw(); } return api; },
+      setSuit(v) {  // dress up (the lab's CEO) — null takes it off
+        s.suit = v ? { jacket: "#2b3142", tie: "#3a7bd5", ...(v === true ? {} : v) } : null; draw(); return api;
+      },
+      hold(act) {  // keep showing this activity (e.g. "sleeping" in its bed) whatever the host says; null lets go
+        s.held = ACTIVITIES.includes(act) ? act : null; s.forceAct = s.held; draw(); return api;
+      },
       setActivity(v) {
         v = ACTIVITIES.includes(v) ? v : "idle";
         if (v !== s.activity) { s.activity = v; s.talkFrame = 0; s.stepFrame = 0; draw(); }
@@ -500,7 +535,7 @@
       act(a) {  // a little move on request: jump spin wave cry laugh sleep
         actTimers.forEach(clearTimeout); actTimers = [];
         const at = (ms, fn) => actTimers.push(setTimeout(fn, ms));
-        const done = (ms) => at(ms, () => { s.moveCls = null; s.arms = null; s.forceAct = null; draw(); });
+        const done = (ms) => at(ms, () => { s.moveCls = null; s.arms = null; s.forceAct = s.held; draw(); });
         if (a === "jump") { s.moveCls = "jump"; s.arms = "up"; draw(); for (let i = 0; i < 3; i++) at(i * 550 + 200, () => sparkle("✦")); done(1700); }
         else if (a === "spin") { s.moveCls = "spin"; s.arms = "up"; draw(); done(1250); }
         else if (a === "wave") { for (let i = 0; i < 8; i++) at(i * 300, () => { s.arms = i % 2 ? "rup" : null; s.moveCls = "wave"; draw(); }); done(2500); }
