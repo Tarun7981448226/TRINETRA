@@ -1,5 +1,6 @@
 council: learning
 description: The ML brain — learns how you really work.
+manager: model_trainer  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: feature_engineer, name: Feature Engineer, role: "Turns raw blocks into features (time of day, day load, recent done-rate, skip streak, weekday, category)", kind: ml, triggers: [cron.nightly], priority: 60, phase: "6", builtin: "app/ml/neural_core.py features() — feeds the Neural Core every night"}
   - {id: completion_predictor, name: Completion Predictor, role: "Neural core: predicts the chance you will actually complete a block", kind: ml, triggers: [task.due, plan.proposed], priority: 55, phase: "2"}

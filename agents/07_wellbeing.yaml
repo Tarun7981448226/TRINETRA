@@ -1,5 +1,6 @@
 council: wellbeing
 description: The caretaker — protects your body and mind. Can veto plans that hurt you.
+manager: sleep_guardian  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: sleep_guardian, name: Sleep Guardian, role: "Protects sleep; vetoes plans that cut it", kind: rule, triggers: [plan.proposed], priority: 70, phase: "4"}
   - {id: health_hydration, name: Health & Hydration, role: "After 90 min of unbroken work: water, stand up, stretch (max 4 a day)", kind: rule, triggers: [wellbeing.nudge], priority: 20, phase: "2"}

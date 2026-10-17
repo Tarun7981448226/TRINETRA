@@ -1,5 +1,6 @@
 council: communications
 description: Watches Gmail and WhatsApp; replies for you only when it's safe.
+manager: confidence_judge  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: mail_triage, name: Mail Triage, role: "Classifies each email (urgent / needs reply / FYI / promo) and summarises it", kind: llm, tier: fast, triggers: [mail.received], priority: 50, phase: "5b"}
   - {id: mail_drafter, name: Mail Drafter, role: "Drafts email replies in your style", kind: llm, tier: smart, triggers: [mail.needs_reply], priority: 40, phase: "5b"}

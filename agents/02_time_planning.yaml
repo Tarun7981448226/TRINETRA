@@ -1,5 +1,6 @@
 council: time_planning
 description: Builds and protects your timetable.
+manager: daily_planner  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: timetable_builder, name: Timetable Builder, role: "Creates timetable blocks from plain language or voice ('gym at 6 every weekday')", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 50, phase: "2"}
   - {id: replanner, name: Re-planner, role: "A course block ended short or was skipped → offers today's free time as a catch-up block (you approve)", kind: rule, triggers: [task.skipped, proof.logged], priority: 60, phase: "4"}

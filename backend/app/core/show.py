@@ -48,6 +48,12 @@ MOOD_EXTRA = {  # music words → the mood it plays in (on top of the emotion wo
     "proud": "epic|heroic|victory|triumphant|proud",
 }
 
+LAB = [  # the portfolio's lab (TRINETRA HQ): orders for the team
+    ("assemble", re.compile(r"^\s*((team|everyone|agents),?\s*)?(assemble|line up|fall in)[\s.!]*$|^\s*(please\s+)?(assemble|line up) (the |your )?(team|agents|squad)[\s.!]*$", re.I)),
+    ("roles", re.compile(r"\bwhat (do|does) (your |all your |the )?(agents?|bots?)( all)? do\b|\bwho does what\b|\b(your )?agents'? (tasks|jobs|roles)\b", re.I)),
+    (None, re.compile(r"\b(open|show|visit|take me to|go to)( me)? (the |your )(lab|hq|headquarters|agents)\b", re.I)),
+]
+LAB_LABEL = {"assemble": "🧍 Assemble", "roles": "❓ Who does what", None: "🧪 Lab"}
 PLAY = re.compile(r"\b(play|playing|plays|jam|strum|perform|bang|hit|rock out|pick up)\b", re.I)
 MUSIC = re.compile(r"\b(music|songs?|tunes?|melody|something|anything|beats?)\b|\bsing\b", re.I)
 DANCE = re.compile(r"\b(dance|dancing|dances|boogie|groove|bust a move|shake it|party time)\b", re.I)
@@ -92,13 +98,16 @@ def mood_of(text: str) -> str | None:
     return m if m and m != "firm" else None
 
 
-def request(text: str) -> dict | None:
+def request(text: str, lab: bool = False) -> dict | None:
     """What show (if any) the words ask for."""
     raw = text.strip()
     if not raw or len(raw) > 90:
         return None
     if STOP.match(raw):
         return {"show": "stop"}
+    for cmd, pat in LAB if lab else ():  # the lab lives on the portfolio, so only visitors' chat checks for it
+        if pat.search(raw):
+            return {"show": "lab", "cmd": cmd}
     t = fix_typos(raw, loose=bool(PLAY.search(raw)))
     if DANCE.search(t) and not re.search(r"\b(class|lesson|teacher|studio|competition)\b", t, re.I):
         return {"show": "dance", "mood": mood_of(t) or "excited", "seconds": 10}
@@ -126,6 +135,8 @@ def label(show: dict) -> str:
         return "⏹ Stopped"
     if kind == "dance":
         return "💃 Dance"
+    if kind == "lab":
+        return LAB_LABEL.get(show.get("cmd"), "🧪 Lab")
     if kind == "act":
         return ACTION_LABEL[show["action"]]
     name = INSTRUMENT_LABEL.get(show.get("instrument") or "", "🎶 Music")

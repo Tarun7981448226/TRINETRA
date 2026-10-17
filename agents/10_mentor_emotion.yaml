@@ -1,5 +1,6 @@
 council: mentor_emotion
 description: The heart — a mentor with feelings that pushes you past your limits.
+manager: emotion_engine  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: vision_keeper, name: Vision Keeper, role: "Keeps your 1/3/5-year vision (from what you say, or the 🎯 screen) and brings it into the Monday briefing and your why", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 40, phase: "3b"}
   - {id: challenge_designer, name: Challenge Designer, role: "Progressive overload — raises the bar when you're winning, eases off when you're struggling", kind: ml, triggers: [cron.weekly], priority: 40, phase: "3b"}

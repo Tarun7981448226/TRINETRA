@@ -396,7 +396,7 @@
       },
     };
     current = me;
-    if (s.show === "stop") { me.end(); return me; }
+    if (!["play", "dance", "act"].includes(s.show)) { me.end(); return me; }  // "stop", or something that isn't a show
     if (s.show === "act") {
       const a = s.action, emo = { cry: "sad", laugh: "happy", sleep: "sleepy", jump: "excited", spin: "excited", wave: "happy" }[a];
       feel(emo); buddy.act(a);

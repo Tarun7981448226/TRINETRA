@@ -1,5 +1,6 @@
 council: monitoring
 description: Knows whether you are actually doing the work.
+manager: checkin_agent  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: checkin_agent, name: Check-in Agent, role: "Asks 'started?' and 'done — how did it go?' at block start and end", kind: rule, triggers: [task.ending], priority: 45, phase: "2"}
   - {id: free_time_watcher, name: Free-Time Watcher, role: "In free gaps between blocks, asks what you're doing every 30 minutes", kind: rule, triggers: [free.checkin], priority: 45, phase: "2"}

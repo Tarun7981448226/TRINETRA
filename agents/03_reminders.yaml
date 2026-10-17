@@ -1,5 +1,6 @@
 council: reminders
 description: Gets the right message to you at the right moment, on the right channel.
+manager: reminder_dispatcher  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: reminder_dispatcher, name: Reminder Dispatcher, role: "Fires reminders when a task is due", kind: rule, triggers: [task.due, task.nag], priority: 50, phase: "2"}
   - {id: escalation_agent, name: Escalation Agent, role: "Red alert (angry push + full-screen alarm in the app) when you ignore an important block and all its follow-ups", kind: rule, triggers: [task.escalate], priority: 50, phase: "5"}

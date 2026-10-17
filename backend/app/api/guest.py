@@ -88,6 +88,51 @@ def buddy_js():
     return FileResponse(STATIC / "buddy.js", media_type="text/javascript", headers={"Cache-Control": "public, max-age=300"})
 
 
+TEAMS = {  # council → how visitors see the team
+    "command": ("🧭", "Command"), "time_planning": ("🗓️", "Time Planning"), "reminders": ("🔔", "Reminders"),
+    "monitoring": ("👁️", "Monitoring"), "learning": ("🧠", "ML Brain"), "coaching": ("📈", "Coaching"),
+    "wellbeing": ("💚", "Wellbeing"), "memory": ("📓", "Memory"), "communications": ("✉️", "Communications"),
+    "mentor_emotion": ("❤️", "Mentor & Emotion"),
+}
+
+
+def _for_visitors(text: str) -> str:
+    """Agent descriptions are written to Tarun ("your timetable"); visitors read them about him:
+    the first mention is "Tarun", later ones he / him / his, and the verb after it agrees ("you skip" → "he skips")."""
+    import re
+    OBJ = r"to|for|with|at|tell|tells|remind|reminds|answers|push|pushes|nudge|nudges|warn|warns|ask|asks|help|helps|keep|keeps|" \
+          r"wake|wakes|reach|reaches|get|gets|protect|protects|hurt|hurts|hold|holds|holds"
+    t = re.sub(r"\byou(?:'re| are)\b", "\x01 is", text, flags=re.I)
+    t = re.sub(r"\byour\b", "\x03", t, flags=re.I)
+    t = re.sub(rf"\b({OBJ}) you\b", "\\1 \x02", t, flags=re.I)
+    t = re.sub(r"\byou\b", "\x01", t, flags=re.I)
+    t = re.sub(r"\x01( really)? (approve|skip|tick|say|write|need|work|finish|start|ignore|plan)\b", lambda m: f"\x01{m.group(1) or ''} {m.group(2)}s", t)
+    seen = False
+    def name(m):
+        nonlocal seen
+        first, seen = not seen, True
+        return {"\x01": "Tarun" if first else "he", "\x02": "Tarun" if first else "him", "\x03": "Tarun's" if first else "his"}[m.group(0)]
+    t = re.sub("[\x01\x02\x03]", name, t)
+    return t[:1].upper() + t[1:]
+
+
+@public.get("/agents")
+def public_agents(request: Request):
+    """TRINETRA's real team for the portfolio's lab: 10 councils, each with a manager who reports to TRINETRA."""
+    reg = request.app.state.orchestrator.registry
+    teams = []
+    for council, members in reg.councils().items():
+        info = reg.info.get(council, {})
+        emoji, title = TEAMS.get(council, ("🤖", council.replace("_", " ").title()))
+        mgr = info.get("manager") if info.get("manager") in {m.id for m in members} else members[0].id
+        teams.append({
+            "id": council, "emoji": emoji, "title": title, "about": _for_visitors(info.get("description", "")), "manager": mgr,
+            "members": [{"id": m.id, "name": m.name, "role": _for_visitors(m.role), "status": m.status, "kind": m.kind} for m in members],
+        })
+    specs = list(reg.specs.values())
+    return {"total": len(specs), "active": sum(s.status == "active" for s in specs), "teams": teams}
+
+
 @public.get("/look")
 def public_look(db: Session = Depends(get_db)):
     """What the portfolio character should look like (read-only for visitors), and its resting mood — the same as in

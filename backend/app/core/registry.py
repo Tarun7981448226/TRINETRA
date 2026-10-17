@@ -61,7 +61,8 @@ class AgentSpec:
 
 
 class Registry:
-    def __init__(self, specs: list[AgentSpec]):
+    def __init__(self, specs: list[AgentSpec], info: dict[str, dict] | None = None):
+        self.info = info or {}  # council → {"description", "manager"}
         ids = [s.id for s in specs]
         dupes = {i for i in ids if ids.count(i) > 1}
         if dupes:
@@ -73,12 +74,14 @@ class Registry:
         import app.agents  # noqa: F401  — registers @agent handlers
 
         specs: list[AgentSpec] = []
+        info: dict[str, dict] = {}
         for path in sorted(agents_dir.glob("*.yaml")):
             doc = yaml.safe_load(path.read_text()) or {}
             council = doc.get("council", path.stem)
+            info[council] = {"description": doc.get("description", ""), "manager": doc.get("manager")}
             for raw in doc.get("agents", []):
                 specs.append(AgentSpec(council=council, **raw))
-        return cls(specs)
+        return cls(specs, info)
 
     def for_event(self, event_type: str) -> list[AgentSpec]:
         matched = [s for s in self.specs.values() if s.enabled and s.listens_to(event_type)]

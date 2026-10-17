@@ -1,5 +1,6 @@
 council: command
 description: Hears every event first, decides who acts, and speaks for TRINETRA.
+manager: arbiter  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: data_collector, name: Data Collector, role: "Stores every event as training data for the ML brain", kind: rule, triggers: ["*"], priority: 100, phase: "1"}
   - {id: router, name: Router, role: "Tags intent and distress in user messages instantly without an LLM", kind: rule, triggers: [user.message, voice.input], priority: 90, phase: "1"}

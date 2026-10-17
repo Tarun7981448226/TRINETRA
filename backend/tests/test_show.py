@@ -55,3 +55,26 @@ def test_world_and_shadow_assets(client):
     assert 'ellipse cx="8" cy="13.6"' not in buddy and 'ellipse cx="50" cy="89"' not in buddy
     assert "setSuit(" in buddy and "hold(act)" in buddy
     assert "loadWorld" in client.get("/guest/eye.js").text
+
+
+def test_public_agents_org_chart(client):
+    """The portfolio lab shows the real team: every agent, 10 councils, one manager each, written about Tarun."""
+    d = client.get("/guest/agents").json()
+    teams = d["teams"]
+    assert d["total"] == sum(len(t["members"]) for t in teams) and len(teams) == 10
+    for t in teams:
+        assert t["manager"] in {m["id"] for m in t["members"]}, t["id"]
+        for m in t["members"]:
+            assert " you " not in f" {m['role'].lower()} " and "your " not in m["role"].lower(), m["role"]
+    assert d["active"] < d["total"]  # some agents are still being built
+
+
+def test_lab_orders():
+    assert show.request("assemble", lab=True) == {"show": "lab", "cmd": "assemble"}
+    assert show.request("what do your agents do", lab=True)["cmd"] == "roles"
+    assert show.request("show me your lab", lab=True) == {"show": "lab", "cmd": None}
+    assert show.request("assemble") is None  # Tarun's own app: no lab, normal chat
+    assert show.request("line up my blocks for tomorrow", lab=True) is None
+    assert show.label({"show": "lab", "cmd": "assemble"}) == "🧍 Assemble"
+    for t in ["i need to assemble furniture", "what do you do", "where are my keys", "Line up a call with Tarun", "see the world"]:
+        assert show.request(t, lab=True) is None, t

@@ -287,7 +287,7 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
     # 0b. "Show me your emotions" → just the names; the face acts them out (whatever step of the chat we're at).
     from app.agents.command import EMOTION_LABEL, perform_request
     from app.core import show
-    if wanted := show.request(text):  # "dance", "play the guitar", "stop" → just the name; the character performs it
+    if wanted := show.request(text, lab=True):  # "dance", "play the guitar", "stop" → just the name; the character performs it
         return done(show.label(wanted), show=wanted)
     if perform := perform_request(text):
         return done(" · ".join(EMOTION_LABEL[e] for e in perform), perform=perform)

@@ -1,5 +1,6 @@
 council: memory
 description: Remembers who you are.
+manager: profile_keeper  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: profile_keeper, name: Profile Keeper, role: "Nightly: your patterns from the data (best time of day, what you skip, streaks, moods) → one profile memory the chat uses", kind: rule, triggers: [cron.nightly], priority: 30, phase: "3b"}
   - {id: long_term_memory, name: Long-term Memory, role: "Extracts facts worth remembering from conversations and recalls them when relevant", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 5, phase: "1"}

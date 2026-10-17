@@ -1737,7 +1737,7 @@
 
     // a show: it comes out to the middle (room on its left for her when they dance) and stays put until it ends
     window.trinetraShow = (s) => {
-      if (!window.TrinetraMusic) return;
+      if (!window.TrinetraMusic || s.show === "lab") return;  // the lab lives on the portfolio
       TrinetraMusic.stopAll();  // the last one ends first, so its clean-up can't undo this one
       if (s.show === "stop") return;
       jumpOut();

@@ -1,5 +1,6 @@
 council: coaching
 description: Turns data into insight and growth.
+manager: daily_reviewer  # the team reports to this agent; it decides and reports to TRINETRA
 agents:
   - {id: daily_reviewer, name: Daily Reviewer, role: "After your last block: today's win, miss and one lesson (blocks, course topics ticked, streaks, moods)", kind: llm, tier: fast, triggers: [day.review], priority: 35, phase: "6"}
   - {id: weekly_analyst, name: Weekly Analyst, role: "Weekly report on where you're lagging and what to focus on", kind: llm, tier: smart, triggers: [cron.weekly], priority: 35, phase: "6"}
