@@ -44,6 +44,49 @@ def brief() -> str:
     return BRIEF.read_text()
 
 
+# Insulting Tarun (or TRINETRA) on his own site gets you removed: one line, the page goes, 24 h before you can return.
+_STRONG = r"f+u+c+k+\w*|fck\w*|fuk\w*|motherf\w*|bitch\w*|bastard\w*|assholes?|a\$\$hole|dickhead\w*|cunts?|sluts?|whores?|retard\w*|piece of shit|bullshit"
+_INSULT = r"idiot\w*|stupid|dumb(ass)?|moron\w*|loser\w*|useless|worthless|pathetic|trash|garbage|clown|fraud|ugly|sucks?|incompetent|scammer|failure|nobody|joke"
+_TARGET = r"you|u|ur|you'?re|tarun'?s?|he|he'?s|him|his|this guy|trinetra|bot|this ai|your (owner|creator|boss)"
+ABUSE = re.compile(
+    rf"\b({_STRONG})\b"                                                    # swearing at all
+    rf"|\b({_TARGET})\b(?:\W+\w+){{0,3}}?\W+(is|are|r|a|an|such|so|total|complete|real|just|the|biggest)?\W*\b({_INSULT})\b"
+    rf"|\b({_INSULT})\b\W+({_TARGET})\b"                                    # "idiot tarun"
+    rf"|\b(shut up|go to hell|hate (you|him|tarun)|kill (yourself|urself)|get lost|screw (you|him|tarun))\b", re.I)
+BAN_FOR = timedelta(hours=24)
+EJECT_LINE = "That's not how anyone talks about Tarun here. You're done — goodbye."
+
+
+def abusive(text: str) -> bool:
+    if not ABUSE.search(text):
+        return False
+    # a sceptical question ("are his numbers fake?") is fair; a swear word never is
+    return not (text.strip().endswith("?") and not re.search(rf"\b({_STRONG})\b", text, re.I))
+
+
+def banned(db: Session, ip: str | None) -> bool:
+    row = db.get(KeyValue, f"guest_ban:{ip}") if ip else None
+    return bool(row and row.value and datetime.fromisoformat(row.value) > datetime.now(timezone.utc))
+
+
+def eject(db: Session, v: GuestVisit, text: str) -> dict:
+    """Removed for abuse: Tarun hears about it, the IP is shut out for BAN_FOR, the conversation is forgotten."""
+    now = datetime.now(timezone.utc)
+    if v.ip:
+        row = db.get(KeyValue, f"guest_ban:{v.ip}")
+        until = (now + BAN_FOR).isoformat()
+        if row is None:
+            db.add(KeyValue(key=f"guest_ban:{v.ip}", value=until))
+        else:
+            row.value = until
+    v.topics = [*(v.topics or []), "removed: insulted you"][-12:]
+    push.send(db, "TRINETRA 🚫", f"{_who(v)} insulted you on your portfolio and was removed for 24 h: “{text[:160]}”",
+              url="/#visitors", tag="visitor-removed")
+    forget(v)
+    db.commit()
+    return {"reply": EJECT_LINE, "eject": True, "ban_hours": int(BAN_FOR.total_seconds() // 3600)}
+
+
 def new_visit(db: Session, ip: str | None) -> GuestVisit | None:
     """None when this IP opened too many visits in the last hour."""
     hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
@@ -238,6 +281,13 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
         db.commit()
         return {"reply": reply, **extra}
 
+    # 0. Insulting Tarun gets you thrown out.
+    if abusive(text):
+        return eject(db, v, text)
+    # 0b. "Show me your emotions" → just the names; the face acts them out (whatever step of the chat we're at).
+    from app.agents.command import EMOTION_LABEL, perform_request
+    if perform := perform_request(text):
+        return done(" · ".join(EMOTION_LABEL[e] for e in perform), perform=perform)
     # 1. They gave us their email / number — always welcome, never refused.
     if (thanks := _take_contact(db, v, text)) is not None:
         return done(thanks, celebrate=True)
@@ -275,16 +325,6 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
         v.role, v.company = role or "other", v.company or company
     if (introducing and v.name) or answering_role:
         return await pitch(db, v, done)
-
-    # 5b. "Show me your emotions" → the character acts them out while the reply names each one.
-    from app.agents.command import perform_request
-    if perform := perform_request(text):
-        history = [{"role": "user", "content": (
-            "Your character is acting out these emotions on screen right now, in this order: " + ", ".join(perform)
-            + ". Give one short, playful line per emotion, in that order, each starting with the emotion's name "
-            "(e.g. 'Happy — …'). No intro, no outro.")}]
-        reply = await _say(v, history, "\n".join(f"{e.capitalize()} — that's this one." for e in perform))
-        return done(reply.replace(". ", ".\n") if "\n" not in reply else reply, perform=perform)
 
     # 6. A normal question about Tarun / TRINETRA.
     v.topics = [*(v.topics or []), _topic(text)][-12:]

@@ -37,11 +37,14 @@ async def data_collector(ctx: AgentContext) -> None:
 
 
 # "show me your emotions" → the character acts them out while the reply names each one
-ALL_EMOTIONS = ["happy", "excited", "proud", "caring", "surprised", "firm", "angry", "sad", "sleepy"]
-EMOTION_WORDS = {"happy": "happy|joy(ful)?|glad", "excited": "excited|hyped?|pumped", "proud": "proud",
-                 "caring": "caring|kind|soft|love|loving|gentle", "surprised": "surprised|shocked|amazed",
-                 "firm": "firm|serious|strict|stern", "angry": "angry|mad|furious|annoyed", "sad": "sad|upset|down|crying",
-                 "sleepy": "sleepy|tired|sleep"}
+ALL_EMOTIONS = ["happy", "excited", "proud", "caring", "shy", "surprised", "firm", "angry", "sad", "sleepy"]
+EMOTION_WORDS = {"happy": "happy|joy(ful)?|glad|smil\\w*", "excited": "excited|hyped?|pumped", "proud": "proud",
+                 "caring": "caring|kind|soft|love|loving|gentle|warm", "shy": "shy|blush\\w*|embarrass\\w*|cute",
+                 "surprised": "surprised|shocked|amazed|scared|confused|curious", "firm": "firm|serious|strict|stern",
+                 "angry": "angry|mad|furious|annoyed|rage", "sad": "sad|upset|down|crying|cry",
+                 "sleepy": "sleepy|tired|sleep|bored"}
+EMOTION_LABEL = {"happy": "😊 Happy", "excited": "🤩 Excited", "proud": "😌 Proud", "caring": "🤗 Caring", "shy": "☺️ Shy",
+                 "surprised": "😮 Surprised", "firm": "😐 Firm", "angry": "😠 Angry", "sad": "😢 Sad", "sleepy": "😴 Sleepy"}
 PERFORM_ALL = re.compile(r"\b(show|act|perform|do|express|display)\b.{0,30}\b(emotions?|feelings?|faces?|expressions?|moods?)\b", re.I)
 PERFORM_ONE = re.compile(r"\b(show me|act|play|give me|do)\b.{0,20}?\b(" + "|".join(EMOTION_WORDS.values()) + r")\b", re.I)
 
@@ -136,10 +139,6 @@ async def core(ctx: AgentContext) -> AgentResult:
     if promises := ctx.notes.get("promises_saved"):
         context += (f"\nYou noted their promise(s): {promises}. Tell them briefly you'll check in at the deadline "
                     "and hold them to it. You did NOT add anything to their timetable — don't say you did.")
-    if perform := ctx.notes.get("perform"):
-        context += ("\nRight now your character is ACTING OUT these emotions on screen, in this order: "
-                    + ", ".join(perform) + ". Give one short, vivid line per emotion, in exactly that order, each starting "
-                    "with the emotion's name (e.g. 'Happy — …'). One line each, no intro, no outro.")
     if coach := ctx.notes.get("coach"):
         mode = coach["mode"]
         if mode == "quiz":
@@ -173,6 +172,11 @@ async def core(ctx: AgentContext) -> AgentResult:
             f"\nThey just asked you to switch to {changed} mode. Switch instantly and show it in this very reply."
             if changed != "normal" else "\nThey asked you to go back to your normal self. Do it, warmly."
         )
+    if perform := ctx.notes.get("perform"):  # "show me your emotions": just the names, while the face acts them out
+        reply = " · ".join(EMOTION_LABEL[e] for e in perform)
+        ctx.db.add(Message(role="user", content=text, channel=channel))
+        ctx.db.add(Message(role="trinetra", content=reply, channel=channel, mood=mood, meta={"kind": "perform", "perform": perform}))
+        return AgentResult(reply=reply, mood=mood)
     messages = [{"role": "system", "content": system_prompt(mood, context)}]
     messages += [
         {

@@ -5,7 +5,7 @@
 
    const b = TrinetraBuddy.create(el, { style: "pixel", palette: "saffron" });
    b.setEmotion("proud"); b.setActivity("speaking"); b.look(dx, dy); b.celebrate();
-   Emotions:   neutral happy proud excited angry firm caring surprised sad sleepy
+   Emotions:   neutral happy proud excited angry firm caring shy surprised sad sleepy
    Activities: idle listening thinking speaking sleeping walking watching
    Works in a normal page or inside a Shadow DOM (it brings its own CSS). Original design — TRINETRA's own. */
 (() => {
@@ -21,7 +21,7 @@
     night: ["#5b6cff", "#3a47c9", "#f1f3ff"],
     mono: ["#d9d9df", "#a9a9b3", "#141418"],
   };
-  const EMOTIONS = ["neutral", "happy", "proud", "excited", "angry", "firm", "caring", "surprised", "sad", "sleepy"];
+  const EMOTIONS = ["neutral", "happy", "proud", "excited", "angry", "firm", "caring", "shy", "surprised", "sad", "sleepy"];
   const ACTIVITIES = ["idle", "listening", "thinking", "speaking", "sleeping", "walking", "watching"];
   const PINK = "#ff8fa3", TEAR = "#7cc7ff", GEM = "#ffd27a", GEM_HOT = "#fff1c2", GEM_RED = "#ff5b4f";
 
@@ -65,6 +65,7 @@
     else if (emo === "proud") { open(); shine(); }
     else if (emo === "excited") { D([[3, 3], [4, 3], [5, 3], [3, 4], [4, 4], [5, 4], [3, 5], [4, 5], [5, 5], [10, 3], [11, 3], [12, 3], [10, 4], [11, 4], [12, 4], [10, 5], [11, 5], [12, 5]]); D([[3, 3], [10, 3]], "W"); }
     else if (emo === "sad") { open(ox, 1); D([[3, 3], [4, 2], [12, 3], [11, 2]]); D([[4, 7], [4, 8]], "T"); }
+    else if (emo === "shy") { open(-1, 1); D([[2, 7], [3, 7], [12, 7], [13, 7]], "P"); }
     else if (emo === "angry") D([[4, 5], [5, 5], [10, 5], [11, 5], [3, 3], [4, 3], [5, 4], [12, 3], [11, 3], [10, 4]]);
     else if (emo === "firm") { open(ox, 0); D([[4, 2], [5, 2], [10, 2], [11, 2]]); }
     else open();
@@ -74,6 +75,7 @@
     else if (emo === "excited" && !dozing) D([[6, 7], [7, 7], [8, 7], [9, 7], [6, 8], [9, 8], [7, 9], [8, 9]]);
     else if (["happy", "proud", "caring"].includes(emo) && !dozing) D([[6, 7], [9, 7], [7, 8], [8, 8]]);
     else if (emo === "sad" && !dozing) D([[7, 8], [8, 8], [6, 9], [9, 9]]);
+    else if (emo === "shy" && !dozing) D([[7, 9], [8, 9]]);
     else if (["firm", "angry"].includes(emo)) D([[6, 8], [9, 8], [7, 7], [8, 7]]);
     return out;
   }
@@ -126,6 +128,8 @@
     else if (emo === "happy") face += arc(L, Y + 1, true) + arc(R, Y + 1, true);
     else if (emo === "proud") face += eye(L, Y) + eye(R, Y) + glint(L, Y) + glint(R, Y);
     else if (emo === "excited") face += eye(L, Y - 1, 5.6, 8) + eye(R, Y - 1, 5.6, 8) + glint(L, Y - 1) + glint(R, Y - 1);
+    else if (emo === "shy") face += eye(L - 3, Y + 3, 4.2, 5.6) + eye(R - 3, Y + 3, 4.2, 5.6)
+      + `<ellipse cx="28" cy="67" rx="7" ry="3.6" fill="${PINK}" opacity=".75"/><ellipse cx="72" cy="67" rx="7" ry="3.6" fill="${PINK}" opacity=".75"/>`;
     else if (emo === "sad") face += eye(L, Y + 2, 4.4, 6) + eye(R, Y + 2, 4.4, 6)
       + `<path d="M30 47 L43 43 M70 47 L57 43" stroke="${dark}" stroke-width="2.4" stroke-linecap="round"/>`
       + `<path d="M${L - 3} ${Y + 8} q-1.6 3.4 0 5.4 q1.6 -2 0 -5.4z" fill="${TEAR}" opacity=".9"/>`;
@@ -139,6 +143,7 @@
     if (act === "speaking") face += `<ellipse cx="50" cy="70" rx="4.4" ry="${s.talkFrame ? 3.8 : 1.4}" fill="${dark}"/>`;
     else if (emo === "surprised") face += `<ellipse cx="50" cy="71" rx="3.2" ry="3.8" fill="${dark}"/>`;
     else if (emo === "excited" && !dozing) face += `<path d="M42 67 Q50 79 58 67 Z" fill="${dark}"/><path d="M45 72 Q50 76 55 72" stroke="${PINK}" stroke-width="2" fill="none"/>`;
+    else if (emo === "shy" && !dozing) face += `<path d="M45 71 Q48 73.5 50 71.5 Q52 73.5 55 71" stroke="${dark}" stroke-width="2" fill="none" stroke-linecap="round"/>`;
     else if (emo === "sad" && !dozing) face += `<path d="M44 73 Q50 67 56 73" stroke="${dark}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
     else if (["happy", "proud", "caring"].includes(emo)) face += `<path d="M44 68 Q50 74 56 68" stroke="${dark}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
     else if (["firm", "angry"].includes(emo)) face += `<path d="M44 72 Q50 67 56 72" stroke="${dark}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
@@ -182,6 +187,7 @@
   .tb-e-excited .tb-svg { animation: tb-bounce .42s ease-in-out infinite; filter: drop-shadow(0 0 .2em rgba(255, 241, 194, .7)); }
   .tb-e-excited .tb-proudspark { display: block; }
   .tb-e-sad .tb-svg { transform: translateY(.06em) scaleY(.96); filter: saturate(.7) brightness(.92); transition: transform .4s, filter .4s; }
+  .tb-e-shy .tb-svg { transform: rotate(-7deg) scale(.96); transition: transform .4s; }
   @keyframes tb-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.12em) scale(1.03, .97); } }
   .tb-proudspark.a { left: 4%; top: 2%; } .tb-proudspark.b { right: 2%; top: 14%; animation-delay: .8s; font-size: .4em; }
   @keyframes tb-twinkle { 50% { opacity: .2; transform: scale(.6) rotate(20deg); } }
@@ -300,6 +306,7 @@
     ["proud", /\b(proud|nailed|crushed|killed it|well done|great job|good work|you did it|earned|impressive|shipped|faster|paper|award)\b/i],
     ["excited", /\b(let'?s go|awesome|amazing|huge|incredible|can'?t wait|boom|woo+|hyped|internship)\b|!!/i],
     ["surprised", /\b(wow|whoa|no way|really\?|oh!|interesting|didn'?t expect|guess what)\b/i],
+    ["shy", /\b(aww+|blush\w*|i'?m shy|embarrass\w*|you'?re too kind|stop it,? you)\b/i],
     ["happy", /\b(glad|happy|nice|love (that|it)|haha|fun|great|good to (see|hear|meet)|welcome|hey there|hello|hi there|nice to meet)\b/i],
   ];
   function moodBase(mood = "") {

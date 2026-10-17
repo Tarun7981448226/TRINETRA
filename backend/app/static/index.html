@@ -626,7 +626,7 @@
       $("mood").textContent = d.mood ? d.mood.split(" — ")[0].toLowerCase() : "";
       if (d.notes?.goal_created) note("🎯 goal saved: " + d.notes.goal_created.title);
       if (d.notes?.promises_saved?.length) note("🤝 I'll hold you to: " + d.notes.promises_saved.join(" · "));
-      say(d.reply, d.mood);
+      if (!d.notes?.perform?.length) say(d.reply, d.mood);  // emotions on request: the face, not the voice
       refreshMode();
       // Agents may have attached something to this reply (e.g. a plan to approve) — show it now.
       const extra = await (await fetch(`/messages?after_id=${before}`)).json();

@@ -269,7 +269,8 @@
     return d;
   }
   async function hello() {
-    const d = await api("hello");
+    let d;
+    try { d = await api("hello"); } catch (e) { if (e.status === 403) return throwOut(0); throw e; }
     token = d.token; store(sessionStorage, KEY, token);
     log.innerHTML = ""; add(d.reply, "tri"); speak();
   }
@@ -595,9 +596,11 @@
     later(400 + list.length * each, () => { performing = null; sync(); });
   }
   function afterReply(d) {  // whatever TRINETRA said, plus what comes with it
-    add(d.reply, "tri"); speak();
+    if (d.eject) { add(d.reply, "tri"); return throwOut(d.ban_hours || 24); }
+    add(d.reply, "tri");
+    if (d.perform?.length) return perform(d.perform);  // just the names, and the face acts them out (no voice)
+    speak();
     if (muted) express(d.reply, d.reply.length * 55);
-    if (d.perform?.length) perform(d.perform);
     if (d.celebrate) { cheer(); beGlad(); }
     if (d.role_options) roleButtons(d.role_options);
     if (d.contact_form) contactCard();
@@ -642,6 +645,20 @@
     } catch (err) { add(err.status === 422 ? "That email doesn't look right — mind checking it?" : err.message, "tri"); }
     finally { btn.disabled = false; }
   };
+
+  // ---- insulting Tarun: an angry face, one line, and the page is gone (24 h before they can come back) ----
+  const BAN = "trinetra-guest-removed";
+  function throwOut(hours) {
+    if (hours) store(localStorage, BAN, String(Date.now() + hours * 3600e3));
+    input.disabled = sendBtn.disabled = true;
+    tourOn = false; tourRun++; saveTour(null); player?.pause();
+    performing = "angry"; sync(); buddy?.shake();
+    later(hours ? 1800 : 0, () => {
+      try { window.close(); } catch {}
+      location.replace("about:blank");
+    });
+  }
+  if (+(store(localStorage, BAN) || 0) > Date.now()) throwOut(0);  // still removed: don't let them back in
 
   // ---- open / close ----
   function open() {

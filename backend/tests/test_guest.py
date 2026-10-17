@@ -334,7 +334,7 @@ def test_show_me_your_emotions_acts_them_out_here_and_in_the_app(client, llm_cal
     from app.core import emotion
     token = hello(client)
     r = client.post("/guest/chat", json={"token": token, "text": "show me your emotions"}).json()
-    assert r["perform"][:3] == ["happy", "excited", "proud"] and len(r["perform"]) == 9
+    assert r["perform"][:3] == ["happy", "excited", "proud"] and len(r["perform"]) == 10
     r = client.post("/chat", json={"text": "Hey, show me all your emotions."}).json()
     assert r["notes"]["perform"][-1] == "sleepy"
     with client.session_factory() as db:  # the portfolio rests in the app's mood, but never shows his frustration
@@ -343,3 +343,29 @@ def test_show_me_your_emotions_acts_them_out_here_and_in_the_app(client, llm_cal
         emotion.save(db, st)
         db.commit()
     assert client.get("/guest/look").json()["mood"] == "neutral"
+
+
+def test_insulting_tarun_gets_you_thrown_out_for_a_day(client, llm_calls, monkeypatch):
+    from app.core import push
+    pushed = []
+    monkeypatch.setattr(push, "send", lambda db, title, body, url="/", tag=None: pushed.append(body) or 1)
+    token = hello(client)
+    client.post("/guest/chat", json={"token": token, "text": "I'm Max"})
+    assert not client.post("/guest/chat", json={"token": token, "text": "are his numbers fake?"}).json().get("eject")
+    r = client.post("/guest/chat", json={"token": token, "text": "tarun is an idiot"}).json()
+    assert r["eject"] and r["ban_hours"] == 24 and "goodbye" in r["reply"]
+    assert any("insulted you" in b and "tarun is an idiot" in b for b in pushed)
+    assert client.post("/guest/hello").status_code == 403  # same IP: not back in today
+    assert "removed: insulted you" in client.get("/visitors").json()[0]["topics"]
+    assert client.post("/visitors/unban").json()["unbanned"] == 1
+    assert client.post("/guest/hello").status_code == 200
+
+
+def test_emotions_on_request_are_just_names(client, llm_calls):
+    token = hello(client)
+    r = client.post("/guest/chat", json={"token": token, "text": "can you show me your angry mood"}).json()
+    assert r["perform"] == ["angry"] and r["reply"] == "😠 Angry"
+    r = client.post("/guest/chat", json={"token": token, "text": "show me shy emotion of yours"}).json()
+    assert r["perform"] == ["shy"] and r["reply"] == "☺️ Shy"
+    r = client.post("/chat", json={"text": "show me all your emotions"}).json()
+    assert r["reply"].startswith("😊 Happy · 🤩 Excited") and len(r["notes"]["perform"]) == 10

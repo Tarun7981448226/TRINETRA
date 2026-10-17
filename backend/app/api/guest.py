@@ -101,6 +101,8 @@ def public_look(db: Session = Depends(get_db)):
 
 @public.post("/hello")
 def hello(request: Request, db: Session = Depends(get_db)):
+    if guest.banned(db, _ip(request)):
+        raise HTTPException(403, "removed")
     v = guest.new_visit(db, _ip(request))
     if v is None:
         raise HTTPException(429, "Lots of hellos from here. Try again in a little while.")
@@ -291,6 +293,18 @@ def visitor(visit_id: int, db: Session = Depends(get_db)):
     return {"id": v.id, "name": v.name, "company": v.company, "role": v.role, "email": v.email, "phone": v.phone,
             "here_now": _here_now(v),
             "replies": [{"text": r.text, "delivered": r.delivered_at is not None} for r in replies]}
+
+
+@private.post("/unban")
+def unban(db: Session = Depends(get_db)):
+    """Let everyone who was removed for insults back in (e.g. Tarun testing it himself)."""
+    from app.db.models import KeyValue
+
+    rows = db.scalars(select(KeyValue).where(KeyValue.key.like("guest_ban:%"))).all()
+    for r in rows:
+        db.delete(r)
+    db.commit()
+    return {"unbanned": len(rows)}
 
 
 class ReplyIn(BaseModel):
