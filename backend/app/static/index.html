@@ -170,6 +170,9 @@
   .crs .bar { height: 8px; background: var(--bg); border-radius: 8px; overflow: hidden; margin: 6px 0; }
   .crs .bar i { display: block; height: 100%; background: var(--accent); }
   .crs .muted, .proof .muted { color: var(--muted); font-size: 12px; }
+  #jrnText { width: 100%; min-height: 140px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; font: inherit; margin-bottom: 10px; }
+  .jrn { border-top: 1px solid var(--line); padding: 10px 0; font-size: 14px; white-space: pre-wrap; }
+  .jrn small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
   .learned p { margin: 6px 0; font-size: 14px; }
   .vision label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: .06em; }
   .vision textarea { width: 100%; min-height: 54px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font: inherit; }
@@ -356,6 +359,13 @@
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>A visitor is asking</h2></div>
     <div id="askBox"></div>
   </section></div>
+  <div id="jrnDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>📓 Journal</h2></div>
+    <p>Just for you. I read it once to answer you, then it stays here; it never goes into my memories.</p>
+    <textarea id="jrnText" maxlength="5000" placeholder="How was today, really?"></textarea>
+    <button id="jrnSave">💾 Save entry</button>
+    <div id="jrnList"></div>
+  </section></div>
   <div id="crsDrawer" class="drawer"><section>
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>My courses</h2></div>
     <p>Each TUF / ML block gets a target from here, and at the end you tick what you really finished.</p>
@@ -513,6 +523,11 @@
     log.appendChild(el);
     const respondUrl = meta?.respond || (meta?.task_id ? `/tasks/${meta.task_id}/respond` : null)
                        || (meta?.kind === "plan_proposal" && meta.id ? `/proposals/${meta.id}/respond` : null);
+    if (meta?.kind === "review") {
+      const row = document.createElement("div"); row.className = "btns";
+      const b = document.createElement("button"); b.textContent = "📓 Journal (optional)";
+      b.onclick = () => go("journal"); row.append(b); log.appendChild(row);
+    }
     if (meta?.kind === "proof" && meta.task_id) {
       const row = document.createElement("div"); row.className = "btns" + (meta.answered ? " answered" : "");
       const b = document.createElement("button"); b.textContent = meta.answered ? "📋 Logged" : "📋 Tick what I finished";
@@ -1188,7 +1203,7 @@
   const SCREENS = { timetable: ["planner", openPlanner], goals: ["goalDrawer", loadGoals],
                     report: ["repDrawer", loadReports], memory: ["drawer", loadMems], wake: ["wakeScreen", loadWake],
                     visitors: ["visDrawer", loadVisitors], ask: ["askDrawer", loadAsk], reply: ["replyDrawer", loadReply],
-                    alert: ["alertScreen", loadAlert], courses: ["crsDrawer", loadCourses], proof: ["proofDrawer", loadProof],
+                    alert: ["alertScreen", loadAlert], courses: ["crsDrawer", loadCourses], proof: ["proofDrawer", loadProof], journal: ["jrnDrawer", loadJournal],
                     character: ["charDrawer", loadCharacter] };
   function closeScreens() {
     for (const [id] of Object.values(SCREENS)) $(id).classList.remove("open");
@@ -1362,6 +1377,26 @@
     };
     box.append(chips, txt, send);
   }
+
+  // ---- 📓 the private journal ----
+  async function loadJournal() {
+    const list = $("jrnList"); list.innerHTML = "";
+    let rows = [];
+    try { rows = await (await fetch("/journal")).json(); } catch {}
+    for (const e of rows) {
+      const d = document.createElement("div"); d.className = "jrn";
+      const w = document.createElement("small"); w.textContent = new Date(e.at).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+      d.append(w, document.createTextNode(e.text)); list.append(d);
+    }
+  }
+  $("jrnSave").onclick = async () => {
+    const t = $("jrnText"), b = $("jrnSave");
+    if (!t.value.trim()) { t.focus(); return; }
+    b.disabled = true; b.textContent = "Saving…";
+    const r = await fetch("/journal", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: t.value.trim() }) });
+    b.disabled = false; b.textContent = r.ok ? "Saved ✅" : "Couldn't save — try again";
+    if (r.ok) { t.value = ""; loadJournal(); poll(); }
+  };
 
   // ---- 📚 courses: syllabus, where I am, pace (proof of work for TUF + the ML Specialization) ----
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };

@@ -5,7 +5,7 @@ import logging
 from sqlalchemy import select
 
 from app.core import llm
-from app.core.orchestrator import AgentContext
+from app.core.orchestrator import AgentContext, AgentResult
 from app.core.registry import agent
 from app.db.models import Memory
 
@@ -66,3 +66,23 @@ async def long_term_memory(ctx: AgentContext) -> None:
         saved.append(content)
     if saved:
         ctx.notes["remembered"] = saved
+
+
+@agent("journal_agent")
+async def journal_agent(ctx: AgentContext) -> AgentResult | None:
+    """You wrote in your journal: one warm line back, and the mood goes in the log. The entry itself stays private."""
+    from app.agents.emotion import FALLBACK
+    from app.agents.planning import _speak_up
+    from app.db.models import JournalEntry, MoodEntry
+
+    entry = ctx.db.get(JournalEntry, ctx.event.payload.get("entry_id"))
+    if entry is None:
+        return None
+    mood = next((name for name, pattern in FALLBACK if pattern.search(entry.text)), None)
+    if mood:
+        ctx.db.add(MoodEntry(mood=mood, intensity=0.6, source="journal"))
+    return await _speak_up(
+        ctx, instruction=(f"I just wrote this in my private journal: “{entry.text[:1200]}”. Reply with ONE warm, human "
+                          "sentence — notice something real in it. Don't summarise it, don't give advice unless I asked."),
+        fallback="Thanks for writing that down. It's kept just for you.", mood="warm and caring", keep_mood=True,
+        channel="web", meta={"kind": "journal_ack"})

@@ -325,3 +325,105 @@ async def focus_recommender(ctx: AgentContext) -> None:
     minutes = int(ctx.event.payload.get("minutes_left") or 60)
     if pick := pick_focus(ctx.db, minutes):
         ctx.notes["focus_pick"] = pick
+
+
+# ---------- teaching and quizzing what you've studied (spaced repetition) ----------
+
+QUIZ_ME = re.compile(r"\b(quiz|test) me\b|\bask me a question\b|\bquiz time\b", re.I)
+EXPLAIN = re.compile(r"^\s*(?:explain|teach me|can you explain)\s+(.{3,100}?)\s*[?.!]*$", re.I)
+GIVE_UP = re.compile(r"^\s*(skip|pass|i don'?t know|idk|no idea|give up)\b", re.I)
+BOXES = [1, 3, 7, 14, 30]  # days until the next review, by how many times in a row you got it right
+QUIZ_TTL_H = 2
+
+
+def _kv_json(db, key: str, default):
+    row = db.get(KeyValue, key)
+    return json.loads(row.value) if row and row.value else default
+
+
+def _kv_put(db, key: str, value) -> None:
+    row = db.get(KeyValue, key)
+    if value is None:
+        if row is not None:
+            db.delete(row)
+        return
+    if row is None:
+        db.add(KeyValue(key=key, value=json.dumps(value)))
+    else:
+        row.value = json.dumps(value)
+
+
+def next_quiz_item(db, now: datetime):
+    """A topic you finished at least a day ago that's due for review (never asked, or its interval is up)."""
+    from datetime import timedelta
+
+    from app.db.models import StudyItem
+
+    log = _kv_json(db, "quiz_log", {})
+    today = local(now).date().isoformat()
+    done = db.scalars(select(StudyItem).where(StudyItem.done_at.is_not(None), StudyItem.done_at <= now - timedelta(hours=20),
+                                              StudyItem.optional.is_(False)).order_by(StudyItem.done_at)).all()
+    due = [i for i in done if str(i.id) not in log or log[str(i.id)]["next"] <= today]
+    due.sort(key=lambda i: (log.get(str(i.id), {}).get("next", "0000"), -(i.done_at.timestamp())))
+    return due[0] if due else None
+
+
+async def _llm_json(system: str, user: str) -> dict | None:
+    try:
+        return json.loads(await llm.complete([{"role": "system", "content": system}, {"role": "user", "content": user}],
+                                             tier="fast", temperature=0.3, max_tokens=400, json_mode=True))
+    except (llm.LLMUnavailable, ValueError, TypeError):
+        return None
+
+
+@agent("skill_coach")
+async def skill_coach(ctx: AgentContext) -> None:
+    """"Quiz me" → one question on a topic due for review; your next message gets graded. "Explain X" → a lesson."""
+    from datetime import timedelta
+
+    text = str(ctx.event.payload.get("text", "")).strip()
+    if ctx.event.payload.get("button") or not text:
+        return
+    now = datetime.now(timezone.utc)
+    pending = _kv_json(ctx.db, "quiz_pending", None)
+    if pending and now - datetime.fromisoformat(pending["at"]) > timedelta(hours=QUIZ_TTL_H):
+        pending = None
+        _kv_put(ctx.db, "quiz_pending", None)
+
+    if m := EXPLAIN.match(text):
+        ctx.notes["coach"] = {"mode": "explain", "topic": m.group(1)}
+        return
+    if QUIZ_ME.search(text):
+        item = next_quiz_item(ctx.db, now)
+        if item is None:
+            ctx.notes["coach"] = {"mode": "nothing_yet"}
+            return
+        q = await _llm_json('You write one short interview-style question to check real understanding of a topic a '
+                            'student just studied (DSA / CS / ML). JSON only: {"question": string, "key_points": [string]} '
+                            "— answerable in 2-3 sentences, no code required.",
+                            f"Topic: {item.title} (section: {item.section})") if ctx.settings.llm_available else None
+        question = (q or {}).get("question") or f"In two or three sentences: what's the key idea behind “{item.title}”, and its time complexity if it has one?"
+        _kv_put(ctx.db, "quiz_pending", {"item_id": item.id, "title": item.title, "question": question,
+                                         "key_points": (q or {}).get("key_points") or [], "at": now.isoformat()})
+        ctx.notes["coach"] = {"mode": "quiz", "question": question, "topic": item.title}
+        return
+    if not pending:
+        return
+    # this message is the answer to the pending question
+    gave_up = bool(GIVE_UP.match(text))
+    graded = None if gave_up or not ctx.settings.llm_available else await _llm_json(
+        'Grade a student\'s spoken answer. JSON only: {"correct": true|false, "feedback": string} — feedback in one or two '
+        "sentences: what they got right, and the missing key point. Be fair: the gist counts, wording doesn't.",
+        f"Question: {pending['question']}\nKey points: {pending['key_points']}\nAnswer: {text}")
+    correct = bool(graded and graded.get("correct")) if graded else (not gave_up and len(text.split()) >= 12)
+    log = _kv_json(ctx.db, "quiz_log", {})
+    rec = log.get(str(pending["item_id"]), {"box": 0, "hits": 0, "misses": 0})
+    rec["box"] = min(rec["box"] + 1, len(BOXES) - 1) if correct else 0
+    rec["hits" if correct else "misses"] += 1
+    rec["next"] = (local(now).date() + timedelta(days=BOXES[rec["box"]] if correct else 1)).isoformat()
+    log[str(pending["item_id"])] = rec
+    _kv_put(ctx.db, "quiz_log", log)
+    _kv_put(ctx.db, "quiz_pending", None)
+    ctx.notes["coach"] = {"mode": "graded", "correct": correct, "gave_up": gave_up, "topic": pending["title"],
+                          "question": pending["question"], "key_points": pending["key_points"],
+                          "feedback": (graded or {}).get("feedback"), "next": rec["next"]}

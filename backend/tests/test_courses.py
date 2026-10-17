@@ -211,3 +211,39 @@ def test_review_lag_and_what_to_do_now(client, llm_calls, monkeypatch):
     assert len([m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "lag"]) == 1  # not every night
     r = client.post("/chat", json={"text": "what should I do now?"}).json()
     assert r["notes"].get("focus_pick", "").startswith("Topic 0 (~30 min")
+
+
+def test_quiz_cycle_with_spaced_repetition(client, llm_calls, monkeypatch):
+    import json as _json
+    from datetime import date
+
+    from app.config import get_settings
+    from app.core import llm
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "x")
+
+    async def fake(messages, tier="smart", **kw):
+        sys = messages[0]["content"]
+        if "interview-style question" in sys:
+            return _json.dumps({"question": "Why is GCD(a, b) = GCD(b, a mod b)?", "key_points": ["common divisors are preserved"]})
+        if "Grade a student" in sys:
+            return _json.dumps({"correct": True, "feedback": "Right: every common divisor of a and b divides a mod b."})
+        return "ok"
+
+    monkeypatch.setattr(llm, "complete", fake)
+    tuf = course(client, "tuf")
+    old = (date.today().fromordinal(date.today().toordinal() - 3)).isoformat()
+    client.post(f"/courses/{tuf['id']}/import", json={"items": [
+        {"section": "Sprint 1 · Day 7", "title": "GCD of Two Numbers", "kind": "dsa", "est_min": 13, "planned_date": old, "done": True}]})
+    with client.session_factory() as db:  # finished three days ago
+        from app.db.models import StudyItem
+        it = db.query(StudyItem).filter_by(title="GCD of Two Numbers").one()
+        it.done_at = datetime.now(timezone.utc) - timedelta(days=3)
+        db.commit()
+    r = client.post("/chat", json={"text": "quiz me"}).json()
+    assert r["notes"]["coach"]["mode"] == "quiz" and "GCD(a, b)" in r["notes"]["coach"]["question"]
+    r = client.post("/chat", json={"text": "because any number dividing both a and b also divides a minus a multiple of b"}).json()
+    c = r["notes"]["coach"]
+    assert c["mode"] == "graded" and c["correct"] and c["next"] == (date.today().fromordinal(date.today().toordinal() + 3)).isoformat()
+    r = client.post("/chat", json={"text": "quiz me"}).json()
+    assert r["notes"]["coach"]["mode"] == "nothing_yet"  # GCD isn't due again for 3 days
+    assert client.post("/chat", json={"text": "explain sliding window"}).json()["notes"]["coach"] == {"mode": "explain", "topic": "sliding window"}

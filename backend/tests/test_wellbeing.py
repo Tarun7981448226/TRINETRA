@@ -136,3 +136,11 @@ def test_daily_review_counts_the_day(client, llm_calls):
     rev = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "review"][-1]
     assert (rev["meta"]["done"], rev["meta"]["skipped"], rev["meta"]["missed"]) == (1, 1, 1)
     assert "daily_reviewer" in r["ran"]
+
+
+def test_journal_is_private_and_answered_warmly(client, llm_calls):
+    r = client.post("/journal", json={"text": "Felt exhausted after class but proud I still did the DSA block."})
+    assert r.status_code == 201 and r.json()["reply"]
+    assert client.get("/journal").json()[0]["text"].startswith("Felt exhausted")
+    assert not any("Felt exhausted" in m["content"] for m in client.get("/memories").json())  # never a memory
+    assert any(d["count"] for d in client.get("/moods").json())  # the mood was logged

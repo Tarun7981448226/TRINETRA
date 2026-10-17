@@ -317,3 +317,13 @@ class MoodEntry(Base):
     mood: Mapped[str] = mapped_column(String(30))
     intensity: Mapped[float] = mapped_column(Float, default=0.0)
     source: Mapped[str] = mapped_column(String(20), default="chat")
+
+
+class JournalEntry(Base):
+    """A private journal entry. Never added to memories or shown anywhere but the 📓 screen."""
+
+    __tablename__ = "journal_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    text: Mapped[str] = mapped_column(Text)

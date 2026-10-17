@@ -113,6 +113,21 @@ async def core(ctx: AgentContext) -> AgentResult:
     if promises := ctx.notes.get("promises_saved"):
         context += (f"\nYou noted their promise(s): {promises}. Tell them briefly you'll check in at the deadline "
                     "and hold them to it. You did NOT add anything to their timetable — don't say you did.")
+    if coach := ctx.notes.get("coach"):
+        mode = coach["mode"]
+        if mode == "quiz":
+            context += (f"\nThey asked for a quiz. Ask EXACTLY this question about '{coach['topic']}', nothing else "
+                        f"(one short lead-in at most): {coach['question']}")
+        elif mode == "graded":
+            verdict = "gave up" if coach["gave_up"] else ("got it right" if coach["correct"] else "got it wrong")
+            context += (f"\nThat message was their answer to your quiz question on '{coach['topic']}' ({coach['question']}). "
+                        f"They {verdict}. Feedback to give: {coach.get('feedback') or 'the key points: ' + '; '.join(coach['key_points'])}. "
+                        f"Tell them in two or three sentences; mention you'll ask about it again on {coach['next']}.")
+        elif mode == "explain":
+            context += (f"\nTeach them '{coach['topic']}' like a great tutor, spoken: the intuition first, one tiny "
+                        "example, then the time/space complexity if it applies. Under 150 words, no code blocks.")
+        elif mode == "nothing_yet":
+            context += "\nThey asked for a quiz, but nothing they've studied is due for review yet (topics come up a day after they tick them). Say so and suggest one to study."
     if pick := ctx.notes.get("focus_pick"):
         context += (f"\nThey're asking what to do now. The highest-impact thing that fits: {pick}. Recommend it "
                     "concretely (name it), in a sentence or two.")

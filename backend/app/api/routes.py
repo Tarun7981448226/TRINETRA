@@ -536,6 +536,29 @@ class VisionIn(BaseModel):
     y5: str | None = Field(None, max_length=600)
 
 
+class JournalIn(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+
+
+@router.get("/journal")
+def journal_list(limit: int = 30, db: Session = Depends(get_db)):
+    from app.db.models import JournalEntry
+
+    rows = db.scalars(select(JournalEntry).order_by(JournalEntry.id.desc()).limit(min(limit, 200))).all()
+    return [{"id": e.id, "at": e.at, "text": e.text} for e in rows]
+
+
+@router.post("/journal", status_code=201)
+async def journal_write(body: JournalIn, db: Session = Depends(get_db), core: Orchestrator = Depends(get_orchestrator)):
+    from app.db.models import JournalEntry
+
+    e = JournalEntry(text=body.text.strip())
+    db.add(e)
+    db.flush()
+    result = await core.dispatch(IncomingEvent("journal.entry", {"entry_id": e.id}, "web"), db)
+    return {"id": e.id, "reply": result.reply}
+
+
 @router.get("/insights")
 def get_insights(db: Session = Depends(get_db)):
     """What your history says: real durations, peak/slump hours, what you push off, day-level links."""

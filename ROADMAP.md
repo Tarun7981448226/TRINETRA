@@ -31,7 +31,7 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 **Stage C · Coaching & learning** (Phase 6)
 10. ✅ Evening wrap after your last block (not mid-TUF): Daily Review (win, miss, one lesson) → Lag Detector (7-day pace vs deadline, with numbers, every few days) → tomorrow's plan; Focus Recommender ("what should I do now?" + free-time check-ins name the topic that fits)
 11. ✅ Learning from your history (app/ml/insights.py, shown on 📊): real durations per kind + Time Estimator (offers the realistic length), energy curve (peak/slump hours), Procrastination Detector (what you push off, which day; named in your why), Pattern Miner (gym days, first-ring mornings, low moods vs done-rate); Feature Engineer = the Neural Core's features
-12. ⬜ Skill Coach (quizzes for DSA / CSCI 570 / ML)
+12. ✅ Skill Coach ("quiz me" → a question on a topic you ticked, graded, spaced repetition 1/3/7/14/30 days; "explain X" → a spoken lesson) + 📓 private Journal (offered after the evening review; never goes into memory)
 
 **Stage D · Communications** (Phase 5b)
 13. ⬜ Gmail triage + drafts · Google Calendar sync
