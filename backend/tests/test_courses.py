@@ -68,3 +68,30 @@ def test_nothing_done_counts_as_skipped_and_blocks_before_monday_are_ordinary(cl
     assert client.get(f"/proof/{early['id']}").status_code == 404
     other = block(client, "Gym", MON + timedelta(days=1))
     assert client.get(f"/proof/{other['id']}").status_code == 404
+
+
+def test_import_a_dated_plan_fills_blocks_by_minutes_and_rebuilds_the_roadmap(client, llm_calls):
+    g = client.post("/goals", json={"title": "Finish DSA (NeetCode)"}).json()
+    tuf = course(client, "tuf")
+    with client.session_factory() as db:
+        from app.db.models import Course
+        db.get(Course, tuf["id"]).goal_id = g["id"]
+        db.commit()
+    rows = [{"section": "Sprint 1 · Day 1 · 2026-10-05", "title": "Pattern 1", "kind": "dsa", "est_min": 30, "planned_date": "2026-10-05", "done": True},
+            {"section": "Sprint 1 · Day 7 · 2026-10-16", "title": "Basic Hashing", "kind": "dsa", "est_min": 90, "planned_date": "2026-10-16"},
+            {"section": "Sprint 1 · Day 7 · 2026-10-16", "title": "Basic String", "kind": "dsa", "est_min": 20, "planned_date": "2026-10-16"},
+            {"section": "Sprint 2 · Day 1 · 2026-10-17", "title": "Palindrome Check", "kind": "dsa", "est_min": 20, "planned_date": "2026-10-17"},
+            {"section": "Sprint 2 · Day 1 · 2026-10-17", "title": "ACID properties", "kind": "dbms", "est_min": 40, "planned_date": "2026-10-17"}]
+    r = client.post(f"/courses/{tuf['id']}/import", json={"items": rows, "title": "TUF RED_CHIP", "active_from": "2026-10-17",
+                                                          "roadmap_title": "Finish TUF RED_CHIP by Jan 1, 2027"}).json()
+    assert r["title"] == "TUF RED_CHIP" and r["done"] == 1 and not r["starter"] and r["milestones"] == 2
+    assert [s["name"] for s in r["sprints"]] == ["Sprint 1", "Sprint 2"] and r["sprints"][0]["done"] == 1
+    goal = next(x for x in client.get("/goals").json() if x["id"] == g["id"])
+    assert goal["title"] == "Finish TUF RED_CHIP by Jan 1, 2027"
+    ms = goal["milestones"]
+    assert [m["title"].split(" · ")[0] for m in ms] == ["Sprint 1", "Sprint 2"] and ms[1]["depends_on"] == [ms[0]["id"]]
+    assert ms[0]["effort_hours"] == 2.3 and ms[0]["title"] == "Sprint 1 · DSA (Pattern 1 → Basic String)"
+    # a 2-hour Saturday block: the backlog first, filled by minutes (90 + 20 + 20 = 130 ≥ 120)
+    t = block(client, "TUF DSA — catch-up", datetime(2026, 10, 17, 17, 0, tzinfo=timezone.utc))
+    form = client.get(f"/proof/{t['id']}").json()
+    assert [i["title"] for i in form["aimed"]] == ["Basic Hashing", "Basic String", "Palindrome Check"]

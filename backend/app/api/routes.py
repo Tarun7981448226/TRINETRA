@@ -573,6 +573,40 @@ def course_position(course_id: int, body: PositionIn, db: Session = Depends(get_
     return courses.summary(db, c)
 
 
+class ImportItem(BaseModel):
+    section: str = Field("", max_length=200)
+    title: str = Field(min_length=1, max_length=300)
+    kind: str | None = Field(None, max_length=60)
+    est_min: int | None = Field(None, ge=0, le=1000)
+    planned_date: date | None = None
+    done: bool = False
+    optional: bool = False
+
+
+class ImportIn(BaseModel):
+    items: list[ImportItem] = Field(min_length=1, max_length=3000)
+    title: str | None = Field(None, max_length=200)
+    active_from: date | None = None
+    roadmap_title: str | None = Field(None, max_length=200)  # set → the linked goal's milestones become the sprints
+
+
+@router.post("/courses/{course_id}/import")
+def course_import(course_id: int, body: ImportIn, db: Session = Depends(get_db)):
+    """Load a course exactly as TUF Planly / Coursera has it (synced from Tarun's own logged-in browser)."""
+    from app.core import courses
+
+    c = _course(db, course_id)
+    courses.import_items(db, c, [{**i.model_dump(), "planned_date": i.planned_date.isoformat() if i.planned_date else None}
+                                 for i in body.items])
+    if body.title:
+        c.title = body.title
+    if body.active_from:
+        c.active_from = datetime.combine(body.active_from, datetime.min.time(), user_tz()).astimezone(timezone.utc)
+    milestones = courses.rebuild_roadmap(db, c, body.roadmap_title) if body.roadmap_title else 0
+    db.commit()
+    return {**courses.summary(db, c), "milestones": milestones}
+
+
 class CourseSettingsIn(BaseModel):
     per_block: int | None = Field(None, ge=1, le=20)
     target_date: date | None = None

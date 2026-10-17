@@ -177,14 +177,98 @@ def course_for(db: Session, task: Task) -> Course | None:
 
 
 def target(db: Session, task: Task) -> tuple[Course, list[StudyItem]] | None:
-    """What this block should get through: items it already finished, then the next ones up to per_block."""
+    """What this block should get through: what it already finished, then the next items in order (the backlog
+    first, since the plan is in date order). Items with time estimates fill the block's minutes; otherwise per_block."""
     c = course_for(db, task)
     if c is None:
         return None
     all_items = items(db, c)
     mine = [i for i in all_items if i.task_id == task.id]
-    nxt = [i for i in all_items if i.done_at is None][: max(0, c.per_block - len(mine))]
+    pool = [i for i in all_items if i.done_at is None and not i.optional]
+    if any(i.est_min for i in all_items):
+        budget = (from_db(task.planned_end) - from_db(task.planned_start)).total_seconds() / 60
+        budget -= sum(i.est_min or 10 for i in mine)
+        nxt = []
+        for i in pool:
+            if budget <= 0 and (nxt or mine):
+                break
+            nxt.append(i)
+            budget -= i.est_min or 10
+    else:
+        nxt = pool[: max(0, c.per_block - len(mine))]
     return c, sorted(mine + nxt, key=lambda i: i.position)
+
+
+def import_items(db: Session, course: Course, rows: list[dict]) -> int:
+    """Load a course exactly as its own site has it (TUF Planly, Coursera): order, dates, estimates, what's done."""
+    keep = {i.title.lower(): i.task_id for i in items(db, course) if i.done_at and i.task_id}
+    for i in items(db, course):
+        db.delete(i)
+    db.flush()
+    now = datetime.now(timezone.utc)
+    for n, r in enumerate(rows):
+        db.add(StudyItem(course_id=course.id, position=n, section=(r.get("section") or "")[:200], title=r["title"][:300],
+                         kind=r.get("kind"), est_min=r.get("est_min"), planned_date=r.get("planned_date"),
+                         optional=bool(r.get("optional")), done_at=now if r.get("done") else None,
+                         task_id=keep.get(r["title"].lower()) if r.get("done") else None))
+    course.starter = False
+    db.flush()
+    return len(rows)
+
+
+def sprints(all_items: list[StudyItem]) -> list[dict]:
+    """'Sprint 2 · Day 3 · …' sections → per-sprint progress (for plans that have sprints)."""
+    out: dict[str, dict] = {}
+    for i in all_items:
+        m = re.match(r"(Sprint \d+)", i.section or "")
+        if not m:
+            continue
+        s = out.setdefault(m.group(1), {"name": m.group(1), "done": 0, "total": 0, "start": i.planned_date,
+                                         "end": i.planned_date, "minutes": 0, "subjects": {}})
+        s["total"] += 1
+        s["done"] += bool(i.done_at)
+        s["minutes"] += i.est_min or 0
+        s["end"] = max(filter(None, [s["end"], i.planned_date]), default=None)
+        s["start"] = min(filter(None, [s["start"], i.planned_date]), default=None)
+        s["subjects"][i.kind or "other"] = s["subjects"].get(i.kind or "other", 0) + 1
+    return list(out.values())
+
+
+SUBJECTS = {"dsa": "DSA", "dbms": "DBMS", "computer-networks": "Networks", "operating-system": "OS", "lld": "LLD",
+            "oops": "OOPs"}
+
+
+def rebuild_roadmap(db: Session, course: Course, title: str | None = None) -> int:
+    """The course's goal gets one milestone per sprint, in a chain, sized by the plan's own estimates."""
+    from app.db.models import Goal, Milestone
+
+    goal = db.get(Goal, course.goal_id) if course.goal_id else None
+    if goal is None:
+        return 0
+    all_items = items(db, course)
+    sp = sprints(all_items)
+    if not sp:
+        return 0
+    if title:
+        goal.title = title[:200]
+    for m in list(goal.milestones):
+        db.delete(m)
+    db.flush()
+    prev = None
+    for n, s in enumerate(sp):
+        names = [i for i in all_items if (i.section or "").startswith(s["name"] + " ") and (i.kind or "") == "dsa"]
+        span = f"{names[0].title} → {names[-1].title}" if names else ""
+        subj = ", ".join(SUBJECTS.get(k, k.replace("-", " ")) for k, _ in sorted(s["subjects"].items(), key=lambda kv: -kv[1])[:3])
+        due = datetime.combine(date.fromisoformat(s["end"]), time(23, 59), user_tz()).astimezone(timezone.utc) if s["end"] else None
+        m = Milestone(goal_id=goal.id, title=f"{s['name']} · {subj}" + (f" ({span})" if span else ""), position=n,
+                      due_date=due, effort_hours=round(s["minutes"] / 60, 1), depends_on=[prev] if prev else None,
+                      done_at=datetime.now(timezone.utc) if s["done"] == s["total"] else None)
+        db.add(m)
+        db.flush()
+        prev = m.id
+    goal.progress = sum(s["done"] for s in sp) / max(1, sum(s["total"] for s in sp))
+    db.flush()
+    return len(sp)
 
 
 def blocks_until(db: Session, c: Course, now: datetime) -> int:
@@ -216,8 +300,21 @@ def summary(db: Session, c: Course, now: datetime | None = None) -> dict:
         "this_week": sum(1 for i in done if from_db(i.done_at) >= week_ago and i.task_id),
         "blocks_left": blocks, "need_per_block": need,
         "on_pace": None if need is None else c.per_block >= need,
-        "items": [{"id": i.id, "section": i.section, "title": i.title, "done": bool(i.done_at)} for i in all_items],
+        "items": [{"id": i.id, "section": i.section, "title": i.title, "done": bool(i.done_at), "kind": i.kind,
+                   "est_min": i.est_min, "date": i.planned_date} for i in all_items],
+        "sprints": sprints(all_items),
+        "today": _today(all_items, local(now).date().isoformat()),
+        "behind": sum(1 for i in all_items if not i.done_at and not i.optional and i.planned_date
+                      and i.planned_date < local(now).date().isoformat()),
     }
+
+
+def _today(all_items: list[StudyItem], day: str) -> dict | None:
+    mine = [i for i in all_items if i.planned_date == day]
+    if not mine:
+        return None
+    return {"date": day, "section": mine[0].section, "done": sum(1 for i in mine if i.done_at), "total": len(mine),
+            "minutes": sum(i.est_min or 0 for i in mine)}
 
 
 def record(db: Session, task: Task, done_ids: list[int], note: str) -> dict:

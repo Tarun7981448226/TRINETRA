@@ -170,6 +170,10 @@
   .crs .bar { height: 8px; background: var(--bg); border-radius: 8px; overflow: hidden; margin: 6px 0; }
   .crs .bar i { display: block; height: 100%; background: var(--accent); }
   .crs .muted, .proof .muted { color: var(--muted); font-size: 12px; }
+  .crs .behind { color: var(--firm, #ff8a65); font-size: 13px; margin-top: 4px; }
+  .crs .sprints { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-top: 8px; }
+  .crs .spr { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px; text-align: center; font-size: 11px; }
+  .crs .spr b { display: block; font-size: 12px; } .crs .spr.part { border-color: var(--accent); } .crs .spr.full { background: var(--accent); color: #000; }
   .crs .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .crs .acts button, .crs .list button, .proof button.sec { background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 7px 12px; font-size: 13px; font-weight: 500; }
   .crs .list { max-height: 50vh; overflow-y: auto; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
@@ -1334,6 +1338,18 @@
       pace.push(`${c.this_week} done this week`);
       if (c.active_from) pace.push(`targets start ${c.active_from}`);
       card.append(el("div", "muted", pace.join(" · ")));
+      if (c.today) card.append(el("div", null, `📅 Today (${c.today.section.replace(/ · \d{4}-.*/, "")}): ${c.today.done}/${c.today.total} · ~${Math.round(c.today.minutes / 60 * 10) / 10}h`));
+      if (c.behind) card.append(el("div", "behind", `⚠️ ${c.behind} overdue from earlier days (they come first in your next block)`));
+      if (c.sprints?.length) {
+        const row = el("div", "sprints");
+        for (const sp of c.sprints) {
+          const chip = el("div", "spr" + (sp.done === sp.total ? " full" : sp.done ? " part" : ""));
+          chip.append(el("b", null, sp.name.replace("Sprint ", "S")), el("span", null, `${sp.done}/${sp.total}`));
+          chip.title = `${sp.name}: ${sp.start} → ${sp.end} · ${Math.round(sp.minutes / 60)}h planned`;
+          row.append(chip);
+        }
+        card.append(row);
+      }
       const acts = el("div", "acts"), panel = el("div");
       const bWhere = el("button", null, "📍 Set where I am"), bEdit = el("button", null, "✏️ Edit syllabus"), bPace = el("button", null, "⚙️ Per block");
       bWhere.onclick = () => { panel.innerHTML = ""; panel.append(whereList(c)); };

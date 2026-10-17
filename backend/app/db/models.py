@@ -299,5 +299,9 @@ class StudyItem(Base):
     position: Mapped[int] = mapped_column(Integer)
     section: Mapped[str] = mapped_column(String(200), default="")
     title: Mapped[str] = mapped_column(String(300))
+    kind: Mapped[str | None] = mapped_column(String(60), nullable=True)  # dsa / dbms / lecture / lab / quiz …
+    est_min: Mapped[int | None] = mapped_column(Integer, nullable=True)  # how long it should take
+    planned_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD in the course's own plan
+    optional: Mapped[bool] = mapped_column(Boolean, default=False)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the block it was done in
