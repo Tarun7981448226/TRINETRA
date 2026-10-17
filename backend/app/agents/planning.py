@@ -187,6 +187,30 @@ async def _nag(ctx: AgentContext, task: Task, count: int) -> AgentResult:
     )
 
 
+@agent("escalation_agent")
+async def escalation_agent(ctx: AgentContext) -> AgentResult | None:
+    """Red alert: an important block, a reminder and three follow-ups, all ignored."""
+    task = ctx.db.get(Task, ctx.event.payload.get("task_id"))
+    if task is None or task.status != TaskStatus.PLANNED:
+        return None
+    count = int(ctx.event.payload.get("count") or 1)
+    late = max(0, round((now_local() - local(task.planned_start)).total_seconds() / 60))
+    left = max(0, round((local(task.planned_end) - now_local()).total_seconds() / 60))
+    return await _speak_up(
+        ctx,
+        instruction=(f"RED ALERT #{count}: '{task.title}' is important and started {late} minutes ago. I've ignored the "
+                     f"reminder and all three follow-ups. {left} minutes of it are left. Two or three short, loud "
+                     "sentences: you're done being polite. Tell me to tap Start right now, or own it and tap Skip."
+                     + (" This is the last alert for this block." if count >= 2 else "")),
+        fallback=f"Red alert. {task.title} started {late} minutes ago and you've ignored me four times. "
+                 "Tap Start now, or own it and skip it.",
+        mood="ANGRY — red alert, every reminder ignored",
+        meta={"kind": "red_alert", "task_id": task.id, "buttons": ["start", "skip"],
+              "respond": f"/tasks/{task.id}/respond", "alert": count},
+        keep_mood=True,
+    )
+
+
 @agent("checkin_agent")
 async def checkin_agent(ctx: AgentContext) -> AgentResult | None:
     task = ctx.db.get(Task, ctx.event.payload.get("task_id"))

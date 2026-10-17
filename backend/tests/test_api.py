@@ -14,7 +14,7 @@ def test_health(client):
 def test_agents_listing(client):
     body = client.get("/agents").json()
     assert body["total"] >= 64
-    assert body["active"] == 24
+    assert body["active"] == 25
 
 
 def test_chat_flows_through_agents_and_is_remembered(client, llm_calls):

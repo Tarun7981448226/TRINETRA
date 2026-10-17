@@ -2,8 +2,8 @@ council: reminders
 description: Gets the right message to you at the right moment, on the right channel.
 agents:
   - {id: reminder_dispatcher, name: Reminder Dispatcher, role: "Fires reminders when a task is due", kind: rule, triggers: [task.due, task.nag], priority: 50, phase: "2"}
-  - {id: escalation_agent, name: Escalation Agent, role: "Nudge → voice note → call-style alert when you ignore important reminders", kind: rule, triggers: [task.missed_checkin, reminder.ignored], priority: 50, phase: "5"}
+  - {id: escalation_agent, name: Escalation Agent, role: "Red alert (angry push + full-screen alarm in the app) when you ignore an important block and all its follow-ups", kind: rule, triggers: [task.escalate], priority: 50, phase: "5"}
   - {id: voice_agent, name: Voice Agent, role: "Speaks replies in TRINETRA's male voice (edge-tts) and transcribes yours (Whisper)", kind: rule, triggers: [notify.voice, voice.input], priority: 95, phase: "3"}
   - {id: telegram_agent, name: Telegram Agent, role: "Delivers messages and voice notes through the Telegram bot", kind: rule, triggers: [notify.*], priority: 30, phase: "2"}
-  - {id: push_agent, name: Push Agent, role: "Sends iPhone web-push notifications to the installed PWA", kind: rule, triggers: [task.due, task.nag, task.ending, free.checkin, promise.due, cron.weekly, "notify.*"], priority: 30, phase: "3"}
+  - {id: push_agent, name: Push Agent, role: "Sends iPhone web-push notifications to the installed PWA", kind: rule, triggers: [task.due, task.nag, task.escalate, task.ending, free.checkin, promise.due, cron.weekly, "notify.*"], priority: 30, phase: "3"}
   - {id: tone_adapter, name: Tone Adapter, role: "Rewrites outgoing messages to match the current emotional mode", kind: llm, tier: fast, triggers: [notify.*], priority: 35, phase: "3b"}

@@ -155,6 +155,15 @@
   #askText { width: 100%; min-height: 84px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
     padding: 10px 14px; font: inherit; resize: vertical; margin-bottom: 10px; }
   #askSend { padding: 12px 20px; }
+  #alertScreen section { width: 100%; background: radial-gradient(circle at 50% 30%, #5c0f18, #1a0507 70%); animation: redPulse 1.6s ease-in-out infinite; }
+  @keyframes redPulse { 50% { box-shadow: inset 0 0 120px #ff2d3d88; } }
+  #alertBox { display: flex; flex-direction: column; gap: 14px; padding-top: 18vh; text-align: center; }
+  #alertBox .say { font-size: 22px; line-height: 1.4; font-weight: 600; }
+  #alertBox .what { color: #ffb3ba; font-size: 14px; text-transform: uppercase; letter-spacing: .08em; }
+  #alertBox button { padding: 16px; font-size: 18px; border-radius: 16px; }
+  #alertBox .go { background: #fff; color: #8b0f1c; font-weight: 700; }
+  #alertBox .skip { background: transparent; color: #ffd6da; border: 1px solid #ffd6da66; }
+  #alertBox .skip.confirm { background: #ffd6da22; border-color: #ffd6da; }
   .vis .rl { display: inline-block; margin-top: 8px; color: var(--accent); font-size: 13px; }
   .rlink { display: inline-flex; align-items: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); text-decoration: none; font-size: 14px; }
   /* ---- timetable dashboard ---- */
@@ -314,6 +323,10 @@
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>A visitor is asking</h2></div>
     <div id="askBox"></div>
   </section></div>
+  <div id="alertScreen" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>🚨 Red alert</h2></div>
+    <div id="alertBox"></div>
+  </section></div>
   <div id="replyDrawer" class="drawer"><section>
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>Reply to a visitor</h2></div>
     <div id="replyBox"></div>
@@ -448,8 +461,10 @@
                    approve: "✅ Do it", reject: "✋ Cancel", kept: "✅ Kept it", broken: "❌ Didn't",
                    accept: "✅ Your version", original: "⚡ Exactly what I said" };
 
+  const redAlerts = {};  // message id → the alert, for the 🚨 screen
   function add(text, who, mood, meta) {
     $("hint")?.remove();
+    if (meta?.kind === "red_alert") redAlerts[meta.id] = { text, meta };
     const el = document.createElement("div");
     el.className = `msg ${who} ${who === "tri" ? moodClass(mood) : ""}`;
     el.textContent = text;
@@ -1089,6 +1104,7 @@
   const SCREENS = { timetable: ["planner", openPlanner], goals: ["goalDrawer", loadGoals],
                     report: ["repDrawer", loadReports], memory: ["drawer", loadMems], wake: ["wakeScreen", loadWake],
                     visitors: ["visDrawer", loadVisitors], ask: ["askDrawer", loadAsk], reply: ["replyDrawer", loadReply],
+                    alert: ["alertScreen", loadAlert],
                     character: ["charDrawer", loadCharacter] };
   function closeScreens() {
     for (const [id] of Object.values(SCREENS)) $(id).classList.remove("open");
@@ -1140,6 +1156,7 @@
         if (m.role === "trinetra") {
           $("mood").textContent = m.mood ? m.mood.split(" — ")[0].toLowerCase() : "";
           if (!SPOKEN_ELSEWHERE.has(m.channel)) say(m.content, m.mood);
+          if (m.meta?.kind === "red_alert" && !m.meta.answered) go(`alert/${m.id}`);
           if (document.hidden && m.channel === "reminder" && !pushOn && window.Notification?.permission === "granted") {
             new Notification("TRINETRA", { body: m.content });
           }
@@ -1154,6 +1171,8 @@
     const heardId = +localStorageGet("heardId", "0"), last = rows[rows.length - 1];
     const fresh = last?.at && Date.now() - Date.parse(last.at) < 3 * 3600e3;
     if (last && last.role === "trinetra" && !SPOKEN_ELSEWHERE.has(last.channel) && last.id > heardId && fresh) say(last.content, last.mood);
+    const red = [...rows].reverse().find((m) => m.meta?.kind === "red_alert");  // opened the app from the 🚨 notification
+    if (red && !red.meta.answered && red.at && Date.now() - Date.parse(red.at) < 30 * 60e3) go(`alert/${red.id}`);
   }).catch(() => {}).finally(() => setInterval(poll, 5000));
   // back from the background (e.g. tapped a notification): check for new lines right away
   document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
@@ -1257,6 +1276,34 @@
       if (!r.ok) send.disabled = false;
     };
     box.append(chips, txt, send);
+  }
+
+  // ---- 🚨 red alert: an important block, a reminder and three follow-ups ignored ----
+  function loadAlert(id) {
+    const box = $("alertBox"); box.innerHTML = "";
+    const a = redAlerts[id];
+    if (!a || a.meta.answered) { box.innerHTML = "<p>This alert is over. Back to the chat.</p>"; return; }
+    window.trinetraFlash?.("angry");
+    const what = document.createElement("div"); what.className = "what"; what.textContent = "Every reminder for this block was ignored";
+    const said = document.createElement("div"); said.className = "say"; said.textContent = a.text;
+    const go_ = document.createElement("button"); go_.className = "go"; go_.textContent = "▶️ Start it now";
+    const skip = document.createElement("button"); skip.className = "skip"; skip.textContent = "⏭ Skip this block";
+    const act = async (action, btn) => {
+      go_.disabled = skip.disabled = true; btn.textContent = "…";
+      try {
+        const r = await fetch(a.meta.respond, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
+        if (!r.ok) throw 0;
+        a.meta.answered = action;
+        history.back();  // to the chat, where TRINETRA answers
+        await poll();
+      } catch { go_.disabled = skip.disabled = false; btn.textContent = "Couldn't reach me — try again"; }
+    };
+    go_.onclick = () => act("start", go_);
+    skip.onclick = () => {  // skipping counts against you: a second tap to be sure
+      if (!skip.classList.contains("confirm")) { skip.classList.add("confirm"); skip.textContent = "Tap again to skip (it counts as skipped)"; return; }
+      act("skip", skip);
+    };
+    box.append(what, said, go_, skip);
   }
 
   // ---- writing back to a visitor: into their chat while they're on the site, or by text / email / call ----

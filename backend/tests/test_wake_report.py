@@ -178,3 +178,42 @@ def test_app_wake_screen_then_briefing_once_then_silence(client, llm_calls):
     briefing = client.get("/wake/speech")
     assert briefing.headers["content-type"] == "audio/mpeg" and briefing.content != SILENT_MP3
     assert sc(client, "/sc/wake/speech").content == SILENT_MP3   # the 06:10 re-ring stays quiet
+
+
+def _ignore(client, priority, minutes=70):
+    start = datetime(2026, 10, 20, 18, 0, tzinfo=timezone.utc)
+    t = client.post("/tasks", json={"title": "CSCI 570 study", "planned_start": start.isoformat(), "priority": priority,
+                                    "planned_end": (start + timedelta(hours=2)).isoformat()}).json()
+    fired = []
+    with client.session_factory() as db:
+        core = client.app.state.orchestrator
+        for minute in range(-5, minutes):
+            fired += asyncio.run(scheduler.tick(db, core, start + timedelta(minutes=minute)))
+            db.commit()
+    return t, fired
+
+
+def test_important_block_ignored_gets_two_red_alerts(client, llm_calls, monkeypatch):
+    titles = []
+    monkeypatch.setattr(push, "send", lambda db, title, body, url="/", tag=None: titles.append((title, tag)) or 1)
+    t, fired = _ignore(client, priority=5)
+    reds = [f for f in fired if f.startswith("task.escalate")]
+    assert reds == [f"task.escalate:{t['id']}:1", f"task.escalate:{t['id']}:2"]
+    assert ("🚨 TRINETRA", f"red-{t['id']}") in titles  # its own notification, not folded into the reminder
+    alerts = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "red_alert"]
+    assert len(alerts) == 2 and alerts[0]["meta"]["buttons"] == ["start", "skip"] and alerts[0]["mood"].startswith("ANGRY")
+    page = client.get("/").text
+    assert 'id="alertScreen"' in page and "Tap again to skip" in page
+
+
+def test_ordinary_blocks_and_started_blocks_get_no_red_alert(client, llm_calls, monkeypatch):
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    _, fired = _ignore(client, priority=3)
+    assert not [f for f in fired if "escalate" in f]
+    t, fired = _ignore(client, priority=5, minutes=22)  # first red alert at +20 min…
+    assert [f for f in fired if "escalate" in f] == [f"task.escalate:{t['id']}:1"]
+    client.post(f"/tasks/{t['id']}/respond", json={"action": "start"})  # …then he starts it
+    with client.session_factory() as db:
+        out = asyncio.run(scheduler.tick(db, client.app.state.orchestrator,
+                                         datetime(2026, 10, 20, 18, 50, tzinfo=timezone.utc)))
+    assert not [f for f in out if "escalate" in f]

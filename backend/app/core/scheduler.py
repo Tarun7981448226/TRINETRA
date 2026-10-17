@@ -24,6 +24,8 @@ TICK_SECONDS = 30
 STALE_REMINDER = timedelta(minutes=30)  # don't remind about blocks that started long ago (e.g. server was off)
 STALE_CHECKIN = timedelta(hours=6)
 NAG_EVERY, NAG_MAX = timedelta(minutes=5), 3  # Tarun chose: every 5 minutes, up to 3 times
+# Ignored all of those on an important block (priority 4–5)? Red alerts: 5 min after the last follow-up, then 15 min later.
+RED_PRIORITY, RED_AFTER = 4, [timedelta(minutes=5), timedelta(minutes=20)]
 
 
 async def tick(db: Session, core: Orchestrator, now: datetime | None = None) -> list[str]:
@@ -63,6 +65,26 @@ async def tick(db: Session, core: Orchestrator, now: datetime | None = None) -> 
         await core.dispatch(IncomingEvent("task.nag", {"task_id": task.id, "title": task.title,
                                                        "count": task.nag_count}, "scheduler"), db)
         fired.append(f"task.nag:{task.id}:{task.nag_count}")
+
+    red = db.scalars(
+        select(Task).where(
+            Task.status == TaskStatus.PLANNED,
+            Task.reminded_at.is_not(None),
+            Task.notify == "full",
+            Task.priority >= RED_PRIORITY,
+            Task.nag_count >= NAG_MAX,
+            Task.nag_count < NAG_MAX + len(RED_AFTER),
+            Task.planned_end > now,
+        )
+    ).all()
+    for task in red:
+        k = task.nag_count - NAG_MAX  # red alerts already sent
+        if now < from_db(task.reminded_at) + NAG_EVERY * NAG_MAX + RED_AFTER[k]:
+            continue
+        task.nag_count += 1
+        await core.dispatch(IncomingEvent("task.escalate", {"task_id": task.id, "title": task.title,
+                                                            "count": k + 1}, "scheduler"), db)
+        fired.append(f"task.escalate:{task.id}:{k + 1}")
 
     ended = db.scalars(
         select(Task).where(

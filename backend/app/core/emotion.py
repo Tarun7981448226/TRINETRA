@@ -87,6 +87,8 @@ def react(state: EmotionState, event_type: str, notes: dict, priority: int = 3, 
         state.nudge("warmth", 0.05)
     elif event_type == "task.nag" and int(notes.get("nag_count") or 0) >= 3:
         state.nudge("frustration", 0.2 * s * weight)  # ignored every follow-up
+    elif event_type == "task.escalate":  # ignored a red alert's worth of pings on something important
+        state.nudge("frustration", 0.15 * s * weight)
     elif event_type == "wake.done":
         rings = int(notes.get("rings") or 1)
         if rings == 1:
