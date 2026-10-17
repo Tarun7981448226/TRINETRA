@@ -2,10 +2,10 @@ council: time_planning
 description: Builds and protects your timetable.
 agents:
   - {id: timetable_builder, name: Timetable Builder, role: "Creates timetable blocks from plain language or voice ('gym at 6 every weekday')", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 50, phase: "2"}
-  - {id: replanner, name: Re-planner, role: "Proposes a new schedule when something slips", kind: llm, tier: smart, triggers: [task.skipped, task.overran, schedule.slipped], priority: 60, phase: "4"}
+  - {id: replanner, name: Re-planner, role: "A course block ended short or was skipped → offers today's free time as a catch-up block (you approve)", kind: rule, triggers: [task.skipped, proof.logged], priority: 60, phase: "4"}
   - {id: deadline_tracker, name: Deadline Tracker, role: "Watches deadlines and warns early when you are behind pace", kind: rule, triggers: [plan.proposed], priority: 40, phase: "4"}
   - {id: buffer_manager, name: Buffer Manager, role: "Keeps breathing room between blocks so one delay doesn't break the day", kind: rule, triggers: [plan.proposed], priority: 45, phase: "4"}
-  - {id: daily_planner, name: Daily Planner, role: "Builds tomorrow's plan each night using your energy curve", kind: llm, tier: smart, triggers: [cron.evening], priority: 40, phase: "2"}
-  - {id: weekly_planner, name: Weekly Planner, role: "Lays out the week around goals and fixed commitments", kind: llm, tier: smart, triggers: [cron.weekly], priority: 40, phase: "2"}
+  - {id: daily_planner, name: Daily Planner, role: "9 pm: tomorrow at a glance + a catch-up proposal when TUF/ML need more time than the blocks give", kind: llm, tier: fast, triggers: [plan.nightly], priority: 40, phase: "2"}
+  - {id: weekly_planner, name: Weekly Planner, role: "Sunday: next week's course load vs the timetable's hours; proposes weekend blocks if it doesn't fit", kind: llm, tier: fast, triggers: [cron.weekly], priority: 40, phase: "2"}
   - {id: calendar_sync, name: Calendar Sync, role: "Two-way sync with Google Calendar via n8n", kind: rule, triggers: [calendar.changed, task.created, task.updated], priority: 30, phase: "5b"}
   - {id: time_estimator, name: Time Estimator, role: "Corrects your duration guesses using your real history", kind: ml, triggers: [task.created], priority: 48, phase: "6"}

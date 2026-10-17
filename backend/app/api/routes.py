@@ -300,6 +300,8 @@ async def answer_proposal(message_id: int, body: ProposalAnswer, db: Session = D
         else:
             ops = msg.meta["original_ops"] if body.action == "original" else msg.meta["ops"]
             changes = deliberation.apply(db, ops)
+            if msg.meta.get("why") and changes:  # a proposal TRINETRA made itself: say what changed and why
+                await core.dispatch(IncomingEvent("plan.applied", {"changes": changes, "why": msg.meta["why"]}, "web"), db)
             label = "⚡ Do exactly what I asked." if body.action == "original" else "✅ Go with your version."
             text = f"{label} (done: {'; '.join(changes[:6]) or 'nothing to change'})"
         result = await core.dispatch(IncomingEvent("user.message", {"text": text, "button": True}, "web"), db)

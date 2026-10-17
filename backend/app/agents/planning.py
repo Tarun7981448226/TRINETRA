@@ -2,14 +2,16 @@
 import json
 import logging
 import re
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+
+from sqlalchemy import select
 
 from app.core import courses, deliberation, llm, timetable
 from app.core import mood as mood_modes
 from app.core.orchestrator import AgentContext, AgentResult, IncomingEvent
 from app.core.persona import humanize, system_prompt
 from app.core.registry import agent
-from app.core.timeutil import local, now_local
+from app.core.timeutil import from_db, local, now_local, to_utc
 from app.db.models import Message, Task, TaskStatus
 
 log = logging.getLogger("trinetra.planning")
@@ -304,3 +306,141 @@ async def free_time_watcher(ctx: AgentContext) -> AgentResult:
         mood="calm and attentive",
         meta={"kind": "free_checkin", "minutes_left": left, "next": nxt},
     )
+
+
+# ---------- planning ahead: tomorrow (9 pm), the rest of today (a block ended short), next week (Sunday) ----------
+
+def _wake(db):
+    from app.core import wake
+
+    h, m = map(int, wake.wake_time(db).split(":"))
+    return time(h, m)
+
+
+def _course_loads(db, day: date) -> list[dict]:
+    from app.core import courses, planner
+    from app.db.models import Course
+
+    courses.ensure(db)
+    out = []
+    for c in db.scalars(select(Course).order_by(Course.id)).all():
+        if c.active_from and from_db(c.active_from) > to_utc(datetime.combine(day, time(23, 59))):
+            continue
+        ld = planner.load(db, c, day)
+        if ld["due"] or ld["overdue"]:
+            out.append({**ld, "course_obj": c})
+    return out
+
+
+@agent("daily_planner")
+async def daily_planner(ctx: AgentContext) -> AgentResult | None:
+    """9 pm: tomorrow at a glance, and a catch-up proposal when the courses need more time than the plan has."""
+    from app.core import planner
+
+    day = date.fromisoformat(ctx.event.payload.get("date") or (now_local().date() + timedelta(days=1)).isoformat())
+    blocks = [t for t in planner.blocks_on(ctx.db, day) if t.notify != "none" and t.category != "sleep"]
+    if not blocks:
+        return None
+    loads = _course_loads(ctx.db, day)
+    plan = "; ".join(f"{local(t.planned_start):%H:%M} {t.title}" for t in blocks[:10])
+    work = " ".join(f"{ld['course']}: {ld['due']} topics due ({ld['section'] or 'catch-up'}), {ld['overdue']} overdue, "
+                    f"~{round(ld['need_min'] / 60, 1)}h needed vs {round(ld['capacity_min'] / 60, 1)}h of blocks."
+                    for ld in loads)
+    out = await _speak_up(
+        ctx, instruction=(f"Brief me on tomorrow ({day:%A}) in two or three short spoken sentences, like a mentor at "
+                          f"9 pm: the shape of the day, the one thing that matters most, and to sleep on time. Plan: {plan}. "
+                          f"{work}"),
+        fallback=f"Tomorrow starts with {blocks[0].title} at {local(blocks[0].planned_start):%-I:%M}. " + (
+            f"{loads[0]['due']} TUF topics are due." if loads else "Sleep on time."),
+        mood="calm and caring", meta={"kind": "daily_plan", "date": day.isoformat()})
+    for ld in loads:
+        if ld["short_min"] > planner.SLACK:
+            ops = planner.catch_up_ops(ctx.db, ld["course_obj"], day, ld["short_min"], _wake(ctx.db))
+            planner.propose(ctx.db, ops, f"Tomorrow {ld['course']} needs about {round(ld['need_min'] / 60, 1)}h "
+                                         f"({ld['due']} due + {ld['overdue']} overdue) but its blocks give "
+                                         f"{round(ld['capacity_min'] / 60, 1)}h.")
+    return out
+
+
+@agent("replanner")
+async def replanner(ctx: AgentContext) -> None:
+    """A course block ended with work left (or was skipped): offer the rest of today's free time for it."""
+    from app.core import courses, planner
+    from app.db.models import KeyValue
+
+    task = ctx.db.get(Task, ctx.event.payload.get("task_id"))
+    if task is None or (ctx.event.type == "proof.logged" and ctx.event.payload.get("outcome") == "all"):
+        return
+    c = courses.course_for(ctx.db, task)
+    now = datetime.now(timezone.utc)
+    if c is None or local(now).time() >= time(21, 0):  # late: the 9 pm planner handles tomorrow
+        return
+    key = f"replan:{c.key}:{local(now).date().isoformat()}"
+    if ctx.db.get(KeyValue, key) is not None:  # one offer a day, not after every block
+        return
+    ld = planner.load(ctx.db, c, local(now).date())
+    remaining = sum((from_db(t.planned_end) - max(now, from_db(t.planned_start))).total_seconds() / 60
+                    for t in planner.blocks_on(ctx.db, local(now).date())
+                    if t.id != task.id and from_db(t.planned_end) > now and re.search(c.block_match, t.title, re.I)
+                    and t.status in (TaskStatus.PLANNED, TaskStatus.STARTED))
+    short = round(ld["need_min"] - remaining)
+    if short <= planner.SLACK:
+        return
+    ops = planner.catch_up_ops(ctx.db, c, local(now).date(), short, _wake(ctx.db), after=now + timedelta(minutes=15),
+                               max_blocks=1)
+    if planner.propose(ctx.db, ops, f"{task.title} left work behind: {c.title} is {round(short / 60, 1)}h short today."):
+        ctx.db.add(KeyValue(key=key, value="1"))
+
+
+@agent("weekly_planner")
+async def weekly_planner(ctx: AgentContext) -> AgentResult | None:
+    """Sunday: next week's course load vs the hours on the timetable; weekend blocks if it doesn't fit."""
+    from app.core import courses, planner
+    from app.db.models import Course
+
+    week = ctx.event.payload.get("week_of")
+    if not week:
+        return None
+    nxt = date.fromisoformat(week) + timedelta(days=7)
+    days = [nxt + timedelta(days=i) for i in range(7)]
+    courses.ensure(ctx.db)
+    out = None
+    for c in db_courses(ctx.db):
+        its = [i for i in courses.items(ctx.db, c) if not i.done_at and not i.optional and i.planned_date]
+        if not its:
+            continue
+        need = sum(i.est_min or 10 for i in its if i.planned_date <= days[-1].isoformat())
+        cap = sum(planner.load(ctx.db, c, d)["capacity_min"] for d in days)
+        short = round(need - cap)
+        sections = sorted({re.match(r"(Sprint \d+)", i.section or "").group(1) for i in its
+                           if days[0].isoformat() <= i.planned_date <= days[-1].isoformat() and re.match(r"Sprint", i.section or "")})
+        if short > 60:
+            ops = []
+            for d in [x for x in days if x.weekday() >= 5]:  # Saturday, Sunday
+                ops += planner.catch_up_ops(ctx.db, c, d, short - sum(o["duration_min"] for o in ops), _wake(ctx.db))
+            planner.propose(ctx.db, ops, f"Next week {c.title} ({', '.join(sections) or 'catch-up'}) needs "
+                                         f"~{round(need / 60)}h, the timetable gives {round(cap / 60)}h.")
+        out = await _speak_up(
+            ctx, instruction=(f"In two short spoken sentences, set up next week for {c.title}: "
+                              f"{', '.join(sections) or 'catch-up'}, about {round(need / 60)} hours of work against "
+                              f"{round(cap / 60)} hours of blocks" + (", so I've proposed weekend blocks." if short > 60 else ".")),
+            fallback=f"Next week: {', '.join(sections) or c.title}, about {round(need / 60)} hours against {round(cap / 60)} on the timetable.",
+            mood="focused and sharp", meta={"kind": "weekly_plan", "week": nxt.isoformat()})
+    return out
+
+
+def db_courses(db):
+    from app.db.models import Course
+
+    return db.scalars(select(Course).order_by(Course.id)).all()
+
+
+@agent("explainer")
+async def explainer(ctx: AgentContext) -> AgentResult | None:
+    """After you approve a change I proposed: what changed and why, in a sentence."""
+    changes, why = ctx.event.payload.get("changes") or [], ctx.event.payload.get("why") or ""
+    if not changes:
+        return None
+    return await _speak_up(
+        ctx, instruction=f"I approved your change. Done: {'; '.join(changes)}. Why: {why}. One short spoken sentence saying what changed and why.",
+        fallback=f"Done: {'; '.join(changes)}.", mood="calm and caring", channel="web", meta={"kind": "explained"})

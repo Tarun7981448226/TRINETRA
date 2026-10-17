@@ -23,7 +23,7 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 5. ✅ Focus mode + places (iPhone automations → /sc/focus, /sc/place): Focus on = working (pauses free-time check-ins, counts as life, offers Start); off mid-block → "break or done?"; gym arrive → Start; home during class / leaving USC mid-class → asked
 
 **Stage B · Daily rhythm & wellbeing** (Phase 2/3b gaps)
-6. ⬜ Daily Planner (tomorrow's plan each night) + Replanner (when something slips)
+6. ✅ Planning ahead: Daily Planner (9 pm briefing + catch-up proposal when TUF/ML need more time than the blocks), Replanner (a course block ended short → today's free time, once a day), Weekly Planner (Sunday: next week's load vs hours → weekend blocks), Explainer (what changed and why after you approve). Nothing is added without Approve
 7. ⬜ Routine Tracker (streaks: wake-up, gym, DSA) · Meal/Break + Hydration nudges
 8. ⬜ Mood Tracker + Stress Monitor (overload from schedule density / your messages)
 9. ⬜ Motivation Coach + Vision Keeper (your "why", 1/3/5-year vision)

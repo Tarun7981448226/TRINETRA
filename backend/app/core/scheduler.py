@@ -254,6 +254,23 @@ async def silence_watch(db: Session, core: Orchestrator, now: datetime) -> bool:
     return True
 
 
+PLAN_AT = time(21, 0)  # local: tomorrow's briefing (and any catch-up proposal)
+
+
+async def plan_tomorrow(db: Session, core: Orchestrator) -> bool:
+    """Once a day at PLAN_AT, the Daily Planner looks at tomorrow."""
+    today = now_local()
+    if today.time() < PLAN_AT:
+        return False
+    key = f"planned:{today.date().isoformat()}"
+    if db.get(KeyValue, key) is not None:
+        return False
+    db.add(KeyValue(key=key, value="1"))
+    await core.dispatch(IncomingEvent("plan.nightly", {"date": (today.date() + timedelta(days=1)).isoformat()},
+                                      "scheduler"), db)
+    return True
+
+
 NIGHTLY_HOUR = 3  # local time: the brain retrains while you sleep
 
 
@@ -287,6 +304,7 @@ async def heartbeat(db: Session, core: Orchestrator, now: datetime | None = None
         db.commit()
     fired = await tick(db, core, now)
     nightly_ran = await nightly(db, core)
+    planned = await plan_tomorrow(db, core)
     weekly_ran = await weekly(db, core)
     woke = await wake_watch(db, now)
     free = await free_watch(db, core, now)
@@ -294,7 +312,7 @@ async def heartbeat(db: Session, core: Orchestrator, now: datetime | None = None
     forgotten = guest.sweep(db, now)
     digest = guest.digest(db, now)
     db.commit()
-    return {"fired": fired, "routines_extended": extended, "nightly": nightly_ran, "weekly": weekly_ran,
+    return {"fired": fired, "routines_extended": extended, "nightly": nightly_ran, "planned_tomorrow": planned, "weekly": weekly_ran,
             "wake_nag": woke, "free_checkin": free, "silence_check": silence, "visitors_forgotten": forgotten, "visitor_digest": bool(digest)}
 
 

@@ -123,3 +123,54 @@ def test_weekly_analyst_feeds_course_progress_into_the_report(client, llm_calls,
     page = client.get("/agents").json()
     voice = next(a for ms in page["councils"].values() for a in ms if a["id"] == "voice_agent")
     assert voice["status"] == "active"  # built into the voice pipeline
+
+
+def _tuf_plan(client, rows):
+    tuf = course(client, "tuf")
+    client.post(f"/courses/{tuf['id']}/import", json={"items": rows, "active_from": "2026-10-19"})
+    return tuf
+
+
+def test_nightly_planner_briefs_and_proposes_catch_up_that_you_approve(client, llm_calls, monkeypatch):
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    day = "2026-10-20"  # Tuesday
+    _tuf_plan(client, [{"section": "Sprint 2 · Day 2 · 2026-10-20", "title": f"Topic {n}", "kind": "dsa", "est_min": 60,
+                        "planned_date": day} for n in range(5)])  # 5 h of TUF due…
+    block(client, "TUF DSA (1/2)", datetime(2026, 10, 20, 15, 30, tzinfo=timezone.utc), hours=2)  # …2 h of blocks (08:30 LA)
+    r = client.post("/events", json={"type": "plan.nightly", "payload": {"date": day}, "source": "test"}).json()
+    assert r["spoke"] == "daily_planner"
+    prop = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "schedule_proposal"][-1]
+    ops = prop["meta"]["ops"]
+    assert prop["meta"]["buttons"] == ["approve", "reject"] and prop["meta"]["respond"] == f"/proposals/{prop['id']}/respond"
+    assert ops and all(o["title"] == "TUF DSA — catch-up" and o["date"] == day for o in ops)
+    assert sum(o["duration_min"] for o in ops) >= 120 and all(o["duration_min"] <= 120 for o in ops)
+    before = len(client.get("/tasks").json())
+    assert len(client.get("/tasks").json()) == before  # nothing added yet
+    client.post(prop["meta"]["respond"], json={"action": "approve"})
+    assert len(client.get("/tasks").json()) == before + len(ops)
+    assert any((m["meta"] or {}).get("kind") == "explained" for m in client.get("/messages").json())
+
+
+def test_free_gaps_skip_blocks_and_respect_bedtime(client):
+    from datetime import date, time
+
+    from app.core import planner
+    from app.core.timeutil import to_utc
+    block(client, "Class", to_utc(datetime(2026, 10, 20, 10, 0)), hours=3)  # 10:00–13:00 local
+    with client.session_factory() as db:
+        gaps = planner.free_gaps(db, date(2026, 10, 20), time(6, 0))
+    from app.core.timeutil import local
+    spans = [(f"{local(a):%H:%M}", f"{local(b):%H:%M}") for a, b in gaps]
+    assert spans == [("06:00", "09:55"), ("13:05", "23:00")]
+
+
+def test_weekly_planner_proposes_weekend_blocks_when_short(client, llm_calls, monkeypatch):
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    rows = [{"section": f"Sprint 3 · Day {n + 1} · 2026-10-2{6 + n % 4}", "title": f"Topic {n}", "kind": "dsa", "est_min": 120,
+             "planned_date": f"2026-10-2{6 + n % 4}"} for n in range(6)]  # 12 h next week, no TUF blocks at all
+    _tuf_plan(client, rows)
+    client.post("/events", json={"type": "cron.weekly", "payload": {"week_of": "2026-10-19"}, "source": "test"})
+    prop = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "schedule_proposal"][-1]
+    days = {o["date"] for o in prop["meta"]["ops"]}
+    assert days <= {"2026-10-31", "2026-11-01"} and days  # Saturday / Sunday of next week
+    assert "Sprint 3" in prop["content"]
