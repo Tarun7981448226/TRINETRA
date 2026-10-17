@@ -181,3 +181,132 @@ async def profile_keeper(ctx: AgentContext) -> None:
         ctx.db.delete(m)
     ctx.db.add(Memory(kind="habit", content=content[:1000], importance=4))
     ctx.db.flush()
+
+
+# ---------- the evening: looking back at today, and whether you're falling behind ----------
+
+@agent("daily_reviewer")
+async def daily_reviewer(ctx: AgentContext) -> AgentResult | None:
+    """After the last block: today's wins, misses and one lesson — short, honest, spoken."""
+    from datetime import timedelta
+
+    from app.core import streaks
+    from app.core.timeutil import to_utc
+    from app.db.models import MoodEntry, StudyItem, TaskStatus
+
+    day = date.fromisoformat(ctx.event.payload["date"])
+    lo = to_utc(datetime.combine(day, datetime.min.time()))
+    hi = lo + timedelta(days=1)
+    tasks = ctx.db.scalars(select(Task).where(Task.planned_start >= lo, Task.planned_start < hi,
+                                              Task.notify != "none", Task.category != "sleep")).all()
+    if not tasks:
+        return None
+    done = [t.title for t in tasks if t.status == TaskStatus.DONE]
+    skipped = [t.title for t in tasks if t.status == TaskStatus.SKIPPED]
+    missed = [t.title for t in tasks if t.status == TaskStatus.PLANNED and from_db(t.planned_end) < datetime.now(timezone.utc)]
+    ticked = ctx.db.scalars(select(StudyItem).where(StudyItem.task_id.is_not(None), StudyItem.done_at >= lo,
+                                                    StudyItem.done_at < hi)).all()
+    alive = [f"{s['label']} {s['current']}" for s in streaks.all_streaks(ctx.db, day) if s["today"] and s["current"] >= 2]
+    moods = [m.mood for m in ctx.db.scalars(select(MoodEntry).where(MoodEntry.at >= lo, MoodEntry.at < hi)).all()]
+    facts = (f"Done: {', '.join(done) or 'nothing'}. Skipped: {', '.join(skipped) or 'none'}. Never answered: "
+             f"{', '.join(missed) or 'none'}. Course topics ticked: {len(ticked)}"
+             + (f" ({', '.join(i.title for i in ticked[:6])})" if ticked else "") + "."
+             + (f" Streaks alive: {', '.join(alive)}." if alive else "") + (f" Moods today: {', '.join(moods)}." if moods else ""))
+    ctx.notes["day_review"] = {"done": len(done), "skipped": len(skipped), "missed": len(missed), "ticked": len(ticked)}
+    return await _speak_up(
+        ctx, instruction=(f"Review my day like a mentor, in three short spoken sentences: the real win, the honest miss, "
+                          f"and one lesson for tomorrow. Facts: {facts}"),
+        fallback=f"Today: {len(done)} done, {len(skipped) + len(missed)} not. {len(ticked)} course topics ticked.",
+        mood="honest, warm, deeply invested mentor — proud where earned, firm where needed",
+        meta={"kind": "review", "date": day.isoformat(), **ctx.notes["day_review"]})
+
+
+LAG_GAP_DAYS = 3  # behind by more than this → say so
+LAG_EVERY_DAYS = 3  # …but not every night
+
+
+def course_pace(db, c, now: datetime) -> dict | None:
+    """Recent pace vs the pace needed to finish on time."""
+    from datetime import timedelta
+
+    its = courses.items(db, c)
+    left = [i for i in its if not i.done_at and not i.optional]
+    dated = [i.planned_date for i in its if i.planned_date]
+    deadline = local(c.target_date).date() if c.target_date else (date.fromisoformat(max(dated)) if dated else None)
+    if not left or deadline is None:
+        return None
+    week = [i for i in its if i.done_at and i.task_id and from_db(i.done_at) >= now - timedelta(days=7)]
+    per_day = len(week) / 7
+    days_left = max(1, (deadline - local(now).date()).days)
+    finish = (local(now).date() + timedelta(days=int(len(left) / per_day) + 1)) if per_day else None
+    return {"course": c.title, "left": len(left), "per_day": round(per_day, 1), "need_per_day": round(len(left) / days_left, 1),
+            "deadline": deadline.isoformat(), "finish": finish.isoformat() if finish else None,
+            "late_days": (finish - deadline).days if finish else None}
+
+
+@agent("lag_detector")
+async def lag_detector(ctx: AgentContext) -> AgentResult | None:
+    """Evening: is a course (or goal) falling behind its deadline at your real pace? Said plainly, every few days."""
+    now = datetime.now(timezone.utc)
+    key = "lag_said"
+    row = ctx.db.get(KeyValue, key)
+    if row and row.value and (now - datetime.fromisoformat(row.value)).days < LAG_EVERY_DAYS:
+        return None
+    behind = []
+    for c in ctx.db.scalars(select(Course).order_by(Course.id)).all():
+        if c.starter or (c.active_from and from_db(c.active_from) > now):
+            continue
+        p = course_pace(ctx.db, c, now)
+        if p and (p["late_days"] is None or p["late_days"] > LAG_GAP_DAYS):
+            behind.append(p)
+    ctx.notes["lag"] = behind
+    if not behind:
+        return None
+    if row is None:
+        ctx.db.add(KeyValue(key=key, value=now.isoformat()))
+    else:
+        row.value = now.isoformat()
+    facts = " ".join(
+        f"{p['course']}: {p['left']} topics left, doing {p['per_day']}/day, need {p['need_per_day']}/day for {p['deadline']}"
+        + (f" — at this pace it finishes {p['finish']}, {p['late_days']} days late." if p["finish"] else " — at this pace it never finishes.")
+        for p in behind)
+    return await _speak_up(
+        ctx, instruction=(f"Tell me plainly I'm falling behind, with the numbers, in two or three short spoken sentences, "
+                          f"and what pace fixes it. No drama. {facts}"),
+        fallback=facts, mood="firm — a clear nudge", meta={"kind": "lag", "behind": behind})
+
+
+# ---------- what to do right now ----------
+
+WHAT_NOW = re.compile(r"\bwhat (should|do|can) i (do|work on|study|start)\b|\bwhat now\b|\bwhat next\b|\bwhat'?s next\b", re.I)
+
+
+def pick_focus(db, minutes: int) -> str | None:
+    """The most useful thing that fits: overdue / next TUF topics first, then the ML course."""
+    out = []
+    budget = minutes
+    for key in ("tuf", "ml"):
+        c = db.scalar(select(Course).where(Course.key == key))
+        if c is None or c.starter:
+            continue
+        for i in [x for x in courses.items(db, c) if not x.done_at and not x.optional]:
+            est = i.est_min or 15
+            if est > budget and out:
+                break
+            out.append(f"{i.title} (~{est} min, {c.title.split(' (')[0]})")
+            budget -= est
+            if budget <= 0 or len(out) >= 3:
+                break
+        if out:
+            break
+    return "; ".join(out) or None
+
+
+@agent("focus_recommender")
+async def focus_recommender(ctx: AgentContext) -> None:
+    """Free time, or you ask "what should I do?": the highest-impact thing that fits the time."""
+    if ctx.event.type == "user.message" and not WHAT_NOW.search(str(ctx.event.payload.get("text", ""))):
+        return
+    minutes = int(ctx.event.payload.get("minutes_left") or 60)
+    if pick := pick_focus(ctx.db, minutes):
+        ctx.notes["focus_pick"] = pick

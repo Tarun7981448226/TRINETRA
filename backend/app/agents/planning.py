@@ -300,7 +300,8 @@ async def free_time_watcher(ctx: AgentContext) -> AgentResult:
         ctx,
         instruction=(f"I'm in free time — no block right now; {then}. Ask me, in one or two short spoken sentences, "
                      "what I'm doing right now. Free time is fine for rest, food or a walk, but if I'm scrolling "
-                     "or wasting it, I should tell you honestly. Don't lecture yet."),
+                     "or wasting it, I should tell you honestly. Don't lecture yet."
+                     + (f" If I'm free, suggest this (it fits): {ctx.notes['focus_pick']}." if ctx.notes.get("focus_pick") else "")),
         fallback="Free time. What are you doing right now? "
                  + (f"{nxt} starts in {left} minutes." if nxt else f"You have {left} minutes before bed."),
         mood="calm and attentive",

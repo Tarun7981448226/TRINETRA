@@ -123,3 +123,15 @@ def test_profile_keeper_writes_one_current_profile_memory(client, llm_calls):
     mems = [m for m in client.get("/memories").json() if m["content"].startswith("[auto-profile]")]
     assert len(mems) == 1 and "Finishes 50% of planned blocks" in mems[0]["content"]
     assert "Most skipped: TUF DSA (1/2) (4×)" in mems[0]["content"]
+
+
+def test_daily_review_counts_the_day(client, llm_calls):
+    with client.session_factory() as db:
+        done_block(db, "TUF DSA (1/2)", DAY, 9)
+        done_block(db, "ML Specialization", DAY, 11, status="skipped")
+        done_block(db, "CSCI 570 study", DAY, 14, status="planned")  # never answered
+        db.commit()
+    r = client.post("/events", json={"type": "day.review", "payload": {"date": DAY.isoformat()}, "source": "test"}).json()
+    rev = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "review"][-1]
+    assert (rev["meta"]["done"], rev["meta"]["skipped"], rev["meta"]["missed"]) == (1, 1, 1)
+    assert "daily_reviewer" in r["ran"]

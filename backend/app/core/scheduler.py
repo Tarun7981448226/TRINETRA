@@ -309,18 +309,33 @@ async def wellbeing_watch(db: Session, core: Orchestrator, now: datetime) -> str
     return kind
 
 
-PLAN_AT = time(21, 0)  # local: tomorrow's briefing (and any catch-up proposal)
+PLAN_AT = time(21, 0)       # the evening wrap-up comes no earlier than this…
+PLAN_LATEST = time(23, 50)  # …and no later than this
+WRAP_AFTER = timedelta(minutes=5)
+
+
+def wrap_time(db: Session, day) -> time:
+    """After the day's last block (so the 20:45 TUF block isn't interrupted), between PLAN_AT and PLAN_LATEST."""
+    from app.core.timeutil import to_utc, user_tz
+
+    lo, hi = to_utc(datetime.combine(day, time.min)), to_utc(datetime.combine(day, PLAN_LATEST))
+    last = db.scalar(select(func.max(Task.planned_end)).where(
+        Task.planned_end > lo, Task.planned_end <= hi, Task.notify != "none", Task.category != "sleep",
+        Task.status != TaskStatus.SKIPPED))
+    at = (from_db(last) + WRAP_AFTER).astimezone(user_tz()).time() if last else PLAN_AT
+    return min(max(at, PLAN_AT), PLAN_LATEST)
 
 
 async def plan_tomorrow(db: Session, core: Orchestrator) -> bool:
-    """Once a day at PLAN_AT, the Daily Planner looks at tomorrow."""
+    """Once a day after the last block: the Daily Reviewer looks back, then the Daily Planner looks at tomorrow."""
     today = now_local()
-    if today.time() < PLAN_AT:
+    if today.time() < wrap_time(db, today.date()):
         return False
     key = f"planned:{today.date().isoformat()}"
     if db.get(KeyValue, key) is not None:
         return False
     db.add(KeyValue(key=key, value="1"))
+    await core.dispatch(IncomingEvent("day.review", {"date": today.date().isoformat()}, "scheduler"), db)
     await core.dispatch(IncomingEvent("plan.nightly", {"date": (today.date() + timedelta(days=1)).isoformat()},
                                       "scheduler"), db)
     return True

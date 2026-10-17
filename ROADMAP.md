@@ -29,7 +29,7 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 9. ✅ Vision Keeper (1/3/5-year vision from what you say or the 🎯 screen; Monday briefings tie the week to it) + Motivation Coach (skip something important → your why, once a day) + Profile Keeper (nightly patterns → one memory the chat uses) + Tone Adapter (built in: every line in the current mood)
 
 **Stage C · Coaching & learning** (Phase 6)
-10. ⬜ Evening Daily Review (wins, misses, one lesson) · Lag Detector · Focus Recommender
+10. ✅ Evening wrap after your last block (not mid-TUF): Daily Review (win, miss, one lesson) → Lag Detector (7-day pace vs deadline, with numbers, every few days) → tomorrow's plan; Focus Recommender ("what should I do now?" + free-time check-ins name the topic that fits)
 11. ⬜ Duration model / Time Estimator · Energy curve · Procrastination Detector · Pattern Miner
 12. ⬜ Skill Coach (quizzes for DSA / CSCI 570 / ML)
 

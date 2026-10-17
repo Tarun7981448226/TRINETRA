@@ -1,10 +1,10 @@
 council: coaching
 description: Turns data into insight and growth.
 agents:
-  - {id: daily_reviewer, name: Daily Reviewer, role: "Evening review — wins, misses, one lesson", kind: llm, tier: smart, triggers: [cron.evening], priority: 35, phase: "6"}
+  - {id: daily_reviewer, name: Daily Reviewer, role: "After your last block: today's win, miss and one lesson (blocks, course topics ticked, streaks, moods)", kind: llm, tier: fast, triggers: [day.review], priority: 35, phase: "6"}
   - {id: weekly_analyst, name: Weekly Analyst, role: "Weekly report on where you're lagging and what to focus on", kind: llm, tier: smart, triggers: [cron.weekly], priority: 35, phase: "6"}
-  - {id: lag_detector, name: Lag Detector, role: "Flags goals falling behind their required pace", kind: rule, triggers: [cron.morning, goal.updated], priority: 40, phase: "6"}
-  - {id: focus_recommender, name: Focus Recommender, role: "Suggests what to work on right now for max impact", kind: llm, tier: fast, triggers: [user.asks_what_next, task.done], priority: 30, phase: "6"}
+  - {id: lag_detector, name: Lag Detector, role: "Evening: TUF / ML pace over the last 7 days vs the pace the deadline needs; says so with numbers, every few days", kind: rule, triggers: [day.review], priority: 40, phase: "6"}
+  - {id: focus_recommender, name: Focus Recommender, role: "Free time or \"what should I do?\" → the overdue / next course topics that fit the time", kind: rule, triggers: [free.checkin, user.message], priority: 70, phase: "6"}
   - {id: skill_coach, name: Skill Coach, role: "Teaches and quizzes you on the skills your goals need", kind: llm, tier: smart, triggers: [coach.session], priority: 30, phase: "6"}
   - {id: motivation_coach, name: Motivation Coach, role: "You skip an important block → your why (goal reason + vision), once a day; fuel, not guilt", kind: llm, tier: fast, triggers: [task.skipped], priority: 35, phase: "3b"}
   - {id: goal_decomposer, name: Goal Decomposer, role: "Breaks big goals into milestones and daily tasks", kind: llm, tier: smart, triggers: [user.message, voice.input], priority: 48, phase: "3b"}

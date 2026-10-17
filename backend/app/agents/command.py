@@ -113,6 +113,11 @@ async def core(ctx: AgentContext) -> AgentResult:
     if promises := ctx.notes.get("promises_saved"):
         context += (f"\nYou noted their promise(s): {promises}. Tell them briefly you'll check in at the deadline "
                     "and hold them to it. You did NOT add anything to their timetable — don't say you did.")
+    if pick := ctx.notes.get("focus_pick"):
+        context += (f"\nThey're asking what to do now. The highest-impact thing that fits: {pick}. Recommend it "
+                    "concretely (name it), in a sentence or two.")
+    if saved := ctx.notes.get("vision_saved"):
+        context += f"\nYou just saved their vision ({saved}). Acknowledge it briefly; it's on the 🎯 screen."
     if demo:
         who = demo["target"] or "the person they describe (or them, if nobody is named)"
         context += (

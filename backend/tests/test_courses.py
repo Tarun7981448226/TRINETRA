@@ -174,3 +174,40 @@ def test_weekly_planner_proposes_weekend_blocks_when_short(client, llm_calls, mo
     days = {o["date"] for o in prop["meta"]["ops"]}
     assert days <= {"2026-10-31", "2026-11-01"} and days  # Saturday / Sunday of next week
     assert "Sprint 3" in prop["content"]
+
+
+def test_evening_wrap_waits_for_the_last_block(client):
+    from datetime import date, time
+
+    from app.core import scheduler
+    from app.core.timeutil import to_utc
+    d = date(2026, 10, 21)
+    with client.session_factory() as db:
+        assert scheduler.wrap_time(db, d) == time(21, 0)  # nothing on: 9 pm
+    block(client, "TUF DSA (2/2)", to_utc(datetime(2026, 10, 21, 20, 45)), hours=2)
+    with client.session_factory() as db:
+        assert scheduler.wrap_time(db, d) == time(22, 50)  # after the 20:45–22:45 block
+    block(client, "NumPy & Pandas", to_utc(datetime(2026, 10, 21, 22, 50)), hours=1)
+    with client.session_factory() as db:
+        assert scheduler.wrap_time(db, d) == time(23, 50)  # never later than 23:50
+
+
+def test_review_lag_and_what_to_do_now(client, llm_calls, monkeypatch):
+    from app.config import get_settings
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "")
+    monkeypatch.setattr(get_settings(), "groq_api_key", "")
+    from datetime import date
+    today = date.today()
+    rows = [{"section": f"Sprint 1 · Day 1 · {today}", "title": f"Topic {n}", "kind": "dsa", "est_min": 30,
+             "planned_date": (today.fromordinal(today.toordinal() + n // 10)).isoformat()} for n in range(100)]
+    tuf = course(client, "tuf")
+    client.post(f"/courses/{tuf['id']}/import", json={"items": rows, "active_from": "2026-10-01"})
+    r = client.post("/events", json={"type": "day.review", "payload": {"date": today.isoformat()}, "source": "test"}).json()
+    assert "lag_detector" in r["ran"]
+    lag = [m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "lag"]
+    assert lag and "never finishes" in lag[-1]["content"]  # nothing done in a week: say it plainly
+    client.post("/events", json={"type": "day.review", "payload": {"date": today.isoformat()}, "source": "test"})
+    assert len([m for m in client.get("/messages").json() if (m["meta"] or {}).get("kind") == "lag"]) == 1  # not every night
+    r = client.post("/chat", json={"text": "what should I do now?"}).json()
+    assert r["notes"].get("focus_pick", "").startswith("Topic 0 (~30 min")
