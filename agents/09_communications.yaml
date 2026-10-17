@@ -1,0 +1,10 @@
+council: communications
+description: Watches Gmail and WhatsApp; replies for you only when it's safe.
+agents:
+  - {id: mail_triage, name: Mail Triage, role: "Classifies each email (urgent / needs reply / FYI / promo) and summarises it", kind: llm, tier: fast, triggers: [mail.received], priority: 50, phase: "5b"}
+  - {id: mail_drafter, name: Mail Drafter, role: "Drafts email replies in your style", kind: llm, tier: smart, triggers: [mail.needs_reply], priority: 40, phase: "5b"}
+  - {id: whatsapp_listener, name: WhatsApp Listener, role: "Reads incoming WhatsApp messages from the Baileys bridge", kind: rule, triggers: [whatsapp.received], priority: 60, phase: "5b"}
+  - {id: whatsapp_replier, name: WhatsApp Replier, role: "Drafts and (when allowed) sends WhatsApp replies with human-like delays", kind: llm, tier: fast, triggers: [whatsapp.received], priority: 40, phase: "5b"}
+  - {id: contact_profiler, name: Contact Profiler, role: "Learns who each contact is and how close they are to you", kind: llm, tier: fast, triggers: [whatsapp.received, mail.received], priority: 55, phase: "5b"}
+  - {id: confidence_judge, name: Confidence Judge, role: "Decides auto-send vs. ask-you-first using the smart-mix policy", kind: rule, triggers: [reply.drafted], priority: 70, phase: "5b"}
+  - {id: reply_style_learner, name: Reply Style Learner, role: "Learns how you write from your sent messages", kind: ml, triggers: [whatsapp.sent, mail.sent, cron.weekly], priority: 20, phase: "5b"}

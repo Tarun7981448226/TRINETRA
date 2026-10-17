@@ -1,0 +1,9 @@
+council: command
+description: Hears every event first, decides who acts, and speaks for TRINETRA.
+agents:
+  - {id: data_collector, name: Data Collector, role: "Stores every event as training data for the ML brain", kind: rule, triggers: ["*"], priority: 100, phase: "1"}
+  - {id: router, name: Router, role: "Tags intent and distress in user messages instantly without an LLM", kind: rule, triggers: [user.message, voice.input], priority: 90, phase: "1"}
+  - {id: core_orchestrator, name: Core Orchestrator, role: "TRINETRA's main voice — answers you with full context of your day, goals and mood", kind: llm, tier: smart, triggers: [user.message, voice.input], priority: 10, phase: "1"}
+  - {id: critic, name: Critic, role: "Challenges every proposed plan against goals, deadlines, sleep and ML predictions before it reaches you", kind: llm, tier: smart, triggers: [plan.proposed], priority: 20, phase: "4"}
+  - {id: arbiter, name: Arbiter, role: "Resolves conflicts when agents disagree (e.g. Push vs Sleep Guardian)", kind: rule, triggers: [plan.proposed], priority: 15, phase: "4"}
+  - {id: explainer, name: Explainer, role: "Turns any decision into a short spoken 'here is what I changed and why'", kind: llm, tier: fast, triggers: [plan.approved_needed, decision.made], priority: 20, phase: "4"}

@@ -1,0 +1,11 @@
+.venv
+**/__pycache__
+**/*.pyc
+.env
+*.db
+data
+models
+.git
+backend/tests
+deploy
+.DS_Store

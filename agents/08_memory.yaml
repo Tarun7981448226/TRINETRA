@@ -1,0 +1,7 @@
+council: memory
+description: Remembers who you are.
+agents:
+  - {id: profile_keeper, name: Profile Keeper, role: "Maintains your evolving profile — strengths, weaknesses, habits, preferences", kind: llm, tier: fast, triggers: [cron.nightly], priority: 30, phase: "3b"}
+  - {id: long_term_memory, name: Long-term Memory, role: "Extracts facts worth remembering from conversations and recalls them when relevant", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 5, phase: "1"}
+  - {id: journal_agent, name: Journal Agent, role: "Guides an optional nightly journal and keeps it private", kind: llm, tier: fast, triggers: [cron.night, journal.entry], priority: 20, phase: "6"}
+  - {id: research_agent, name: Research Agent, role: "Finds learning resources and answers for your goals", kind: llm, tier: smart, triggers: [research.request], priority: 20, phase: "7"}

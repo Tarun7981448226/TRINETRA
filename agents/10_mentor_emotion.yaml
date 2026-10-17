@@ -1,0 +1,10 @@
+council: mentor_emotion
+description: The heart — a mentor with feelings that pushes you past your limits.
+agents:
+  - {id: vision_keeper, name: Vision Keeper, role: "Holds your 1/3/5-year vision and connects daily work to it", kind: llm, tier: smart, triggers: [onboarding.vision, cron.monthly], priority: 40, phase: "3b"}
+  - {id: challenge_designer, name: Challenge Designer, role: "Progressive overload — raises the bar when you're winning, eases off when you're struggling", kind: ml, triggers: [cron.weekly], priority: 40, phase: "3b"}
+  - {id: accountability_agent, name: Accountability Agent, role: "Remembers your promises and holds you to them", kind: llm, tier: fast, triggers: [user.message, voice.input, promise.due], priority: 46, phase: "3b"}
+  - {id: mentor_voice, name: Mentor Voice, role: "Runs the weekly voice mentor session", kind: llm, tier: smart, triggers: [mentor.session], priority: 35, phase: "3b"}
+  - {id: emotion_engine, name: Emotion Engine, role: "Maintains TRINETRA's simulated feelings (warmth, concern, pride, disappointment) and picks its mood", kind: rule, triggers: ["*"], priority: 85, phase: "2"}
+  - {id: empathy_detector, name: Empathy Detector, role: "Reads your mood from text and voice", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 88, phase: "2"}
+  - {id: tone_voice_director, name: Tone & Voice Director, role: "Maps mood to voice pitch, speed and volume (SSML) and wording style", kind: rule, triggers: [notify.voice], priority: 96, phase: "3b"}

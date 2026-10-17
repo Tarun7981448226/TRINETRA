@@ -1,0 +1,12 @@
+.venv
+.git
+**/__pycache__
+*.db
+data
+models
+deploy
+backend/tests
+backend/Dockerfile
+.env
+.env.*
+ROADMAP.md

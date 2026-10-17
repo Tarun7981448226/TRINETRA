@@ -1,0 +1,10 @@
+council: coaching
+description: Turns data into insight and growth.
+agents:
+  - {id: daily_reviewer, name: Daily Reviewer, role: "Evening review — wins, misses, one lesson", kind: llm, tier: smart, triggers: [cron.evening], priority: 35, phase: "6"}
+  - {id: weekly_analyst, name: Weekly Analyst, role: "Weekly report on where you're lagging and what to focus on", kind: llm, tier: smart, triggers: [cron.weekly], priority: 35, phase: "6"}
+  - {id: lag_detector, name: Lag Detector, role: "Flags goals falling behind their required pace", kind: rule, triggers: [cron.morning, goal.updated], priority: 40, phase: "6"}
+  - {id: focus_recommender, name: Focus Recommender, role: "Suggests what to work on right now for max impact", kind: llm, tier: fast, triggers: [user.asks_what_next, task.done], priority: 30, phase: "6"}
+  - {id: skill_coach, name: Skill Coach, role: "Teaches and quizzes you on the skills your goals need", kind: llm, tier: smart, triggers: [coach.session], priority: 30, phase: "6"}
+  - {id: motivation_coach, name: Motivation Coach, role: "Reminds you of your 'why' at the moments you waver", kind: llm, tier: fast, triggers: [task.skipped, emotion.low_drive], priority: 35, phase: "3b"}
+  - {id: goal_decomposer, name: Goal Decomposer, role: "Breaks big goals into milestones and daily tasks", kind: llm, tier: smart, triggers: [user.message, voice.input], priority: 48, phase: "3b"}

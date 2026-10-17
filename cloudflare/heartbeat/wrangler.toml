@@ -1,0 +1,13 @@
+# TRINETRA's heartbeat in the cloud: every minute, poke /cron/tick so reminders,
+# check-ins and nightly training happen even when every device is off.
+name = "trinetra-heartbeat"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+TRINETRA_URL = "https://trinetra-tarun.vercel.app"
+
+# Secret (never commit): npx wrangler secret put TRINETRA_CRON_SECRET

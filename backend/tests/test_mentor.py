@@ -1,0 +1,146 @@
+import asyncio
+import json
+from datetime import datetime, timedelta, timezone
+
+import pytest
+from sqlalchemy import select
+
+from app.core import llm, mentor, scheduler
+from app.core.timeutil import now_local
+from app.db.models import Goal, Message, Promise, Task, TaskStatus
+from tests.conftest import trinetra_prompt
+
+
+@pytest.fixture
+def mentor_llm(monkeypatch):
+    """LLM stub that answers each agent by recognising its prompt."""
+    calls = []
+    plan = {"is_goal": True,
+            "goal": {"title": "Land a software engineering internship", "why": "to support my family",
+                     "horizon": "1y", "area": "career", "target_date": "2027-06-01"},
+            "milestones": [{"title": "Finish 150 LeetCode problems", "due_date": "2026-12-31"},
+                           {"title": "Build 2 portfolio projects", "due_date": "2027-02-28"},
+                           {"title": "Apply to 60 companies", "due_date": "2027-04-30"}],
+            "weekly_blocks": [{"title": "LeetCode practice", "days": "mon,wed,fri", "start": "07:00",
+                               "duration_min": 60, "category": "study"}]}
+    due = (now_local() + timedelta(days=2)).strftime("%Y-%m-%d 21:00")
+
+    async def fake(messages, tier="smart", json_mode=False, **kw):
+        sys_prompt = messages[0]["content"]
+        calls.append(sys_prompt)
+        if "goal architect" in sys_prompt:
+            return json.dumps(plan)
+        if "Extract commitments" in sys_prompt:
+            return json.dumps({"promises": [{"text": "finish 20 LeetCode problems", "due": due}]})
+        if json_mode:
+            return json.dumps({"facts": [], "ops": [], "mood": "motivated", "intensity": 0.5})
+        return "Love it. Let's build this."
+
+    monkeypatch.setattr(llm, "complete", fake)
+    return calls
+
+
+def test_goal_becomes_milestones_and_a_plan_to_approve(client, mentor_llm):
+    body = client.post("/chat", json={"text": "My goal is to land a software engineering internship by "
+                                              "summer 2027, to support my family"}).json()
+    assert body["notes"]["goal_created"]["title"] == "Land a software engineering internship"
+    assert "You JUST saved their goal" in trinetra_prompt([{"messages": [{"content": c}]} for c in mentor_llm])
+
+    [goal] = client.get("/goals").json()
+    assert goal["why"] == "to support my family" and len(goal["milestones"]) == 3
+    assert goal["target_date"].startswith("2027-06-0")
+
+    msgs = client.get("/messages").json()
+    assert msgs[-1]["meta"]["kind"] == "plan_proposal"   # the plan comes AFTER the reply
+    assert msgs[-2]["role"] == "trinetra" and not msgs[-2]["meta"]
+    assert client.get("/today?days=7").json() == []      # nothing added before approval
+
+    r = client.post(f"/proposals/{msgs[-1]['id']}/respond", json={"action": "approve"})
+    assert r.status_code == 200
+    blocks = client.get("/today?days=14").json()
+    assert blocks and all(b["start"] == "07:00" and b["recurrence"] == "mon,wed,fri" for b in blocks)
+    with client.session_factory() as db:
+        assert all(t.goal_id == goal["id"] for t in db.scalars(select(Task)))
+    assert client.post(f"/proposals/{msgs[-1]['id']}/respond", json={"action": "approve"}).status_code == 409
+
+
+def test_rejecting_a_plan_adds_nothing(client, mentor_llm):
+    client.post("/chat", json={"text": "I want to become a strong runner by march"})
+    proposal = client.get("/messages").json()[-1]
+    client.post(f"/proposals/{proposal['id']}/respond", json={"action": "reject"})
+    assert client.get("/today?days=14").json() == []
+
+
+def test_milestones_drive_progress_and_pride(client, mentor_llm):
+    client.post("/chat", json={"text": "My goal is to land a software engineering internship by summer 2027"})
+    [goal] = client.get("/goals").json()
+    first = goal["milestones"][0]["id"]
+    g = client.patch(f"/milestones/{first}", json={"done": True}).json()
+    assert g["progress"] == pytest.approx(0.33, abs=0.01)
+    assert client.get("/emotion").json()["pride"] > 0.3
+    for m in goal["milestones"]:
+        g = client.patch(f"/milestones/{m['id']}", json={"done": True}).json()
+    assert g["status"] == "achieved" and g["progress"] == 1.0
+
+
+def test_promise_is_remembered_then_checked_at_deadline(client, mentor_llm):
+    body = client.post("/chat", json={"text": "I'll finish 20 LeetCode problems by Saturday"}).json()
+    assert body["notes"]["promises_saved"]
+    [p] = client.get("/promises").json()
+    assert p["status"] == "open"
+
+    with client.session_factory() as db:
+        promise = db.get(Promise, p["id"])
+        deadline = promise.due_at.replace(tzinfo=timezone.utc)
+        fired = asyncio.run(scheduler.tick(db, client.app.state.orchestrator, deadline + timedelta(minutes=1)))
+    assert fired == [f"promise.due:{p['id']}"]
+    check = client.get("/messages").json()[-1]
+    assert check["meta"]["kind"] == "promise_check" and check["meta"]["buttons"] == ["kept", "broken"]
+
+    frustration_before = client.get("/emotion").json()["frustration"]
+    body = client.post(check["meta"]["respond"], json={"action": "broken"}).json()
+    assert client.get("/promises").json()[0]["status"] == "broken"
+    assert client.get("/emotion").json()["frustration"] > frustration_before
+    assert client.get("/messages").json()[-3]["meta"]["answered"] == "broken"
+
+
+def test_stale_promises_dont_nag(client, llm_calls):
+    with client.session_factory() as db:
+        db.add(Promise(text="old thing", due_at=datetime.now(timezone.utc) - timedelta(days=3)))
+        db.commit()
+        assert asyncio.run(scheduler.tick(db, client.app.state.orchestrator)) == []
+
+
+def _blocks(db, area, done, skipped, days_ago=3):
+    base = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    for i in range(done + skipped):
+        db.add(Task(title=f"{area} {i}", category=area, planned_start=base + timedelta(hours=i),
+                    planned_end=base + timedelta(hours=i, minutes=45),
+                    status=TaskStatus.DONE if i < done else TaskStatus.SKIPPED))
+    db.commit()
+
+
+def test_progressive_overload_verdicts(client):
+    with client.session_factory() as db:
+        _blocks(db, "study", done=9, skipped=1)     # 90% → raise the bar
+        _blocks(db, "fitness", done=2, skipped=4)   # 33% → ease off
+        _blocks(db, "reading", done=3, skipped=2)   # 60% → hold
+        _blocks(db, "chores", done=1, skipped=1)    # too little data
+        verdicts = {c["area"]: c["verdict"] for c in mentor.challenges(db)}
+    assert verdicts == {"study": "raise", "fitness": "ease", "reading": "hold"}
+
+
+def test_overlapping_plan_blocks_are_untangled(client):
+    blocks = [
+        {"title": "DSA", "days": "weekdays", "start": "19:00", "duration_min": 90, "category": "study"},
+        {"title": "Apply to jobs", "days": "wed", "start": "20:00", "duration_min": 60, "category": "work"},
+    ]
+    with client.session_factory() as db:
+        added = mentor.apply_plan(db, None, blocks)
+        db.commit()
+    assert added[1].startswith("Apply to jobs (wed 21:00")  # moved after DSA ends (20:30) + 30 min
+    from app.core.timeutil import local
+    with client.session_factory() as db:
+        wed = [t for t in db.scalars(select(Task)) if local(t.planned_start).weekday() == 2]
+        spans = sorted((local(t.planned_start), local(t.planned_end)) for t in wed if local(t.planned_start).date() == local(wed[0].planned_start).date())
+        assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:]))

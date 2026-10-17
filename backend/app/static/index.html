@@ -1,0 +1,1495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0b12">
+<meta name="apple-mobile-web-app-title" content="TRINETRA">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<title>TRINETRA</title>
+<style>
+  :root {
+    --bg: #0b0b12; --panel: #14141f; --line: #2a2a3d; --text: #ecebf5; --muted: #8b8aa3;
+    --me: #2a2a40; --accent: #f0a83a; --glow: rgba(240,168,58,.35);
+    --firm: #e5534b; --gentle: #6cb6ff; --proud: #57d38c;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body { display: flex; flex-direction: column; max-width: 720px; margin: 0 auto;
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); }
+  header { display: flex; align-items: center; gap: 14px; padding: 20px 0 14px; }
+  .emblem { width: 34px; height: 34px; flex: none; }
+  h1 { font-size: 20px; letter-spacing: .18em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .tools { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  #mood { font-size: 12px; color: var(--muted); text-align: right; margin-right: 6px; }
+  .icon { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 50%;
+    width: 38px; height: 38px; padding: 0; font-size: 17px; display: grid; place-items: center; }
+  .icon.off { opacity: .45; }
+  #log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 8px 0 16px; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 16px; white-space: pre-wrap; word-wrap: break-word; }
+  .me { align-self: flex-end; background: var(--me); border-bottom-right-radius: 4px; }
+  .tri { align-self: flex-start; background: var(--panel); border-bottom-left-radius: 4px;
+    border-left: 3px solid var(--accent); }
+  .tri.firm { border-left-color: var(--firm); }
+  .tri.gentle { border-left-color: var(--gentle); }
+  .tri.proud { border-left-color: var(--proud); }
+  .tri.annoyed { border-left-color: #e8913a; }
+  .tri.angry { border-left: 4px solid var(--firm); background: #241114; font-weight: 600; }
+  #modeChip { display: none; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    padding: 6px 12px; font-size: 12px; font-weight: 500; }
+  #modeChip.on { display: inline-block; }
+  #modeChip.angry { border-color: var(--firm); color: #ff8a80; }
+  .note { align-self: flex-start; color: var(--muted); font-size: 12px; margin-top: -6px; padding-left: 6px; }
+  .hint { color: var(--muted); font-size: 14px; text-align: center; margin: auto 0; }
+  form { display: flex; gap: 8px; padding: 12px 0 16px; }
+  input { flex: 1; min-width: 0; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 24px; padding: 12px 18px; font-size: 16px; outline: none; }
+  input:focus { border-color: var(--accent); }
+  button { background: var(--accent); color: #1a1205; border: 0; border-radius: 24px; padding: 0 20px;
+    font-weight: 600; font-size: 15px; cursor: pointer; }
+  button:disabled { opacity: .5; }
+  #mic { width: 48px; padding: 0; font-size: 20px; background: var(--panel); border: 1px solid var(--line); }
+  #mic.rec { background: var(--firm); border-color: var(--firm); }
+  /* memory drawer */
+  .drawer { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; }
+  .drawer.open { display: block; }
+  .drawer section { position: absolute; right: 0; top: 0; bottom: 0; width: min(420px, 100%);
+    background: var(--panel); border-left: 1px solid var(--line); padding: 0 16px calc(20px + env(safe-area-inset-bottom)); overflow-y: auto; }
+  .scr-head { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 12px; background: var(--panel);
+    margin: 0 -16px 12px; padding: calc(12px + env(safe-area-inset-top)) 16px 10px; border-bottom: 1px solid var(--line); }
+  .scr-head h2 { margin: 0; flex: 1; min-width: 0; }
+  .back { background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 8px 14px; font-size: 14px; flex: none; }
+  .drawer h2 { font-size: 17px; margin-bottom: 4px; }
+  .drawer p { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .mem { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+  .mem span { flex: 1; font-size: 14px; }
+  .mem small { color: var(--accent); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .mem button { background: none; color: var(--muted); padding: 0 4px; font-size: 18px; }
+  #banner { display: none; background: var(--panel); border: 1px solid var(--accent); border-radius: 14px;
+    padding: 12px 14px; font-size: 14px; margin-bottom: 8px; }
+  #banner.on { display: block; }
+  #hear { display: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom));
+    z-index: 30; background: var(--accent); color: #000; font-weight: 600; border: 0; border-radius: 999px; padding: 10px 18px;
+    box-shadow: 0 6px 24px #0008; animation: hearPulse 1.4s ease-in-out infinite; }
+  #hear.on { display: block; }
+  @keyframes hearPulse { 50% { transform: translateX(-50%) scale(1.06); } }
+  #banner b { color: var(--accent); }
+  .btns { align-self: flex-start; display: flex; gap: 8px; flex-wrap: wrap; margin-top: -4px; }
+  .btns button { background: var(--panel); color: var(--text); border: 1px solid var(--line); padding: 7px 14px; font-weight: 500; font-size: 14px; }
+  .btns button:hover { border-color: var(--accent); }
+  .btns.answered button { opacity: .35; pointer-events: none; }
+  .btns.answered button.chosen { opacity: 1; border-color: var(--accent); }
+  .slot { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .slot time { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 13px; width: 92px; flex: none; }
+  .slot span { flex: 1; font-size: 14px; }
+  .slot em { font-style: normal; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .slot.done span { text-decoration: line-through; color: var(--muted); }
+  .slot.skipped span { color: var(--firm); }
+  .goal { border-top: 1px solid var(--line); padding: 14px 0; }
+  .goal h3 { font-size: 15px; display: flex; justify-content: space-between; gap: 8px; }
+  .goal h3 small { color: var(--accent); font-weight: 600; }
+  .goal .why { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .ms { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; padding: 4px 0; cursor: pointer; }
+  .ms input { accent-color: var(--accent); margin-top: 3px; flex: none; width: auto; padding: 0; }
+  .ms span { flex: 1; }
+  .ms.done span { text-decoration: line-through; color: var(--muted); }
+  .ms em { margin-left: auto; font-style: normal; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  @media (max-width: 520px) {
+    header { gap: 10px; padding-top: 14px; }
+    .emblem { width: 28px; height: 28px; }
+    h1 { font-size: 16px; letter-spacing: .12em; }
+    .sub, #mood { display: none; }
+    .tools { gap: 4px; }
+    .icon { width: 34px; height: 34px; font-size: 15px; }
+  }
+  @media (max-width: 400px) {
+    h1 { display: none; }
+    .icon { width: 31px; height: 31px; font-size: 14px; }
+  }
+  /* ---- TRINETRA's character: lives in the mic slot, jumps out to listen and to speak (art: /static/buddy.js) ---- */
+  .orb { --size: 84px; position: fixed; left: 0; top: 0; width: var(--size); height: var(--size);
+    z-index: 4; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+    cursor: pointer; will-change: transform; transform-origin: 0 0; }
+  .orb.gliding { transition: transform 1.9s cubic-bezier(.45,.05,.35,1); }
+  .orb.jump { transition: transform .6s cubic-bezier(.3,1.5,.5,1); }
+  .orb.homing { transition: transform .8s cubic-bezier(.55,0,.3,1.25); }
+  #eyeSlot { width: 52px; flex: none; }
+  #mic[hidden] { display: none; }
+  .orb.away { display: none; }
+  .orb .float { width: 100%; height: 100%; }
+  .orb .buddy { width: 100%; height: 100%; }
+  .orb.sleep { opacity: .8; }
+  .orb .tbar { position: absolute; left: 22%; right: 22%; bottom: -3px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; opacity: 0; transition: opacity .4s; }
+  .orb .tbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 1s, background .4s; }
+  .orb .tbar.on { opacity: 1; } .orb .tbar.low i { background: var(--firm); }
+  .orb .tip { position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); white-space: nowrap; background: var(--panel);
+    border: 1px solid var(--line); color: var(--text); font-size: 11px; padding: 3px 8px; border-radius: 10px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .orb.showtip .tip { opacity: 1; }
+  @media (max-width: 520px) { .orb { --size: 70px; } }
+  @media (prefers-reduced-motion: reduce) { .orb.gliding { transition: none; } }
+  /* ---- 🎨 character screen ---- */
+  .chr-stage { height: 190px; display: grid; place-items: center; margin: 6px 0 12px; background: radial-gradient(ellipse at 50% 60%, #22203a, transparent 70%); border-radius: 16px; }
+  .chr-stage > div { width: 150px; height: 150px; }
+  .chr-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; }
+  .chr-row button { background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 7px 12px; font-size: 13px; font-weight: 500; }
+  .chr-row button.on { border-color: var(--accent); color: var(--accent); }
+  .chr-row .sw { width: 34px; height: 34px; padding: 0; border-radius: 50%; border-width: 2px; }
+  .chr-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  /* ---- portfolio visitors ---- */
+  .vis { border-top: 1px solid var(--line); padding: 12px 0; font-size: 14px; }
+  .vis b { font-size: 15px; } .vis .when { color: var(--muted); font-size: 12px; }
+  .vis .live { color: var(--proud); font-size: 12px; margin-left: 6px; }
+  .vis .tags { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .vis .q, .vis .nt { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-top: 8px; font-size: 13px; }
+  .vis .q a { color: var(--accent); }
+  .askq { font-size: 16px; margin: 4px 0 14px; } .askq small { display: block; color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chips button { background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 7px 12px; font-size: 13px; font-weight: 500; }
+  #askText { width: 100%; min-height: 84px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
+    padding: 10px 14px; font: inherit; resize: vertical; margin-bottom: 10px; }
+  #askSend { padding: 12px 20px; }
+  /* ---- timetable dashboard ---- */
+  #planner { position: fixed; inset: 0; background: var(--bg); display: none; flex-direction: column;
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); z-index: 5; }
+  #planner.open { display: flex; }
+  .pl-head { display: flex; align-items: center; gap: 12px; padding: 14px 0 6px; }
+  .pl-head h2 { font-size: 18px; letter-spacing: .08em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-nav { display: flex; gap: 6px; align-items: center; }
+  .pl-nav #plToday { background: var(--panel); color: var(--text); border: 1px solid var(--line); padding: 8px 12px; font-size: 13px; }
+  #plRange { color: var(--muted); font-size: 13px; padding-bottom: 8px; }
+  #plDays { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; }
+  #plDays button { flex: none; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 12px; padding: 6px 10px; font-size: 13px; font-weight: 500; line-height: 1.2; }
+  #plDays button.sel { border-color: var(--accent); color: var(--accent); }
+  #plDays button.today { box-shadow: inset 0 -2px 0 var(--accent); }
+  #plGrid { flex: 1; overflow-y: auto; display: flex; border-top: 1px solid var(--line); position: relative; }
+  #plHours { width: 44px; flex: none; position: relative; }
+  #plHours div { position: absolute; right: 8px; font-size: 11px; color: var(--muted); transform: translateY(-50%); }
+  #plCols { flex: 1; min-width: 0; display: grid; position: relative; }
+  #planner > * { min-width: 0; }
+  .pl-col { position: relative; border-left: 1px solid var(--line); }
+  .pl-col.today { background: rgba(240,168,58,.04); }
+  .pl-colhead { position: sticky; top: 0; z-index: 2; background: var(--bg); text-align: center; font-size: 12px;
+    color: var(--muted); padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .pl-colhead.today { color: var(--accent); font-weight: 600; }
+  .pl-line { position: absolute; left: 0; right: 0; border-top: 1px solid rgba(42,42,61,.6); }
+  .pl-now { position: absolute; left: 0; right: 0; border-top: 2px solid var(--firm); z-index: 3; }
+  .pl-now::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--firm); }
+  .blk { position: absolute; border-radius: 8px; padding: 4px 7px; font-size: 12px; line-height: 1.25;
+    overflow: hidden; cursor: pointer; border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 22%, var(--panel)); }
+  .blk b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .blk small { color: var(--muted); }
+  .blk.done { opacity: .5; }
+  .blk.done b::before { content: "✓ "; }
+  .blk.skipped { opacity: .55; }
+  .blk.skipped b { text-decoration: line-through; }
+  .blk.started { box-shadow: 0 0 0 1px var(--c); animation: pulse 1.6s ease-in-out infinite; }
+  #plThought { font-size: 13px; color: var(--muted); padding: 8px 2px 0; max-height: 30vh; overflow-y: auto; }
+  #plThought .say { color: var(--text); background: var(--panel); border-left: 3px solid var(--accent); border-radius: 10px; padding: 8px 12px; margin-top: 6px; white-space: pre-wrap; }
+  #plThought .btns { margin-top: 8px; }
+  #plForm { display: flex; gap: 8px; padding: 10px 0 14px; }
+  #plMic { width: 48px; padding: 0; font-size: 20px; background: var(--panel); border: 1px solid var(--line); }
+  #plMic.rec { background: var(--firm); border-color: var(--firm); }
+  #plSheet, #nodeSheet { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line);
+    border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); display: none; z-index: 6; }
+  #plSheet.open, #nodeSheet.open { display: block; }
+  #nodeSheet { z-index: 20; max-width: 720px; margin: 0 auto; }
+  #plSheet h3, #nodeSheet h3 { font-size: 16px; } #plSheet p, #nodeSheet p { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
+  #plSheet .row, #nodeSheet .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  #plSheet .row button, #nodeSheet .row button { background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 10px 14px; font-weight: 500; }
+  #plSheet .row button.danger, #nodeSheet .row button.danger { color: var(--firm); }
+  #nodeSheet .row button.primary { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 600; }
+  #nodeSheet .row button:disabled { opacity: .5; }
+  #goalDrawer section, #repDrawer section { width: min(760px, 100%); }
+  .rp-week { border-top: 1px solid var(--line); padding: 14px 0; }
+  .rp-week h3 { font-size: 15px; margin-bottom: 10px; }
+  .rp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .rp-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .rp-card b { display: block; font-size: 22px; }
+  .rp-card small { color: var(--muted); font-size: 12px; }
+  .rp-card .up { color: var(--proud); } .rp-card .down { color: var(--firm); }
+  .rp-days { display: flex; gap: 6px; align-items: flex-end; height: 90px; margin: 6px 0 4px; }
+  .rp-days div { flex: 1; text-align: center; font-size: 11px; color: var(--muted); }
+  .rp-days i { display: block; background: var(--accent); border-radius: 4px 4px 0 0; margin-bottom: 4px; min-height: 2px; }
+  .rp-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+  .rp-row span:last-child { color: var(--muted); }
+  details.rp-ch { margin-top: 8px; } details.rp-ch summary { cursor: pointer; font-weight: 600; font-size: 14px; padding: 6px 0; }
+  details.rp-ch p { color: var(--text); font-size: 14px; white-space: pre-wrap; margin: 4px 0 8px; }
+  .roadmap { position: relative; padding: 6px 0 4px; margin: 6px 0 10px; }
+  .roadmap svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .rm-row { display: flex; justify-content: center; gap: 8px; margin: 0 0 22px; flex-wrap: nowrap; }
+  .rm-node { position: relative; z-index: 1; background: #3d3d6b; color: #fff; border: 1px solid #55558a; border-radius: 8px;
+    padding: 7px 8px 9px; font-size: 12px; font-weight: 600; text-align: center; min-width: 0; flex: 0 1 120px; cursor: pointer; line-height: 1.2; }
+  .rm-node::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 4px; height: 2px; border-radius: 1px; background: rgba(255,255,255,.75); }
+  .rm-node small { display: block; font-weight: 400; font-size: 10px; opacity: .75; margin-top: 2px; }
+  .rm-node.done { background: #1f4d37; border-color: var(--proud); }
+  .rm-node.done::after { background: var(--proud); }
+  .rm-node.next { border-color: var(--accent); box-shadow: 0 0 12px var(--glow); }
+  .rm-node.next::after { background: var(--accent); }
+  .rm-node.locked { background: #24243a; border-color: #34344f; color: #8b8aa3; }
+  .rm-node.locked::after { background: #45455f; }
+  .rm-node.overdue { border-color: var(--firm); }
+  .rm-node.overdue::after { background: var(--firm); }
+  .rm-node.behind { border-color: #e8913a; }
+  .rm-node.behind::after { background: #e8913a; }
+  .fc { background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--proud); border-radius: 12px;
+    padding: 10px 12px; font-size: 13px; margin: 4px 0 10px; }
+  .fc.late { border-left-color: var(--firm); }
+  .fc b { color: var(--text); }
+  .sp { display: flex; gap: 10px; font-size: 13px; padding: 7px 0; border-top: 1px dashed var(--line); }
+  .sp b { flex: none; width: 66px; color: var(--accent); font-weight: 600; }
+  .sp span { flex: 1; } .sp em { font-style: normal; color: var(--muted); white-space: nowrap; }
+  .sp.now { background: rgba(240,168,58,.07); border-radius: 8px; }
+  .rm-legend { font-size: 11px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  #wakeScreen section { width: min(560px, 100%); }
+  .wk { text-align: center; padding: 18px 0; }
+  .wk .q { font-size: 44px; font-weight: 700; margin: 18px 0 6px; font-variant-numeric: tabular-nums; }
+  .wk .step { color: var(--muted); font-size: 14px; }
+  .wk .fb { min-height: 22px; font-size: 15px; margin: 10px 0; }
+  .wk .fb.bad { color: var(--firm); } .wk .fb.good { color: var(--proud); }
+  .wk form { justify-content: center; padding: 6px 0; }
+  .wk input { max-width: 180px; text-align: center; font-size: 26px; padding: 12px; }
+  .wk button { font-size: 17px; padding: 0 24px; }
+  .wk .hear { background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 10px 16px; margin-top: 12px; }
+  .wk .done { font-size: 22px; margin-top: 10px; }
+  .dayhead { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 14px 0 2px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="emblem" id="emblem" aria-hidden="true"></div>
+    <div>
+      <h1>TRINETRA</h1>
+      <div class="sub">The Eye That Watches Over You</div>
+    </div>
+    <div class="tools">
+      <div id="mood"></div>
+      <button id="modeChip" title="Tap to go back to normal"></button>
+      <button class="icon" id="voiceBtn" title="Voice on/off">🔊</button>
+      <button class="icon" id="bellBtn" title="Notifications on this device">🔔</button>
+      <button class="icon" id="repBtn" title="Weekly report">📊</button>
+      <button class="icon" id="goalBtn" title="My goals">🎯</button>
+      <button class="icon" id="dayBtn" title="My timetable">📅</button>
+      <button class="icon" id="memBtn" title="What I remember">🧠</button>
+      <button class="icon" id="visBtn" title="Portfolio visitors">👥</button>
+      <button class="icon" id="chrBtn" title="My look">🎨</button>
+    </div>
+  </header>
+  <div id="banner"></div>
+  <button id="hear" type="button">🔊 Tap to hear me</button>
+  <main id="log">
+    <p class="hint" id="hint">Talk to me — type, or tap my Eye and just talk. I'll answer and keep listening. Tell me about yourself, your goals, how you feel.</p>
+  </main>
+  <form id="form">
+    <button type="button" id="mic" hidden>🎙</button>
+    <div id="eyeSlot" aria-hidden="true"></div>
+    <input id="text" placeholder="Message TRINETRA…" autocomplete="off">
+    <button id="send">Send</button>
+  </form>
+  <div id="charDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>My look</h2></div>
+    <p>How I look and feel. Trying faces here changes nothing else.</p>
+    <div class="chr-stage"><div id="chrBig"></div></div>
+    <div class="chr-label">Style</div><div class="chr-row" id="chrStyle"></div>
+    <div class="chr-label">Colour</div><div class="chr-row" id="chrPal"></div>
+    <div class="chr-label">Try a feeling</div><div class="chr-row" id="chrEmo"></div>
+    <div class="chr-label">Try an action</div><div class="chr-row" id="chrAct"></div>
+    <div class="chr-row"><button type="button" id="chrDemo">▶ Play demo</button></div>
+  </section></div>
+  <div id="visDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>Portfolio visitors</h2></div>
+    <p>People who talked to me on tarundeepreddy.com. I forget their conversation when they leave; this log stays for you.</p>
+    <div id="visitors"></div>
+  </section></div>
+  <div id="askDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>A visitor is asking</h2></div>
+    <div id="askBox"></div>
+  </section></div>
+  <div id="repDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>Weekly report</h2></div>
+    <p>Built every Sunday at 11pm, spoken at 11:30. Each week is kept and compared with the ones before.</p>
+    <div id="reports"></div>
+  </section></div>
+  <div id="goalDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>Your goals</h2></div>
+    <p>Tell me what you want to achieve — “I want to land a software internship by summer 2027 because…” — and I'll build the plan.</p>
+    <div id="goals"></div>
+  </section></div>
+  <div id="planner">
+    <div class="pl-head">
+      <button class="back" id="plClose" data-back title="Back to the dashboard">‹ Back</button>
+      <h2>Timetable</h2>
+      <div class="pl-nav">
+        <button class="icon" id="plPrev" title="Previous week">‹</button>
+        <button id="plToday">Today</button>
+        <button class="icon" id="plNext" title="Next week">›</button>
+      </div>
+    </div>
+    <div id="plRange"></div>
+    <div id="plDays"></div>
+    <div id="plGrid"><div id="plHours"></div><div id="plCols"></div></div>
+    <div id="plThought"></div>
+    <form id="plForm">
+      <button type="button" id="plMic" title="Tap to talk">🎙</button>
+      <input id="plText" placeholder="Tell me a change — “move gym to 7pm on Friday”" autocomplete="off">
+      <button id="plSend">Go</button>
+    </form>
+    <div id="plSheet"></div>
+  </div>
+  <div id="nodeSheet"></div>
+  <div id="wakeScreen" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>⏰ Wake up</h2></div>
+    <div class="wk" id="wk"></div>
+  </section></div>
+  <div id="drawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>What I remember</h2></div>
+    <p>I keep these permanently. Tap ✕ if something is wrong — or just tell me.</p>
+    <div id="mems"></div>
+  </section></div>
+  <div class="orb" id="eye" role="button" aria-label="TRINETRA — tap to talk" title="Tap to talk · drag to move">
+    <div class="float"><div class="buddy"></div></div>
+    <div class="tbar"><i></i></div><span class="tip" id="eyeTip"></span>
+  </div>
+<script src="/static/buddy.js"></script>
+<script>
+  // Session expired or passcode changed → back to the login screen.
+  const _fetch = window.fetch;
+  window.fetch = async (...args) => {
+    const r = await _fetch(...args);
+    if (r.status === 401 && !String(args[0]).startsWith("/login")) location.href = "/login";
+    return r;
+  };
+  const $ = (id) => document.getElementById(id);
+  const log = $("log"), input = $("text"), send = $("send"), eye = $("eye"), mic = $("mic");
+  let voiceOn = localStorageGet("voiceOn", "1") === "1";
+  let player = null;
+  // iPhone only lets a page play sound from an element that was first started by a tap.
+  // So we make ONE element, "unlock" it on the first tap with a silent clip, and reuse it forever.
+  const SILENT = (() => {  // 50 ms of silence as a WAV
+    const n = 400, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+    const w = (o, str) => [...str].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+    v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+    return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  })();
+  function audio() { return player ??= new Audio(); }
+
+  // ---- the furious voice: shouting colour applied on this device with Web Audio ----
+  // presence boost (harshness) → drive into tanh soft-clipping (strain/rasp) → hard compression (punch)
+  let ctx = null, furiousSource = null;
+  function audioCtx() { return ctx ??= new (window.AudioContext || window.webkitAudioContext)(); }
+  function tanhCurve(drive) {
+    const n = 2048, c = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * drive) / Math.tanh(drive); }
+    return c;
+  }
+  async function playFurious(bytes, level) {
+    const ac = audioCtx();
+    if (ac.state !== "running") await Promise.race([ac.resume(), new Promise((ok) => setTimeout(ok, 400))]);
+    if (ac.state !== "running") throw new DOMException("no tap yet", "NotAllowedError");
+    const buf = await ac.decodeAudioData(bytes);
+    const full = level === "angry";
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const hp = ac.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = full ? 140 : 120;
+    const pres = ac.createBiquadFilter(); pres.type = "peaking"; pres.frequency.value = 2600; pres.Q.value = 1.2; pres.gain.value = full ? 7 : 4;
+    const bite = ac.createBiquadFilter(); bite.type = "peaking"; bite.frequency.value = 4200; bite.Q.value = 1; bite.gain.value = full ? 3 : 0;
+    const drive = ac.createGain(); drive.gain.value = full ? 3.2 : 1.8;
+    const shaper = ac.createWaveShaper(); shaper.curve = tanhCurve(full ? 2.2 : 1.4); shaper.oversample = "4x";
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = full ? -20 : -18; comp.ratio.value = full ? 8 : 4; comp.attack.value = full ? 0.003 : 0.005; comp.release.value = full ? 0.05 : 0.08;
+    const out = ac.createGain(); out.gain.value = 0.9;
+    src.connect(hp).connect(pres).connect(bite).connect(drive).connect(shaper).connect(comp).connect(out).connect(ac.destination);
+    if (furiousSource) furiousSource.onended = null;  // replaced, not finished
+    furiousSource?.stop?.(); if (player) player.onended = player.onpause = null; player?.pause();
+    furiousSource = src;
+    eye.classList.add("speaking");
+    src.onended = () => eye.classList.remove("speaking");
+    src.start();
+  }
+  document.addEventListener("pointerdown", () => {
+    const p = audio();
+    try { audioCtx().resume(); } catch {}
+    if (pending) { const c = pending; pending = null; paintHear(); playClip(c).catch(() => {}); p.dataset.unlocked = "1"; return; }
+    if (p.dataset.unlocked) return;
+    p.src = SILENT; p.play().then(() => { p.dataset.unlocked = "1"; }).catch(() => {});
+    try { audioCtx().resume(); } catch {}
+  }, { capture: true });
+
+  function localStorageGet(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }
+  function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+
+  function moodClass(mood = "") {
+    if (/^ANGRY/.test(mood)) return "angry";
+    if (/angry|firm|disappointed/i.test(mood)) return "firm";
+    if (/annoyed/.test(mood)) return "annoyed";
+    if (/gentle|comfort|no pressure|attentive/.test(mood)) return "gentle";
+    if (/proud|upbeat/.test(mood)) return "proud";
+    return "";
+  }
+
+  let lastId = 0;
+  const LABELS = { start: "▶️ Starting", snooze: "⏰ 10 min", skip: "⏭ Skip",
+                   done: "✅ Done", partly: "◐ Partly", skipped: "⏭ Skipped",
+                   approve: "✅ Do it", reject: "✋ Cancel", kept: "✅ Kept it", broken: "❌ Didn't",
+                   accept: "✅ Your version", original: "⚡ Exactly what I said" };
+
+  function add(text, who, mood, meta) {
+    $("hint")?.remove();
+    const el = document.createElement("div");
+    el.className = `msg ${who} ${who === "tri" ? moodClass(mood) : ""}`;
+    el.textContent = text;
+    log.appendChild(el);
+    const respondUrl = meta?.respond || (meta?.task_id ? `/tasks/${meta.task_id}/respond` : null)
+                       || (meta?.kind === "plan_proposal" && meta.id ? `/proposals/${meta.id}/respond` : null);
+    if (meta?.buttons && respondUrl) {
+      const row = document.createElement("div");
+      row.className = "btns" + (meta.answered ? " answered" : "");
+      for (const action of meta.buttons) {
+        const b = document.createElement("button");
+        b.textContent = LABELS[action] || action;
+        if (meta.answered === action) b.classList.add("chosen");
+        b.onclick = () => answer(respondUrl, action, row, b);
+        row.appendChild(b);
+      }
+      log.appendChild(row);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function answer(url, action, row, btn) {
+    row.classList.add("answered"); btn.classList.add("chosen");
+    eye.classList.add("thinking");
+    try {
+      const r = await fetch(url, { method: "POST",
+        headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
+      await r.json();
+      await poll();  // pulls in my message + TRINETRA's reaction in order
+    } finally { eye.classList.remove("thinking"); }
+  }
+
+  function note(text) {
+    const el = document.createElement("div");
+    el.className = "note"; el.textContent = text;
+    log.appendChild(el); log.scrollTop = log.scrollHeight;
+  }
+
+  // iPhone won't play sound in an app that hasn't been tapped since it opened (e.g. opened from a notification).
+  // Such a line waits here, with a "tap to hear" button, and plays on the first tap anywhere.
+  let pending = null;
+  function paintHear() { $("hear").classList.toggle("on", !!pending); }
+  function heard() { localStorageSet("heardId", String(lastId)); }
+  async function playClip(c) {
+    if (c.effect) { await playFurious(c.bytes.slice(0), c.effect); heard(); return; }
+    if (furiousSource) { furiousSource.onended = null; furiousSource.stop?.(); }
+    const p = audio(), done = () => eye.classList.remove("speaking");
+    p.onended = p.onpause = null;
+    p.pause();
+    p.src = c.url;
+    eye.classList.add("speaking");
+    p.onended = p.onpause = done;
+    try { await p.play(); heard(); } catch (e) { done(); throw e; }
+  }
+
+  async function say(text, mood) {
+    if (!voiceOn) return;
+    eye.classList.add("speaking");  // from the moment the voice is requested (it takes ~2 s to arrive)
+    let c = null;
+    try {
+      const r = await fetch("/speak", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, mood }) });
+      if (!r.ok) return eye.classList.remove("speaking");
+      const effect = r.headers.get("X-Trinetra-Effect");
+      c = effect === "angry" || effect === "firm_angry" ? { effect, bytes: await r.arrayBuffer() }
+                                                        : { url: URL.createObjectURL(await r.blob()) };
+      await playClip(c);
+    } catch (e) {
+      eye.classList.remove("speaking");
+      if (c && e?.name === "NotAllowedError") { pending = c; paintHear(); }
+    }
+  }
+
+  let busy = false;  // while a chat is in flight, polling waits (avoids showing messages twice)
+
+  async function chat(text) {
+    busy = true;
+    const before = lastId;
+    add(text, "me");
+    send.disabled = true; eye.classList.add("thinking");
+    try {
+      const r = await fetch("/chat", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, channel: "web" }) });
+      const d = await r.json();
+      add(d.reply || "…", "tri", d.mood);
+      if (d.notes?.timetable_changes?.length) note("📅 " + d.notes.timetable_changes.join(" · "));
+      if (d.notes?.remembered?.length) note("🧠 remembered: " + d.notes.remembered.join(" · "));
+      $("mood").textContent = d.mood ? d.mood.split(" — ")[0].toLowerCase() : "";
+      if (d.notes?.goal_created) note("🎯 goal saved: " + d.notes.goal_created.title);
+      if (d.notes?.promises_saved?.length) note("🤝 I'll hold you to: " + d.notes.promises_saved.join(" · "));
+      say(d.reply, d.mood);
+      refreshMode();
+      // Agents may have attached something to this reply (e.g. a plan to approve) — show it now.
+      const extra = await (await fetch(`/messages?after_id=${before}`)).json();
+      for (const m of extra) if (m.meta && m.role === "trinetra") add(m.content, "tri", m.mood, { ...m.meta, id: m.id });
+      if (d.notes?.deliberation?.findings?.length) note("🧠 checked: " + d.notes.deliberation.findings.join(" · "));
+      await syncLastId(); heard();  // you were here for this reply: don't replay it next time the app opens
+      return { ...d, extra };
+    } catch {
+      add("I can't reach my brain right now. Is the server running?", "tri", "firm");
+    } finally {
+      busy = false; send.disabled = false; eye.classList.remove("thinking");
+    }
+  }
+
+  $("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    chat(text);
+  });
+
+  // ---- voice toggle ----
+  function paintVoice() { $("voiceBtn").textContent = voiceOn ? "🔊" : "🔇"; $("voiceBtn").classList.toggle("off", !voiceOn); }
+  $("voiceBtn").onclick = () => { voiceOn = !voiceOn; localStorageSet("voiceOn", voiceOn ? "1" : "0"); if (!voiceOn) { player?.pause(); furiousSource?.stop?.(); } paintVoice(); };
+  paintVoice();
+
+  // ---- microphone: tap to start, tap to stop & send ----
+  // The mic stays open for a minute after each recording, so the next tap starts instantly
+  // (opening it takes ~0.5 s on iPhone, which used to cut off your first words).
+  let recorder = null, chunks = [], micStream = null, micIdle = null, recStart = 0;
+  const MIC_KEEP_MS = 60000;
+  function releaseMic() { micStream?.getTracks().forEach((t) => t.stop()); micStream = null; }
+  async function getMic() {
+    if (micStream?.getAudioTracks().some((t) => t.readyState === "live")) return micStream;
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    return micStream;
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden && recorder?.state !== "recording") releaseMic(); });
+  const listening = (on) => {
+    mic.classList.toggle("rec", on); $("plMic").classList.toggle("rec", on); eye.classList.toggle("listening", on);
+    input.placeholder = on ? (talk.active ? "Listening… just talk" : "Listening… tap to send") : "Message TRINETRA…";
+    $("plText").placeholder = on ? "Listening… tap 🎙 to send" : "Tell me a change — “move gym to 7pm on Friday”";
+  };
+
+  // Hands-free: in a conversation the mic notices when you stop talking (1.2 s of quiet) and sends by itself,
+  // then listens again once TRINETRA has finished speaking. 8 s of silence ends the conversation.
+  const talk = { active: false, misses: 0, timer: null };
+  const TEST_VAD = new URLSearchParams(location.search).get("vad") === "test";  // tests drive the level by hand
+  let vad = null, vadSpoke = false, discard = false;
+  function stopVad() { vad?.stop(); vad = null; eye.style.removeProperty("--lvl"); }
+  function watchVoice(stream, onEnd) {
+    const ac = audioCtx(); ac.resume?.();
+    const src = ac.createMediaStreamSource(stream), an = ac.createAnalyser();
+    an.fftSize = 1024; src.connect(an);
+    const buf = new Float32Array(an.fftSize), t0 = Date.now();
+    let floor = 0, n = 0, loud = 0, quiet = 0, last = t0;
+    vadSpoke = false;
+    const timer = setInterval(() => {
+      const now = Date.now(), dt = now - last; last = now;
+      let lvl = 0;
+      if (TEST_VAD) lvl = window.__fakeLevel || 0;
+      else { an.getFloatTimeDomainData(buf); let sum = 0; for (const v of buf) sum += v * v; lvl = Math.sqrt(sum / buf.length); }
+      eye.style.setProperty("--lvl", Math.min(1, lvl * 12).toFixed(2));
+      if (now - t0 < 300) { floor = (floor * n + lvl) / ++n; return; }  // the room's own noise
+      const thr = Math.max(Math.min(floor, 0.015) * 3, 0.018);
+      if (lvl > thr) { loud += dt; quiet = 0; if (loud >= 150) vadSpoke = true; } else { loud = 0; quiet += dt; }
+      if (vadSpoke && quiet >= 1200) end("spoke");
+      else if (!vadSpoke && now - t0 > 8000) end("silent");
+      else if (now - t0 > 30000) end(vadSpoke ? "spoke" : "silent");
+    }, 50);
+    const end = (why) => { stopVad(); onEnd(why); };
+    vad = { stop() { clearInterval(timer); try { src.disconnect(); } catch {} } };
+  }
+
+  async function startRec(auto = false) {
+    clearTimeout(micIdle);
+    const stream = await getMic();
+    player?.pause();
+    discard = false; vadSpoke = false;
+    recorder = new MediaRecorder(stream); chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data?.size) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      stopVad();
+      micIdle = setTimeout(releaseMic, MIC_KEEP_MS);
+      listening(false);
+      if (discard) { if (auto) talkEnd(); return; }  // nothing said (or you ended it before speaking)
+      if (!auto && Date.now() - recStart < 700) { note("🎙 Tap, speak, then tap again to send."); return; }  // accidental tap
+      const type = (recorder.mimeType || "audio/webm").split(";")[0];
+      const ext = type.includes("mp4") ? "mp4" : type.includes("ogg") ? "ogg" : "webm";
+      const fd = new FormData(); fd.append("audio", new Blob(chunks, { type }), `voice.${ext}`);
+      eye.classList.add("thinking");
+      if (talk.active) talkAwaitTurn();
+      try {
+        const r = await fetch("/listen", { method: "POST", body: fd });
+        const d = await r.json();
+        eye.classList.remove("thinking");
+        if (r.ok && d.text) { talk.misses = 0; (plannerOpen() ? plannerSend(d.text) : chat(d.text)); }
+        else { note("🎙 " + (d.detail || "I didn't catch that.")); if (talk.active && ++talk.misses >= 2) talkEnd(); }
+      } catch { eye.classList.remove("thinking"); note("🎙 I couldn't hear you."); talkEnd(); }
+    };
+    recorder.start(250);  // collect in small pieces so a quick stop never loses the audio
+    recStart = Date.now();
+    listening(true);
+    if (auto) watchVoice(stream, (why) => { if (why === "silent") discard = true; if (recorder?.state === "recording") recorder.stop(); });
+  }
+  function stopRec(send = true) { if (recorder?.state === "recording") { discard = !send; recorder.stop(); } }
+
+  function talkStart() { talk.active = true; talk.misses = 0; talkListen(); }
+  async function talkListen() {
+    if (!talk.active) return;
+    try { await startRec(true); } catch { talkEnd(); releaseMic(); note("🎙 Microphone blocked — allow it in the browser to talk to me."); }
+  }
+  function talkEnd() { talk.active = false; clearInterval(talk.timer); talk.timer = null; }
+  function talkAwaitTurn() {  // once the answer is in and TRINETRA has stopped talking, listen again
+    clearInterval(talk.timer);
+    let calm = 0;
+    talk.timer = setInterval(() => {
+      if (!talk.active || document.querySelector(".drawer.open, #planner.open")) { talkEnd(); return; }
+      if (recorder?.state === "recording") return;
+      const working = busy || eye.classList.contains("thinking") || eye.classList.contains("speaking");
+      calm = working ? 0 : calm + 100;
+      if (calm >= 500) { clearInterval(talk.timer); talk.timer = null; talkListen(); }
+    }, 100);
+  }
+
+  mic.onclick = async () => {  // manual: tap to start, tap to stop & send (the planner's 🎙)
+    if (recorder?.state === "recording") { stopRec(); return; }
+    try { await startRec(false); } catch { releaseMic(); note("🎙 Microphone blocked — allow it in the browser to talk to me."); }
+  };
+
+  // ---- memory drawer ----
+  async function loadMems() {
+    const box = $("mems"); box.innerHTML = "";
+    const mems = await (await fetch("/memories")).json();
+    if (!mems.length) { box.innerHTML = '<p>Nothing yet. Tell me about yourself.</p>'; return; }
+    for (const m of mems) {
+      const row = document.createElement("div"); row.className = "mem";
+      const span = document.createElement("span");
+      span.innerHTML = `<small></small>`; span.firstChild.textContent = m.kind;
+      span.append(m.content);
+      const x = document.createElement("button"); x.textContent = "✕"; x.title = "Forget this";
+      x.onclick = async () => { await fetch(`/memories/${m.id}`, { method: "DELETE" }); row.remove(); };
+      row.append(span, x); box.appendChild(row);
+    }
+  }
+
+
+  // ---- mood mode chip ("be angry with me" → 😠 angry; tap to reset) ----
+  async function refreshMode() {
+    try {
+      const d = await (await fetch("/mode")).json();
+      const chip = $("modeChip");
+      chip.textContent = d.label ? `${d.label} mode ✕` : "";
+      chip.className = d.mode ? `on ${d.mode}` : "";
+      eye.classList.toggle("angry", d.mode === "angry");
+    } catch {}
+  }
+  $("modeChip").onclick = async () => {
+    await fetch("/mode", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: null }) });
+    refreshMode();
+  };
+  refreshMode();
+
+  // ---- goals drawer ----
+  async function loadGoals() {
+    const box = $("goals"); box.innerHTML = "";
+    const goals = await (await fetch("/goals")).json();
+    if (!goals.length) { box.innerHTML = "<p>No goals yet. Tell me what you're chasing.</p>"; return; }
+    for (const g of goals) {
+      const el = document.createElement("div"); el.className = "goal";
+      const h = document.createElement("h3"); h.textContent = g.title;
+      const pct = document.createElement("small"); pct.textContent = g.status === "achieved" ? "🏆 achieved" : `${Math.round(g.progress * 100)}%`;
+      h.appendChild(pct); el.appendChild(h);
+      if (g.why) { const w = document.createElement("div"); w.className = "why"; w.textContent = "Why: " + g.why; el.appendChild(w); }
+      const bar = document.createElement("div"); bar.className = "bar"; bar.innerHTML = "<i></i>";
+      bar.firstChild.style.width = `${Math.round(g.progress * 100)}%`; el.appendChild(bar);
+      if (g.milestones.some((m) => m.depends_on?.length)) { el.appendChild(roadmap(g)); box.appendChild(el); continue; }
+      for (const m of g.milestones) {
+        const row = document.createElement("label"); row.className = "ms" + (m.done ? " done" : "");
+        const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = m.done;
+        cb.onchange = async () => { cb.disabled = true; await setMilestone(m.id, cb.checked); };
+        const t = document.createElement("span"); t.textContent = m.title;
+        const due = document.createElement("em"); due.textContent = m.due_date ? new Date(m.due_date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" }) : "";
+        row.append(cb, t, due); el.appendChild(row);
+      }
+      box.appendChild(el);
+    }
+  }
+  async function setMilestone(id, done) {
+    await fetch(`/milestones/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ done }) });
+    await loadGoals(); poll();
+  }
+  const fmtDay = (iso) => iso ? new Date(iso + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+
+  // Tapping a roadmap topic opens its details — nothing changes until you press a button.
+  function openNode(m, f, byId) {
+    const sh = $("nodeSheet"); sh.innerHTML = "";
+    const h = document.createElement("h3"); h.textContent = m.title;
+    const p = document.createElement("p");
+    const deps = (m.depends_on || []).map((x) => byId[x]?.title).filter(Boolean);
+    const bits = [];
+    if (m.done) bits.push(`✓ Done${f?.done_on ? " on " + fmtDay(f.done_on) : ""}`);
+    else if (f?.finish) bits.push(`Sprint ${f.sprint} · TUF hours reach it ${fmtDay(f.start)} → done by ${fmtDay(f.finish)}`);
+    else if (f) bits.push("Not enough TUF blocks on the timetable to finish this");
+    if (m.effort_hours) bits.push(`~${m.effort_hours} h of study`);
+    if (m.due_date) bits.push(`due ${new Date(m.due_date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`);
+    if (f?.slip_days > 0) bits.push(`⚠️ ${f.slip_days} day(s) behind`);
+    if (deps.length) bits.push(`after: ${deps.join(", ")}`);
+    p.textContent = bits.join(" · ");
+    const row = document.createElement("div"); row.className = "row";
+    const btn = (label, cls, fn) => {
+      const b = document.createElement("button"); b.textContent = label; if (cls) b.className = cls;
+      b.onclick = async () => { row.querySelectorAll("button").forEach((x) => (x.disabled = true)); b.textContent = "Saving…"; await fn(); sh.classList.remove("open"); };
+      row.appendChild(b);
+    };
+    if (m.done) btn("↩️ Undo — not done yet", "danger", () => setMilestone(m.id, false));
+    else btn("✅ Mark done", "primary", () => setMilestone(m.id, true));
+    btn("Close", "", async () => {});
+    sh.append(h, p, row); sh.classList.add("open");
+  }
+
+  function forecastView(g) {
+    const f = g.forecast, box = document.createElement("div");
+    const card = document.createElement("div");
+    const late = f.buffer_days != null && f.buffer_days < 0;
+    card.className = "fc" + (late || !f.finish ? " late" : "");
+    card.textContent = !f.finish
+      ? `⚠️ The TUF blocks on your timetable aren't enough to finish — ${f.hours_left} h left at ${f.hours_per_week} h/week.`
+      : `📈 At ${f.hours_per_week} h/week of TUF, you finish every topic by ${fmtDay(f.finish)} — ` +
+        (late ? `${-f.buffer_days} days AFTER the deadline.` : `${f.buffer_days} days before ${fmtDay(f.target)}, left for revision and mock interviews.`) +
+        ` ${f.hours_left} h of study to go.`;
+    box.appendChild(card);
+    const det = document.createElement("details"); det.className = "rp-ch";
+    const su = document.createElement("summary"); su.textContent = `Sprint plan — ${f.sprints.length} weekly sprints`;
+    det.appendChild(su);
+    const today = isoDay(new Date());
+    for (const sp of f.sprints) {
+      const r = document.createElement("div"); r.className = "sp" + (sp.start <= today && today <= sp.end ? " now" : "");
+      const b = document.createElement("b"); b.textContent = `Sprint ${sp.n}`;
+      const t = document.createElement("span"); t.textContent = sp.topics.join(" → ");
+      const e = document.createElement("em"); e.textContent = `${fmtDay(sp.start)}–${fmtDay(sp.end)} · ${sp.hours}h`;
+      r.append(b, t, e); det.appendChild(r);
+    }
+    box.appendChild(det);
+    return box;
+  }
+
+  // A goal whose milestones depend on each other is drawn as a tree (like the NeetCode roadmap).
+  function roadmap(g) {
+    const byId = Object.fromEntries(g.milestones.map((m) => [m.id, m]));
+    const depth = {};
+    const d = (m) => depth[m.id] ??= (m.depends_on?.length ? 1 + Math.max(...m.depends_on.map((x) => byId[x] ? d(byId[x]) : 0)) : 0);
+    g.milestones.forEach(d);
+    const rows = [];
+    for (const m of g.milestones) (rows[depth[m.id]] ??= []).push(m);
+    const now = new Date();
+    const wrap = document.createElement("div"); wrap.className = "roadmap";
+    const legend = document.createElement("div"); legend.className = "rm-legend";
+    const done = g.milestones.filter((m) => m.done).length;
+    legend.textContent = `${done}/${g.milestones.length} topics · green = done · gold = do next · dim = locked · orange = behind · red = overdue · tap a topic for details`;
+    const fm = g.forecast?.milestones || {};
+    const nodes = {};
+    for (const row of rows) {
+      const r = document.createElement("div"); r.className = "rm-row";
+      for (const m of row || []) {
+        const unlocked = (m.depends_on || []).every((x) => byId[x]?.done);
+        const overdue = !m.done && m.due_date && new Date(m.due_date) < now;
+        const f = fm[m.id], behind = !m.done && f?.slip_days > 0;
+        const n = document.createElement("div");
+        n.className = "rm-node " + (m.done ? "done" : overdue ? "overdue" : unlocked ? "next" : "locked") + (behind ? " behind" : "");
+        n.textContent = m.title;
+        const sm = document.createElement("small");
+        sm.textContent = m.done ? "✓ done" : f?.finish ? `S${f.sprint} · ${fmtDay(f.finish)}`
+          : m.due_date ? new Date(m.due_date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+        if (sm.textContent) n.appendChild(sm);
+        n.onclick = () => openNode(m, f, byId);
+        nodes[m.id] = n; r.appendChild(n);
+      }
+      wrap.appendChild(r);
+    }
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    wrap.prepend(svg);
+    // Connector curves are drawn once the nodes have their final positions.
+    requestAnimationFrame(() => {
+      const box = wrap.getBoundingClientRect();
+      let paths = "";
+      for (const m of g.milestones) for (const p of m.depends_on || []) {
+        const a = nodes[p]?.getBoundingClientRect(), b = nodes[m.id]?.getBoundingClientRect();
+        if (!a || !b) continue;
+        const x1 = a.left + a.width / 2 - box.left, y1 = a.bottom - box.top, x2 = b.left + b.width / 2 - box.left, y2 = b.top - box.top;
+        const my = (y1 + y2) / 2;
+        const lit = byId[p].done;
+        paths += `<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" fill="none" stroke="${lit ? "#57d38c" : "#6b6b80"}" stroke-width="2"/>`;
+      }
+      svg.innerHTML = paths;
+    });
+    const frag = document.createElement("div");
+    if (g.forecast) frag.appendChild(forecastView(g));
+    frag.append(legend, wrap);
+    return frag;
+  }
+
+  // ---- the 6am wake-up: three questions, typed, before TRINETRA lets you go ----
+  async function wakeVoice() {  // TRINETRA's line for this moment (shouting, next question, or the briefing)
+    try {
+      const r = await fetch("/wake/speech");
+      if (!r.ok || !voiceOn) return;
+      const effect = r.headers.get("X-Trinetra-Effect");
+      if (effect === "angry" || effect === "firm_angry") return playFurious(await r.arrayBuffer(), effect);
+      furiousSource?.stop?.(); const p = audio(); p.pause(); p.src = URL.createObjectURL(await r.blob());
+      eye.classList.add("speaking"); p.onended = p.onpause = () => eye.classList.remove("speaking");
+      await p.play();
+    } catch { eye.classList.remove("speaking"); }
+  }
+  function renderWake(st, feedback = "", good = false) {
+    const box = $("wk"); box.innerHTML = "";
+    if (st.done) {
+      box.innerHTML = '<div class="done">✅ You\'re up. Good.</div><p class="step"></p>';
+      box.querySelector(".step").textContent = `${st.total} questions · ${st.wrong} wrong · ${st.rings} ring(s)`;
+      const b = document.createElement("button"); b.className = "hear"; b.textContent = "🔊 Hear my morning briefing";
+      b.onclick = wakeVoice; box.appendChild(b);
+      return;
+    }
+    const step = document.createElement("div"); step.className = "step"; step.textContent = `Question ${st.number} of ${st.total} — prove you're awake`;
+    const q = document.createElement("div"); q.className = "q"; q.textContent = `${st.question} = ?`;
+    const fb = document.createElement("div"); fb.className = "fb " + (feedback ? (good ? "good" : "bad") : ""); fb.textContent = feedback;
+    const f = document.createElement("form");
+    const inp = document.createElement("input"); inp.inputMode = "numeric"; inp.autocomplete = "off"; inp.placeholder = "answer";
+    const go = document.createElement("button"); go.textContent = "Answer";
+    f.append(inp, go);
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      if (!inp.value.trim()) return;
+      go.disabled = true;
+      const r = await (await fetch("/wake/answer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ a: inp.value.trim() }) })).json();
+      renderWake(r, r.result === "wrong" ? "✗ Wrong. Wake up properly and try again." : r.result === "correct" ? "✓ Correct. Next one." : "", r.result !== "wrong");
+      wakeVoice();  // TRINETRA reacts out loud (this tap lets the phone play sound)
+    };
+    const hear = document.createElement("button"); hear.className = "hear"; hear.type = "button"; hear.textContent = "🔊 Hear TRINETRA";
+    hear.onclick = wakeVoice;
+    box.append(step, q, fb, f, hear);
+    setTimeout(() => inp.focus(), 100);
+  }
+  async function loadWake() { renderWake(await (await fetch("/wake/state")).json()); }
+
+  // ---- weekly reports ----
+  async function loadReports() {
+    const box = $("reports"); box.innerHTML = "";
+    const reps = await (await fetch("/reports")).json();
+    if (!reps.length) { box.innerHTML = "<p>Your first report arrives Sunday at 11:30pm.</p>"; return; }
+    for (const r of reps) {
+      const m = r.metrics || {}, c = m.compare?.change_vs_last_week || {};
+      const el = document.createElement("div"); el.className = "rp-week";
+      const h = document.createElement("h3");
+      h.textContent = `Week of ${new Date(r.week_start + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}` + (r.status !== "ready" ? " · writing…" : "");
+      el.appendChild(h);
+      const cards = document.createElement("div"); cards.className = "rp-cards";
+      const card = (label, value, delta, goodUp = true) => {
+        const d = document.createElement("div"); d.className = "rp-card";
+        const b = document.createElement("b"); b.textContent = value ?? "—";
+        const sm = document.createElement("small"); sm.textContent = label;
+        d.append(b, sm);
+        if (delta !== undefined && delta !== null) {
+          const sp = document.createElement("small"); const better = goodUp ? delta > 0 : delta < 0;
+          sp.className = delta === 0 ? "" : better ? "up" : "down";
+          sp.textContent = ` ${delta > 0 ? "▲" : delta < 0 ? "▼" : "="} ${Math.abs(delta)} vs last week`;
+          d.appendChild(sp);
+        }
+        cards.appendChild(d);
+      };
+      const rate = m.blocks?.rate;
+      card("blocks completed", rate != null ? `${Math.round(rate * 100)}%` : "—", c.rate != null ? Math.round(c.rate * 100) : null);
+      card("hours of real work", m.hours_done, c.hours_done);
+      card("avg minutes to wake", m.wake?.avg_minutes_to_wake, c.avg_minutes_to_wake, false);
+      card("woke on first ring", `${m.wake?.first_ring_days ?? 0}/7`);
+      card("promises kept", `${m.promises?.kept ?? 0}/${(m.promises?.kept ?? 0) + (m.promises?.broken ?? 0)}`);
+      el.appendChild(cards);
+      // completion per day
+      const days = document.createElement("div"); days.className = "rp-days";
+      for (const d of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
+        const v = m.by_day?.[d] || { planned: 0, done: 0 }, pct = v.planned ? v.done / v.planned : 0;
+        const col = document.createElement("div"); const bar = document.createElement("i");
+        bar.style.height = `${Math.round(pct * 70)}px`; col.append(bar, `${d} ${v.planned ? Math.round(pct * 100) + "%" : ""}`);
+        days.appendChild(col);
+      }
+      el.appendChild(days);
+      for (const [cat, v] of Object.entries(m.by_category || {})) {
+        const row = document.createElement("div"); row.className = "rp-row";
+        const a = document.createElement("span"); a.textContent = cat;
+        const b = document.createElement("span"); b.textContent = `${v.done}/${v.planned} done · ${v.hours_done}h · skipped ${v.skipped} · missed ${v.missed}`;
+        row.append(a, b); el.appendChild(row);
+      }
+      for (const w of m.wake?.days || []) {
+        const row = document.createElement("div"); row.className = "rp-row";
+        const a = document.createElement("span"); a.textContent = `⏰ ${w.day}`;
+        const b = document.createElement("span");
+        b.textContent = w.solved ? `up at ${w.solved_at} · ${w.minutes_to_wake} min · ${w.rings} ring(s) · ${w.wrong} wrong` : (w.rings ? `${w.rings} ring(s), never solved` : "no wake-up");
+        row.append(a, b); el.appendChild(row);
+      }
+      for (const ch of r.sections || []) {
+        const d = document.createElement("details"); d.className = "rp-ch";
+        const su = document.createElement("summary"); su.textContent = ch.title;
+        const p = document.createElement("p"); p.textContent = ch.text;
+        d.append(su, p); el.appendChild(d);
+      }
+      box.appendChild(el);
+    }
+  }
+
+  // ---- timetable dashboard ----
+  const CAT = { study: "#6cb6ff", work: "#b39ddb", fitness: "#57d38c", health: "#4dd0c8", personal: "#f0a83a",
+                social: "#ff8fb1", chores: "#a1887f", rest: "#90a4ae", general: "#c5b358", career: "#b39ddb", sleep: "#7e6bd6" };
+  const H0 = 0, H1 = 24, PX = 52;  // the whole day, so sleep shows too  // visible hours and pixels per hour
+  let weekStart = mondayOf(new Date()), selDay = isoDay(new Date()), weekData = [];
+  const plannerOpen = () => $("planner").classList.contains("open");
+  function isoDay(d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+  function mondayOf(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+  function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  const wide = () => innerWidth >= 860;
+
+  async function loadWeek() {
+    try { weekData = await (await fetch(`/today?days=7&start_day=${isoDay(weekStart)}`)).json(); } catch { weekData = []; }
+    renderPlanner();
+  }
+
+  function renderPlanner() {
+    const days = [...Array(7)].map((_, i) => addDays(weekStart, i));
+    const today = isoDay(new Date());
+    $("plRange").textContent = `${days[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(undefined, { month: "short", day: "numeric" })}` + (weekData.length ? ` · ${weekData.length} blocks` : " · nothing planned yet — tell me your routine below");
+    // day chips (phone)
+    const chips = $("plDays"); chips.innerHTML = ""; chips.style.display = wide() ? "none" : "flex";
+    for (const d of days) {
+      const id = isoDay(d), b = document.createElement("button");
+      b.innerHTML = `${d.toLocaleDateString(undefined, { weekday: "short" })}<br>${d.getDate()}`;
+      b.className = (id === selDay ? "sel " : "") + (id === today ? "today" : "");
+      b.onclick = () => { selDay = id; renderPlanner(); };
+      chips.appendChild(b);
+    }
+    const shown = wide() ? days : days.filter((d) => isoDay(d) === selDay);
+    const hours = $("plHours"), cols = $("plCols");
+    hours.innerHTML = ""; cols.innerHTML = "";
+    const height = (H1 - H0) * PX;
+    hours.style.height = cols.style.height = `${height + 24}px`;
+    for (let h = H0; h <= H1; h++) {
+      const lab = document.createElement("div"); lab.style.top = `${(h - H0) * PX + 24}px`;
+      lab.textContent = h === 24 || h === 0 ? "" : `${h % 12 || 12}${h < 12 ? "a" : "p"}`; hours.appendChild(lab);
+    }
+    cols.style.gridTemplateColumns = `repeat(${shown.length}, minmax(0, 1fr))`;
+    for (const d of shown) {
+      const id = isoDay(d), col = document.createElement("div");
+      col.className = "pl-col" + (id === today ? " today" : "");
+      const head = document.createElement("div"); head.className = "pl-colhead" + (id === today ? " today" : "");
+      head.textContent = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric" }); col.appendChild(head);
+      const body = document.createElement("div"); body.style.position = "relative"; body.style.height = `${height}px`;
+      for (let h = H0; h < H1; h++) { const l = document.createElement("div"); l.className = "pl-line"; l.style.top = `${(h - H0) * PX}px`; body.appendChild(l); }
+      // Overlapping blocks share the width: each cluster of overlaps is split into lanes.
+      const items = weekData.filter((t) => t.date === id).map((t) => {
+        const [sh, sm] = t.start.split(":").map(Number), [eh, em] = t.end.split(":").map(Number);
+        const s = sh * 60 + sm; let e = eh * 60 + em; if (e <= s) e = 24 * 60;
+        return { t, s, e, lane: 0, lanes: 1 };
+      }).sort((a, b) => a.s - b.s || b.e - a.e);
+      let cluster = [], clusterEnd = -1;
+      const closeCluster = () => { const n = Math.max(1, ...cluster.map((x) => x.lane + 1)); cluster.forEach((x) => (x.lanes = n)); cluster = []; };
+      for (const it of items) {
+        if (it.s >= clusterEnd) { closeCluster(); clusterEnd = -1; }
+        const used = new Set(cluster.filter((x) => x.e > it.s).map((x) => x.lane));
+        while (used.has(it.lane)) it.lane++;
+        cluster.push(it); clusterEnd = Math.max(clusterEnd, it.e);
+      }
+      closeCluster();
+      for (const { t, s, e, lane, lanes } of items) {
+        const top = Math.max(0, (s - H0 * 60) * PX / 60), bottom = Math.min(height, (e - H0 * 60) * PX / 60);
+        if (bottom <= 0) continue;
+        const el = document.createElement("div"); el.className = `blk ${t.status}`;
+        el.style.setProperty("--c", CAT[t.category] || CAT.general);
+        el.style.top = `${top}px`; el.style.height = `${Math.max(22, bottom - top - 2)}px`;
+        el.style.left = `calc(${(lane / lanes) * 100}% + 3px)`; el.style.width = `calc(${100 / lanes}% - 6px)`;
+        const b = document.createElement("b"); b.textContent = t.title;
+        const sm2 = document.createElement("small"); sm2.textContent = `${t.start}–${t.end}${t.routine ? " · ↻" : ""}`;
+        el.append(b, sm2); el.onclick = () => openSheet(t); body.appendChild(el);
+      }
+      if (id === today) {
+        const n = new Date(), mins = n.getHours() * 60 + n.getMinutes();
+        if (mins >= H0 * 60) { const nl = document.createElement("div"); nl.className = "pl-now"; nl.style.top = `${(mins - H0 * 60) * PX / 60}px`; body.appendChild(nl); }
+      }
+      col.appendChild(body); cols.appendChild(col);
+    }
+  }
+
+  function openSheet(t) {
+    const sh = $("plSheet"); sh.innerHTML = "";
+    const h = document.createElement("h3"); h.textContent = t.title;
+    const p = document.createElement("p"); p.textContent = `${t.day} · ${t.start}–${t.end} · ${t.category}${t.routine ? " · repeats " + (t.recurrence || "") : ""} · ${t.status}`;
+    const row = document.createElement("div"); row.className = "row";
+    const act = (label, fn, cls) => { const b = document.createElement("button"); b.textContent = label; if (cls) b.className = cls; b.onclick = async () => { await fn(); sh.classList.remove("open"); loadWeek(); poll(); }; row.appendChild(b); };
+    const status = (st) => fetch(`/tasks/${t.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: st }) });
+    if (t.status === "planned") act("▶️ Start", () => status("started"));
+    if (t.status !== "done") act("✅ Done", () => status("done"));
+    if (t.status !== "skipped") act("⏭ Skip", () => status("skipped"));
+    act("🗑 Remove", () => fetch(`/tasks/${t.id}`, { method: "DELETE" }), "danger");
+    if (t.routine) act("🗑 Whole routine", () => fetch(`/tasks/${t.id}?whole_routine=true`, { method: "DELETE" }), "danger");
+    act("Close", async () => {});
+    sh.append(h, p, row); sh.classList.add("open");
+  }
+
+  async function plannerSend(text) {
+    const box = $("plThought");
+    box.innerHTML = "🧠 thinking it through…";
+    const d = await chat(text);
+    box.innerHTML = "";
+    if (!d) return;
+    if (d.notes?.deliberation?.findings?.length) {
+      const f = document.createElement("div"); f.textContent = "🧠 checked: " + d.notes.deliberation.findings.join(" · "); box.appendChild(f);
+    }
+    const say = document.createElement("div"); say.className = "say"; say.textContent = d.reply || ""; box.appendChild(say);
+    for (const m of d.extra || []) {
+      if (!m.meta || !m.meta.buttons || m.meta.answered) continue;
+      const card = document.createElement("div"); card.className = "say"; card.textContent = m.content; box.appendChild(card);
+      const url = m.meta.respond || `/proposals/${m.id}/respond`;
+      const btns = document.createElement("div"); btns.className = "btns";
+      for (const action of m.meta.buttons) {
+        const b = document.createElement("button"); b.textContent = LABELS[action] || action;
+        b.onclick = async () => { btns.classList.add("answered"); b.classList.add("chosen"); await answer(url, action, btns, b); loadWeek(); };
+        btns.appendChild(b);
+      }
+      box.appendChild(btns);
+    }
+    loadWeek();
+  }
+
+  function openPlanner() {
+    weekStart = mondayOf(new Date()); selDay = isoDay(new Date()); loadWeek();
+    setTimeout(() => { const g = $("plGrid"); g.scrollTop = Math.max(0, (new Date().getHours() - H0 - 1) * PX); }, 50);
+  }
+  $("plPrev").onclick = () => { weekStart = addDays(weekStart, -7); selDay = isoDay(weekStart); loadWeek(); };
+  $("plNext").onclick = () => { weekStart = addDays(weekStart, 7); selDay = isoDay(weekStart); loadWeek(); };
+  $("plToday").onclick = () => { weekStart = mondayOf(new Date()); selDay = isoDay(new Date()); loadWeek(); };
+  $("plForm").addEventListener("submit", (e) => { e.preventDefault(); const t = $("plText").value.trim(); if (!t) return; $("plText").value = ""; plannerSend(t); });
+  $("plMic").onclick = () => mic.click();
+  addEventListener("resize", () => { if (plannerOpen()) renderPlanner(); });
+
+  // ---- screens: every page has ‹ Back to the dashboard (also the phone's back swipe / Esc) ----
+  // Opening a screen adds a history entry, so "back" always lands on the dashboard (the chat).
+  const SCREENS = { timetable: ["planner", openPlanner], goals: ["goalDrawer", loadGoals],
+                    report: ["repDrawer", loadReports], memory: ["drawer", loadMems], wake: ["wakeScreen", loadWake],
+                    visitors: ["visDrawer", loadVisitors], ask: ["askDrawer", loadAsk], character: ["charDrawer", loadCharacter] };
+  function closeScreens() {
+    for (const [id] of Object.values(SCREENS)) $(id).classList.remove("open");
+    $("plSheet").classList.remove("open"); $("nodeSheet").classList.remove("open");
+  }
+  const screenOf = (hash) => SCREENS[hash.split("/")[0]];  // "#ask/12" → the ask screen for question 12
+  function showScreen(name) { closeScreens(); const [id, load] = screenOf(name); $(id).classList.add("open"); load(name.split("/")[1]); }
+  function go(name) {
+    if (location.hash !== "#" + name) history.pushState({ screen: name }, "", "#" + name);
+    showScreen(name);
+  }
+  function back() {
+    for (const id of ["nodeSheet", "plSheet"]) if ($(id).classList.contains("open")) { $(id).classList.remove("open"); return; }
+    if (history.state?.screen) history.back();
+    else { history.replaceState(null, "", location.pathname); closeScreens(); }
+  }
+  addEventListener("popstate", () => { const n = location.hash.slice(1); screenOf(n) ? showScreen(n) : closeScreens(); });
+  addEventListener("keydown", (e) => { if (e.key === "Escape") back(); });
+  document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
+  for (const id of ["drawer", "repDrawer", "goalDrawer", "wakeScreen", "visDrawer", "askDrawer", "charDrawer"]) $(id).onclick = (e) => { if (e.target.id === id) back(); };
+  $("dayBtn").onclick = () => go("timetable");
+  $("goalBtn").onclick = () => go("goals");
+  $("repBtn").onclick = () => go("report");
+  $("memBtn").onclick = () => go("memory");
+  $("visBtn").onclick = () => go("visitors");
+  $("chrBtn").onclick = () => go("character");
+  {  // deep link (e.g. a notification opens /#report): put the dashboard underneath so Back works
+    const n = location.hash.slice(1);
+    if (screenOf(n)) { history.replaceState(null, "", location.pathname); go(n); }
+  }
+  setInterval(() => { if (plannerOpen() && !document.hidden) loadWeek(); }, 60000);  // keep the "now" line and statuses fresh
+
+  // ---- proactive messages: reminders & check-ins arrive here ----
+  async function syncLastId() {
+    const rows = await (await fetch("/messages?limit=1")).json();
+    if (rows.length) lastId = Math.max(lastId, rows[rows.length - 1].id);
+  }
+
+  let polling = false;
+  async function poll() {
+    if (busy || polling) return;
+    polling = true;
+    try {
+      const rows = await (await fetch(`/messages?after_id=${lastId}`)).json();
+      for (const m of rows) {
+        lastId = Math.max(lastId, m.id);
+        add(m.content, m.role === "user" ? "me" : "tri", m.mood, m.meta && { ...m.meta, id: m.id });
+        if (m.role === "trinetra") {
+          $("mood").textContent = m.mood ? m.mood.split(" — ")[0].toLowerCase() : "";
+          if (m.channel !== "wake") say(m.content, m.mood);  // wake lines already played (Shortcut / wake screen)
+          if (document.hidden && m.channel === "reminder" && !pushOn && window.Notification?.permission === "granted") {
+            new Notification("TRINETRA", { body: m.content });
+          }
+        }
+      }
+    } catch {} finally { polling = false; }
+  }
+
+  // ---- restore conversation, then keep listening ----
+  fetch("/messages?limit=40").then((r) => r.json()).then((rows) => {
+    for (const m of rows) { add(m.content, m.role === "user" ? "me" : "tri", m.mood, m.meta && { ...m.meta, id: m.id }); lastId = Math.max(lastId, m.id); }
+    const heardId = +localStorageGet("heardId", "0"), last = rows[rows.length - 1];
+    const fresh = last?.at && Date.now() - Date.parse(last.at) < 3 * 3600e3;
+    if (last && last.role === "trinetra" && last.channel !== "wake" && last.id > heardId && fresh) say(last.content, last.mood);
+  }).catch(() => {}).finally(() => setInterval(poll, 5000));
+  // back from the background (e.g. tapped a notification): check for new lines right away
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+
+  // ---- installable app + lock-screen notifications ----
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let pushOn = localStorageGet("pushOn", "0") === "1";
+
+  function banner(html) { $("banner").innerHTML = html; $("banner").classList.toggle("on", !!html); }
+  function paintBell() { $("bellBtn").classList.toggle("off", !pushOn); }
+  paintBell();
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
+  if (isIOS && !standalone) {
+    banner("📲 <b>Install me:</b> tap the <b>Share</b> button below, then <b>Add to Home Screen</b>. " +
+           "Open TRINETRA from your home screen and tap 🔔 so my reminders reach your lock screen.");
+  }
+
+  function urlB64ToUint8(b64) {
+    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  }
+
+  $("bellBtn").onclick = async () => {
+    if (isIOS && !standalone) { banner($("banner").innerHTML || "Add me to your Home Screen first, then tap 🔔 again."); return; }
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) { note("🔔 This browser can't receive push notifications."); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") { note("🔔 Notifications are blocked — allow them in Settings → Notifications → TRINETRA."); return; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const { public_key } = await (await fetch("/push/key")).json();
+      const sub = (await reg.pushManager.getSubscription()) ||
+        await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(public_key) });
+      const body = { ...sub.toJSON(), device: navigator.userAgent.slice(0, 200) };
+      const r = await fetch("/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error();
+      pushOn = true; localStorageSet("pushOn", "1"); paintBell(); banner("");
+      await fetch("/push/test", { method: "POST" });
+      note("🔔 Notifications are on for this device.");
+    } catch { note("🔔 Couldn't turn on notifications. Try again in a moment."); }
+  };
+
+
+  // ---- portfolio visitors: the log, and answering "what is Tarun doing now?" ----
+  const ago = (t) => { const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(t).toLocaleDateString(); };
+  async function loadVisitors() {
+    const box = $("visitors"); box.innerHTML = "";
+    let rows = [];
+    try { rows = await (await fetch("/visitors")).json(); } catch {}
+    if (!rows.length) { box.innerHTML = "<p>No visitors yet. When a recruiter talks to my Eye on your portfolio, they'll show up here.</p>"; return; }
+    for (const v of rows) {
+      const el = document.createElement("div"); el.className = "vis";
+      const head = document.createElement("div");
+      const b = document.createElement("b"); b.textContent = [v.name || "Someone (no name)", v.role && v.role !== "other" ? v.role : "", v.company].filter(Boolean).join(" · ");
+      const when = document.createElement("span"); when.className = "when"; when.textContent = "  " + ago(v.started_at);
+      head.append(b, when);
+      if (v.here_now) { const l = document.createElement("span"); l.className = "live"; l.textContent = "● on the site now"; head.append(l); }
+      el.append(head);
+      const tags = [...new Set(v.topics)].join(" · ");
+      if (tags || v.email || v.phone) { const t = document.createElement("div"); t.className = "tags"; t.textContent = [v.email, v.phone, tags].filter(Boolean).join(" — "); el.append(t); }
+      for (const a of v.asks) {
+        const q = document.createElement("div"); q.className = "q";
+        q.textContent = `“${a.question}” — ` + (a.answer ? `you: ${a.answer}` : a.status === "timeout" ? "you missed this one" : "");
+        if (!a.answer) { const link = document.createElement("a"); link.href = `#ask/${a.id}`; link.textContent = "Answer"; link.onclick = (e) => { e.preventDefault(); go(`ask/${a.id}`); }; q.append(link); }
+        el.append(q);
+      }
+      for (const n of v.notes) { const nt = document.createElement("div"); nt.className = "nt"; nt.textContent = `📇 ${[n.email, n.phone].filter(Boolean).join(" · ")}: ${n.message}`; el.append(nt); }
+      box.append(el);
+    }
+  }
+  async function loadAsk(id) {
+    const box = $("askBox"); box.innerHTML = "";
+    let a;
+    try { const r = await fetch(`/visitors/ask/${id}`); if (!r.ok) throw 0; a = await r.json(); } catch { box.innerHTML = "<p>That question isn't here any more.</p>"; return; }
+    const q = document.createElement("div"); q.className = "askq";
+    const who = document.createElement("small");
+    who.textContent = `${a.name || "A visitor"}${a.company ? ` (${a.company})` : ""} on your portfolio${a.here_now ? " · still there" : " · has left"}`;
+    q.append(who, `“${a.question}”`);
+    box.append(q);
+    if (a.answer) { const p = document.createElement("p"); p.textContent = `You answered: ${a.answer}`; box.append(p); return; }
+    if (a.status === "timeout") { const p = document.createElement("p"); p.textContent = "I already told them you're busy and asked for their email. If they're still on the site, your answer still reaches them."; box.append(p); }
+    const chips = document.createElement("div"); chips.className = "chips";
+    const txt = document.createElement("textarea"); txt.id = "askText"; txt.maxLength = 400; txt.placeholder = "What are you doing right now? I'll pass it on.";
+    for (const c of ["In class right now 📚", "Coding on a project 💻", "Practising DSA", "At the gym, back soon", "Free now, happy to chat!"]) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = c;
+      b.onclick = () => { txt.value = c; txt.focus(); };  // fills the box; Send is a separate tap
+      chips.append(b);
+    }
+    const send = document.createElement("button"); send.id = "askSend"; send.textContent = "Send to them";
+    send.onclick = async () => {
+      if (!txt.value.trim()) { txt.focus(); return; }
+      send.disabled = true; send.textContent = "Sending…";
+      const r = await fetch(`/visitors/ask/${id}/answer`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: txt.value.trim() }) });
+      send.textContent = r.ok ? "Sent ✅" : "Couldn't send — try again";
+      if (!r.ok) send.disabled = false;
+    };
+    box.append(chips, txt, send);
+  }
+
+  // ---- how it looks (🎨 screen) — saved on the server, so every device and the portfolio match ----
+  const LOOK_KEY = "trinetraLook";
+  let myLook = { style: "pixel", palette: "saffron" };
+  try { myLook = { ...myLook, ...JSON.parse(localStorageGet(LOOK_KEY, "{}")) }; } catch {}
+  const buddy = TrinetraBuddy.create(eye.querySelector(".buddy"), myLook);
+  const emblem = TrinetraBuddy.create($("emblem"), { ...myLook, static: true });
+  let chrBig = null;
+  function applyLook(look) {
+    myLook = { ...myLook, ...look };
+    localStorageSet(LOOK_KEY, JSON.stringify(myLook));  // instant on the next open; the server copy is the truth
+    for (const b of [buddy, emblem, chrBig]) b?.setStyle(myLook.style).setPalette(myLook.palette);
+  }
+  function setLook(change) {
+    applyLook(change);
+    loadCharacter();
+    fetch("/look", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(myLook) }).catch(() => {});
+  }
+  fetch("/look").then((r) => (r.ok ? r.json() : null)).then((l) => {
+    if (!l) return;
+    if (!l.saved && localStorageGet(LOOK_KEY, "")) return setLook({});  // first time: this device's pick becomes everyone's
+    applyLook({ style: l.style, palette: l.palette });
+    if (chrBig) loadCharacter();
+  }).catch(() => {});
+  function loadCharacter() {
+    chrBig ??= TrinetraBuddy.create($("chrBig"), myLook);
+    const fill = (id, items, isOn, onTap, swatch) => {
+      const row = $(id); row.innerHTML = "";
+      for (const [key, label] of items) {
+        const b = document.createElement("button"); b.type = "button"; b.textContent = swatch ? "" : label; b.title = label;
+        if (swatch) { b.className = "sw"; b.style.background = TrinetraBuddy.PALETTES[key][0]; }
+        if (isOn(key)) b.classList.add("on");
+        b.onclick = () => onTap(key);
+        row.append(b);
+      }
+    };
+    fill("chrStyle", [["pixel", "Pixel bot"], ["fuzzy", "Fuzzy blob"]], (k) => k === myLook.style, (k) => setLook({ style: k }));
+    fill("chrPal", Object.keys(TrinetraBuddy.PALETTES).map((k) => [k, k[0].toUpperCase() + k.slice(1)]), (k) => k === myLook.palette, (k) => setLook({ palette: k }), true);
+    fill("chrEmo", TrinetraBuddy.EMOTIONS.map((e) => [e, e]), () => false, (e) => { chrBig.setActivity("idle").setEmotion(e); if (e === "proud" || e === "happy") chrBig.celebrate(); if (e === "angry") chrBig.shake(); });
+    fill("chrAct", TrinetraBuddy.ACTIVITIES.map((a) => [a, a]), () => false, (a) => chrBig.setActivity(a));
+  }
+  $("chrDemo").onclick = () => {
+    const seq = [["idle", "neutral"], ["listening", "neutral"], ["thinking", "neutral"], ["speaking", "happy"], ["idle", "proud"],
+                 ["idle", "firm"], ["idle", "angry"], ["idle", "caring"], ["walking", "neutral"], ["sleeping", "neutral"], ["idle", "neutral"]];
+    seq.forEach(([a, e], i) => setTimeout(() => { chrBig.setActivity(a).setEmotion(e); if (e === "angry") chrBig.shake(); if (e === "proud") chrBig.celebrate(); }, i * 1500));
+  };
+
+  // ---- TRINETRA's character (the art and faces live in /static/buddy.js) ----
+  // Home is the slot next to the text box (where 🎙 used to be): it rests there, peeking now and then.
+  // Tap it → it jumps out and listens, walking around the screen while it listens / thinks / speaks.
+  // Catch it (tap again) → it stops listening and sends (or stops talking). Once it's done, it walks home.
+  // Drag it while it's out to put it somewhere. The little bar under it is the time left in the current block.
+  (() => {
+    const orb = eye, tip = $("eyeTip"), slot = $("eyeSlot"), tbar = orb.querySelector(".tbar");
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const has = (c) => orb.classList.contains(c);
+    const awake = () => talk.active || has("listening") || has("speaking") || has("thinking");
+    const screenOpen = () => !!document.querySelector(".drawer.open, #planner.open");
+    const later = (ms, fn) => setTimeout(fn, ms);
+    const rand = (a, b) => a + Math.random() * (b - a);
+    let x = 0, y = 0, k = 1, out = false, idleSince = 0, holdUntil = 0, drag = null, dragged = false, pressedLong = false;
+
+    function zone() {  // where it may roam: below the header, above the text box
+      const s = orb.offsetWidth, top = document.querySelector("header").getBoundingClientRect().bottom + 6;
+      const bottom = $("form").getBoundingClientRect().top - s - 8;
+      return { x0: 6, x1: Math.max(6, innerWidth - s - 6), y0: top, y1: Math.max(top, bottom) };
+    }
+    function move(nx, ny, scale, how) {
+      x = nx; y = ny; k = scale;
+      orb.classList.remove("gliding", "jump", "homing");
+      if (how && !still) orb.classList.add(how);
+      orb.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+    }
+    function roamTo(nx, ny, how = "gliding") {
+      const z = zone();
+      move(Math.min(z.x1, Math.max(z.x0, nx)), Math.min(z.y1, Math.max(z.y0, ny)), 1, how);
+    }
+    function dock(how = "homing") {  // sit in the home slot, scaled down to fit it
+      const r = slot.getBoundingClientRect(), s = orb.offsetWidth, sc = Math.min(1, (r.height + 10) / s);
+      move(r.left + (r.width - s * sc) / 2, r.top + (r.height - s * sc) / 2, sc, how);
+    }
+    function look(dx, dy) { buddy.look(dx, dy); }  // eyes toward a direction (screen px)
+    const center = () => { const s = orb.offsetWidth * k; return [x + s / 2, y + s / 2]; };
+    const lookAt = (px, py) => { const [cx, cy] = center(); look(px - cx, py - cy); };
+
+    // what it's doing, from the classes the rest of the app already sets on #eye
+    let prev = "";
+    function sync() {
+      const act = has("listening") ? "listening" : has("speaking") || has("say") ? "speaking" : has("thinking") ? "thinking"
+        : has("sleep") ? "sleeping" : (has("gliding") || has("jump") || has("homing")) ? "walking"
+        : has("watch") || has("peek") ? "watching" : "idle";
+      buddy.setActivity(act);
+      buddy.setEmotion(has("angry") ? "angry" : has("happy") ? "proud" : flashEmotion || restingEmotion);
+      const cls = orb.className;
+      if (has("shake") && !/\bshake\b/.test(prev)) buddy.shake();
+      if (has("happy") && !/\bhappy\b/.test(prev)) buddy.celebrate();
+      prev = cls;
+    }
+    new MutationObserver(sync).observe(orb, { attributes: true, attributeFilter: ["class"] });
+    orb.addEventListener("transitionend", (e) => { if (e.target === orb) { orb.classList.remove("gliding", "jump", "homing"); } });
+    // its resting face follows TRINETRA's real feelings (frustration · pride · concern), checked every minute
+    let restingEmotion = "neutral", flashEmotion = null;
+    async function feelings() {
+      try {
+        const f = await (await fetch("/emotion")).json();
+        restingEmotion = f.frustration >= 0.75 ? "angry" : f.frustration >= 0.5 ? "firm" : f.concern >= 0.5 ? "caring"
+          : f.pride >= 0.5 ? "proud" : "neutral";
+        sync();
+      } catch {}
+    }
+    feelings(); setInterval(feelings, 60000);
+    window.trinetraFlash = (emo, ms = 3500) => { flashEmotion = emo; sync(); later(ms, () => { flashEmotion = null; sync(); }); };
+
+    function jumpOut() {
+      if (out) return;
+      out = true; orb.classList.remove("docked");
+      const z = zone();
+      roamTo(rand(z.x0 + (z.x1 - z.x0) * 0.25, z.x0 + (z.x1 - z.x0) * 0.75), z.y0 + (z.y1 - z.y0) * rand(0.35, 0.6), "jump");
+      later(700, () => look(0, -20));
+    }
+    function goHome() {
+      if (!out) return;
+      out = false; look(0, 0); dock("homing");
+      later(850, () => { if (!out) orb.classList.add("docked"); });
+    }
+
+    function roam() {  // while it's out and busy: drift around, glancing where it goes
+      later(rand(2600, 4200), roam);
+      if (!out || still || drag || screenOpen() || Date.now() < holdUntil) return;
+      const z = zone(), nx = rand(z.x0, z.x1), ny = rand(z.y0, z.y1);
+      look(nx - x, ny - y); roamTo(nx, ny);
+      later(1800, () => look(0, 0));
+    }
+    function peek() {  // at home: half-open, glance around, close again
+      later(rand(9000, 18000), peek);
+      if (out || awake() || has("watch") || sleeping() || screenOpen()) return;
+      orb.classList.add("peek"); look(-60, -20);
+      later(700, () => look(60, -20));
+      later(1400, () => look(0, 0));
+      later(1900, () => orb.classList.remove("peek"));
+    }
+    function blink() {
+      later(rand(2500, 6000), blink);
+      if (!(awake() || has("peek") || has("watch")) || has("listening")) return;
+      orb.classList.add("blink"); later(130, () => orb.classList.remove("blink"));
+    }
+    function flash(cls, ms) { orb.classList.add(cls); later(ms, () => orb.classList.remove(cls)); }
+    const sleeping = () => { const d = new Date(), h = d.getHours(); return h < 6 || (h === 23 && d.getMinutes() >= 30); };
+
+    // the heartbeat of the little guy: wake → jump out; eye closed for a moment → fly home
+    setInterval(() => {
+      orb.classList.toggle("away", screenOpen());
+      orb.classList.toggle("sleep", sleeping() && !awake() && !out && !has("watch"));
+      if (awake()) { idleSince = 0; jumpOut(); return; }
+      if (out && !drag) {
+        idleSince ||= Date.now();
+        if (Date.now() - idleSince > 1500) goHome();
+      } else if (!out && !drag) dock(null);  // stay glued to the slot (keyboard, rotation, scrolling)
+    }, 250);
+    addEventListener("resize", () => (out ? roamTo(x, y, null) : dock(null)));
+
+    // tap = wake it up / catch it; drag = move it
+    orb.addEventListener("pointerdown", (e) => {
+      drag = { px: e.clientX, py: e.clientY, ox: x, oy: y }; dragged = false; pressedLong = false;
+      orb.setPointerCapture(e.pointerId);
+      tipTimer = later(550, () => { if (!dragged) { pressedLong = true; flash("showtip", 2500); } });
+    });
+    orb.addEventListener("pointermove", (e) => {
+      if (!drag || !out) return;  // at home it stays put
+      const dx = e.clientX - drag.px, dy = e.clientY - drag.py;
+      if (!dragged && Math.hypot(dx, dy) < 8) return;
+      dragged = true; clearTimeout(tipTimer); roamTo(drag.ox + dx, drag.oy + dy, null); look(dx, dy);
+    });
+    const endDrag = () => { clearTimeout(tipTimer); if (dragged) { holdUntil = Date.now() + 8000; look(0, 0); } drag = null; };
+    orb.addEventListener("pointerup", endDrag);
+    orb.addEventListener("pointercancel", endDrag);
+    orb.addEventListener("click", () => {
+      if (dragged || pressedLong) { dragged = pressedLong = false; return; }
+      // caught: end the conversation (send what you'd said, or hush mid-sentence) — once its eye closes it flies home
+      if (has("listening")) { const wasTalk = talk.active; talkEnd(); stopRec(!wasTalk || vadSpoke); return; }
+      if (has("speaking")) { talkEnd(); player?.pause(); furiousSource?.stop?.(); return; }
+      if (has("thinking")) { talkEnd(); return; }
+      if (out) { talkEnd(); goHome(); return; }
+      talkStart();  // open the eye, jump out, and just talk
+    });
+    let tipTimer = null;  // press and hold: "TUF DSA · 42 min left"
+    orb.addEventListener("contextmenu", (e) => e.preventDefault());
+    orb.addEventListener("mouseenter", () => orb.classList.add("showtip"));
+    orb.addEventListener("mouseleave", () => orb.classList.remove("showtip"));
+
+    // it watches you: the pupil follows your taps while its eye is open
+    document.addEventListener("pointerdown", (e) => {
+      if (!orb.contains(e.target) && (awake() || has("peek") || has("watch"))) lookAt(e.clientX, e.clientY);
+    }, { capture: true });
+    // bring the cursor (or a finger) near and it opens its eye to follow you — just looking, not listening;
+    // once you're still for 2 s it closes again
+    let watchTimer = null;
+    document.addEventListener("pointermove", (e) => {
+      if (drag || screenOpen()) return;
+      if (awake() || has("peek")) { lookAt(e.clientX, e.clientY); return; }
+      const [cx, cy] = center(), near = Math.hypot(e.clientX - cx, e.clientY - cy) < Math.max(170, orb.offsetWidth * k * 2.4);
+      if (!near && !has("watch")) return;
+      orb.classList.add("watch");
+      lookAt(e.clientX, e.clientY);
+      clearTimeout(watchTimer);
+      watchTimer = later(2000, () => { orb.classList.remove("watch"); if (!awake()) look(0, 0); });
+    }, { passive: true });
+
+    // react to every new TRINETRA line (after the history has loaded)
+    let ready = false; later(2500, () => { ready = true; });
+    new MutationObserver((muts) => {
+      if (!ready) return;
+      for (const m of muts) for (const n of m.addedNodes) {
+        if (!n.classList?.contains("tri")) continue;
+        if (n.classList.contains("angry")) { flash("shake", 700); window.trinetraFlash("angry"); }
+        else if (n.classList.contains("firm") || n.classList.contains("annoyed")) window.trinetraFlash("firm");
+        else if (n.classList.contains("gentle")) window.trinetraFlash("caring");
+        if (n.classList.contains("proud")) flash("happy", 1600);
+        if (!voiceOn) flash("say", 2600);  // muted: still opens its eye to "say" it
+      }
+    }).observe(log, { childList: true });
+
+    // the time ring: how much of the current block is left
+    async function timeRing() {
+      try {
+        const now = new Date(), day = now.toLocaleDateString("en-CA");
+        const rows = await (await fetch(`/today?days=1&start_day=${day}`)).json();
+        const at = (hm) => { const [h, m] = hm.split(":").map(Number); const d = new Date(now); d.setHours(h, m, 0, 0); return d; };
+        const cur = rows.map((t) => { const s = at(t.start); let e = at(t.end); if (e <= s) e = new Date(e.getTime() + 864e5); return { ...t, s, e }; })
+                        .find((t) => t.s <= now && now < t.e && (t.status === "planned" || t.status === "started"));
+        if (!cur) { tbar.classList.remove("on"); tip.textContent = "Free time"; return; }
+        const left = (cur.e - now) / (cur.e - cur.s), mins = Math.round((cur.e - now) / 60000);
+        tbar.classList.add("on"); tbar.firstElementChild.style.width = `${(left * 100).toFixed(1)}%`;
+        tbar.classList.toggle("low", mins <= 10);
+        tip.textContent = `${cur.title} · ${mins} min left`;
+        orb.setAttribute("aria-label", `TRINETRA — ${tip.textContent}. Tap to talk`);
+      } catch {}
+    }
+    timeRing(); setInterval(timeRing, 60000);
+
+    requestAnimationFrame(() => { dock(null); orb.classList.add("docked"); later(1500, roam); later(3000, blink); later(4000, peek); });
+  })();
+
+</script>
+</body>
+</html>
