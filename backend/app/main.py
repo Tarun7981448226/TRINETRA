@@ -24,6 +24,16 @@ STATIC = Path(__file__).parent / "static"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 
+class CachedStatic(StaticFiles):
+    """Instrument samples and the music model never change in place: let browsers and the CDN keep them."""
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        if "/music/" in str(args[0] if args else kwargs.get("full_path", "")):
+            resp.headers["Cache-Control"] = "public, max-age=604800, s-maxage=2592000"
+        return resp
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
 
@@ -52,7 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(guest_api.public)
     app.include_router(guest_api.private)
     app.include_router(guest_api.look_router)
-    app.mount("/static", StaticFiles(directory=STATIC), name="static")
+    app.mount("/static", CachedStatic(directory=STATIC), name="static")
 
     # The service worker must be served from the root so it controls the whole app.
     @app.get("/sw.js", include_in_schema=False)

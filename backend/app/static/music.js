@@ -64,14 +64,20 @@
     return (sets[name] ??= (async () => {
       const [lo, hi] = SETS[name], notes = [];
       for (let m = lo - (lo % 4); m <= hi; m += 4) if (m >= lo - 2) notes.push(m);
-      const got = await Promise.all(notes.map(async (m) => {
+      // start as soon as most are in (a slow one fills in later; until then its neighbour plays, shifted)
+      const bank = { keys: [], map: new Map() };
+      let settled = 0, ready;
+      const enough = new Promise((ok) => (ready = ok));
+      notes.forEach(async (m) => {
         try {
           const raw = await (await fetch(`${BASE}samples/${name}/${m}.mp3`)).arrayBuffer();
-          return [m, await new Promise((ok, no) => audio().decodeAudioData(raw, ok, no))];
-        } catch { return null; }
-      }));
-      const map = new Map(got.filter(Boolean));
-      return map.size ? { keys: [...map.keys()].sort((a, b) => a - b), map } : null;
+          bank.map.set(m, await new Promise((ok, no) => audio().decodeAudioData(raw, ok, no)));
+          bank.keys = [...bank.map.keys()].sort((a, b) => a - b);
+        } catch {}
+        if (++settled >= Math.ceil(notes.length * 0.75)) ready();
+      });
+      await Promise.race([enough, new Promise((ok) => setTimeout(ok, 2500))]);
+      return bank.keys.length ? bank : (await enough, bank.keys.length ? bank : null);
     })());
   }
   function makeRoom(c) {  // a soft hall: decaying noise as the reverb's impulse
