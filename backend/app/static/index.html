@@ -1432,6 +1432,7 @@
     if (!r.ok) throw new Error(d.detail || "That didn't work.");
     return d;
   }
+  let waQrTimer = null;
   async function loadWhatsApp() {
     let d;
     try { d = await (await fetch("/whatsapp")).json(); } catch { $("waLink").textContent = "I can't reach my brain right now."; return; }
@@ -1443,7 +1444,14 @@
       link.append(waEl("div", null, d.link.state === "logged_out" ? "You unlinked me. Scan again to link:" : "Scan this in WhatsApp → Settings → Linked devices → Link a device:"));
       const img = waEl("img", "wa-qr"); img.alt = "QR code to link WhatsApp"; img.src = "/whatsapp/qr?t=" + Date.now();
       img.onerror = () => { img.replaceWith(waEl("div", "muted", "The bridge is starting — the QR appears in a minute.")); };
-      link.append(img);
+      link.append(img, waEl("div", "muted", "The code changes every ~20 s; this one keeps itself fresh."));
+      clearInterval(waQrTimer);  // WhatsApp rotates the code: keep showing the current one, and notice when it's linked
+      waQrTimer = setInterval(async () => {
+        if (!$("waDrawer").classList.contains("open")) return clearInterval(waQrTimer);
+        const now = await (await fetch("/whatsapp")).json().catch(() => null);
+        if (now?.link?.state === "open") { clearInterval(waQrTimer); loadWhatsApp(); }
+        else img.src = "/whatsapp/qr?t=" + Date.now();
+      }, 10_000);
     }
     $("waAuto").checked = d.autopilot;
     $("waAuto").onchange = async (e) => { await waPost("/autopilot", { on: e.target.checked }).catch(() => {}); loadWhatsApp(); };
