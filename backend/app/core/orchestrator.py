@@ -76,6 +76,10 @@ class Orchestrator:
                 continue  # planned agent, not built yet
             ctx.spec = spec
             t0 = time.perf_counter()
+            before = {k: id(v) for k, v in ctx.notes.items()}
+            if spec.id == "core_orchestrator":  # TRINETRA decides with its managers' reports in hand
+                from app.core import briefing
+                ctx.notes["briefing"] = briefing.reports(ctx)
             try:
                 result = await spec.handler(ctx)
             except Exception:
@@ -86,6 +90,10 @@ class Orchestrator:
                 continue
             finally:
                 ctx.notes.setdefault("timings_ms", {})[spec.id] = round((time.perf_counter() - t0) * 1000)
+                found = [k for k, v in ctx.notes.items() if before.get(k) != id(v) and k not in ("timings_ms", "briefing")]
+                if found:  # credit the findings to the agent's team (its manager reports them up)
+                    team = ctx.notes.setdefault("_by_council", {}).setdefault(spec.council, [])
+                    team += [k for k in found if k not in team]
             ran.append(spec.id)
             if result is None:
                 continue

@@ -123,6 +123,9 @@ async def core(ctx: AgentContext) -> AgentResult:
 
     history = ctx.db.scalars(select(Message).order_by(Message.id.desc()).limit(12)).all()
     context = _today_context(ctx)
+    from app.core import briefing
+    if reports := briefing.as_text(ctx.notes.get("briefing") or []):
+        context += "\n" + reports
     if changes := ctx.notes.get("timetable_changes"):
         context += "\nYou JUST made these timetable changes for them in response to this message. Confirm in a few natural words, like a friend would, e.g. Done, gym's on for 6 every weekday.:\n"
         context += "\n".join(f"- {c}" for c in changes)

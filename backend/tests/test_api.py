@@ -88,3 +88,12 @@ def test_external_event_ingest(client):
     assert r.status_code == 200
     assert r.json()["ran"] == ["data_collector", "emotion_engine", "distraction_watcher"]
     assert client.post("/events", json={"type": "BAD TYPE"}).status_code == 422
+
+
+def test_managers_report_to_trinetra(client, llm_calls):
+    """The org chart is real at run time: findings are credited to teams, managers condense them, TRINETRA reads them."""
+    from tests.conftest import trinetra_prompt
+    b = client.post("/chat", json={"text": "I feel nervous about my interview tomorrow"}).json()
+    teams = {r["team"]: r for r in b["notes"]["briefing"]}
+    assert teams["mentor_emotion"]["manager"] == "Emotion Engine" and "anxious" in teams["mentor_emotion"]["line"]
+    assert "Your teams' reports" in trinetra_prompt(llm_calls) and "Emotion Engine (mentor emotion)" in trinetra_prompt(llm_calls)
