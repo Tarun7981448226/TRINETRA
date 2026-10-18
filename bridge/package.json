@@ -1,0 +1,19 @@
+{
+  "name": "trinetra-whatsapp-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TRINETRA's WhatsApp link (Baileys): listens, reports to TRINETRA, sends only what it decides",
+  "type": "module",
+  "main": "index.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "pg": "8.23.1",
+    "pino": "10.4.0",
+    "qrcode": "1.5.4"
+  }
+}

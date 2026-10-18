@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import guest as guest_api
+from app.api import whatsapp as whatsapp_api
 from app.api.routes import router
 from app.config import get_settings
 from app.core import scheduler
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(guest_api.public)
     app.include_router(guest_api.private)
     app.include_router(guest_api.look_router)
+    app.include_router(whatsapp_api.router)
     app.mount("/static", CachedStatic(directory=STATIC), name="static")
 
     # The service worker must be served from the root so it controls the whole app.

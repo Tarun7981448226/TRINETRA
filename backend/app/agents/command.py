@@ -276,6 +276,13 @@ async def core(ctx: AgentContext) -> AgentResult:
         context += (f"\nHe asked you to back off, so you just turned your OPTIONAL nudges (check-in extras, streak cheers, "
                     f"behind-schedule talks, your own ideas) off until {until}. Reminders he set himself and his wake-up "
                     "still come. Tell him that in a sentence, without arguing, and that he can say 'nudge me again' anytime.")
+    if until := ctx.notes.get("wa_session_until"):
+        context += (f"\nHe just told you he's busy, so you're now looking after his WhatsApp until {until}: you'll answer "
+                    "simple messages the way he writes (with a small 🤖), and anything urgent, about money, plans, codes, groups "
+                    "or from strangers goes to him. If he opens WhatsApp you step back. Confirm that in one or two short "
+                    "sentences, with the end time.")
+    if ended := ctx.notes.get("wa_session_ended"):
+        context += f"\nHe's back, so you stopped looking after his WhatsApp. What happened meanwhile: {ended} Tell him briefly."
     if forgot := ctx.notes.get("forgotten"):
         if FORGET_THAT.search(text):
             context += (f"\nHe asked you to forget what he just told you. You put these away for good (they won't come up "

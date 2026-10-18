@@ -476,11 +476,17 @@ async def _beat(db: Session, core: Orchestrator, now: datetime | None) -> dict:
     settled = autonomy.settle(db, now)  # how did its own decisions land? (teaches the policy)
     idea = await initiative_watch(db, core)
     reflected = await reflect_watch(db, core)
+    from app.core import whatsapp
+    try:
+        wa = await whatsapp.tick(db, now)  # WhatsApp sessions: end on time, take over again when he leaves
+    except Exception:
+        log.exception("whatsapp tick failed")
+        wa = None
     forgotten = guest.sweep(db, now)
     digest = guest.digest(db, now)
     db.commit()
     return {"fired": fired, "routines_extended": extended, "nightly": nightly_ran, "planned_tomorrow": planned, "weekly": weekly_ran,
-            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "decisions_settled": settled, "initiative": idea, "reflected": reflected, "visitor_digest": bool(digest)}
+            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "decisions_settled": settled, "initiative": idea, "reflected": reflected, "visitor_digest": bool(digest), "whatsapp": wa}
 
 
 async def run_forever(session_factory: sessionmaker, core: Orchestrator) -> None:

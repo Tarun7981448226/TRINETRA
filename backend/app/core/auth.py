@@ -17,7 +17,8 @@ COOKIE = "trinetra_session"
 # Reachable without logging in: the login page, health check, what iOS needs to install the app,
 # and the portfolio widget's endpoints.
 PUBLIC = ("/login", "/health", "/manifest.webmanifest", "/sw.js", "/static/", "/cron/", "/sc/",  # own secrets
-          "/guest/")  # portfolio visitors: per-visit tokens, public facts only
+          "/guest/",  # portfolio visitors: per-visit tokens, public facts only
+          "/whatsapp/event")  # the WhatsApp bridge: its own key (TRINETRA_BRIDGE_KEY)
 
 
 def session_token(passcode: str, secret: str) -> str:

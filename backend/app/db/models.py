@@ -349,3 +349,47 @@ class JournalEntry(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     text: Mapped[str] = mapped_column(Text)
+
+
+# ---------- WhatsApp autopilot (the Baileys bridge on Render; TRINETRA replies like Tarun while he's busy) ----------
+
+class WaContact(Base):
+    """Someone Tarun chats with on WhatsApp. `auto_ok` = TRINETRA may answer simple messages for him."""
+
+    __tablename__ = "wa_contacts"
+
+    jid: Mapped[str] = mapped_column(String(80), primary_key=True)  # 9198…@s.whatsapp.net, or …@g.us for a group
+    name: Mapped[str | None] = mapped_column(String(120))
+    is_group: Mapped[bool] = mapped_column(Boolean, default=False)
+    known: Mapped[bool] = mapped_column(Boolean, default=False)  # he has written to them himself (not a stranger)
+    auto_ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class WaMessage(Base):
+    """One WhatsApp text, either way. Only text is kept (no media), and only what style learning and the log need."""
+
+    __tablename__ = "wa_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    wa_id: Mapped[str | None] = mapped_column(String(120), unique=True)  # WhatsApp's own id (no duplicates)
+    jid: Mapped[str] = mapped_column(String(80), index=True)
+    from_me: Mapped[bool] = mapped_column(Boolean, default=False)
+    by_trinetra: Mapped[bool] = mapped_column(Boolean, default=False)
+    text: Mapped[str] = mapped_column(Text)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    handled: Mapped[str | None] = mapped_column(String(20))  # pending / replied / for_you / skipped / history
+    note: Mapped[str | None] = mapped_column(Text)  # why it went to Tarun, or the draft it suggested
+
+
+class WaSession(Base):
+    """"I'm busy for 2 hours": TRINETRA looks after WhatsApp until `until`, and pauses while he's online."""
+
+    __tablename__ = "wa_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    state: Mapped[str] = mapped_column(String(10), default="active")  # active / paused / ended
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    log: Mapped[list | None] = mapped_column(JSON(none_as_null=True))  # [{"jid", "name", "did": replied|for_you, "text"}]

@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     data_dir: Path = ROOT / "data"
     trinetra_shortcut_key: str = ""  # lets iOS Shortcuts call /wake, /now and /report audio (nothing else)
     trinetra_cron_secret: str = ""  # the Cloudflare cron proves itself with this; empty = /cron disabled
+    trinetra_bridge_url: str = ""  # the WhatsApp bridge on Render (bridge/), e.g. https://trinetra-whatsapp.onrender.com
+    trinetra_bridge_key: str = ""  # shared secret between TRINETRA and the bridge, both ways; empty = WhatsApp off
     vapid_private_pem: str = ""  # in the cloud the push keys come from env vars (no disk)
     vapid_public_key: str = ""
     agents_dir: Path = ROOT / "agents"

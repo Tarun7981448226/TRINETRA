@@ -2,6 +2,7 @@
 export default {
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(beat(env));
+    if (env.BRIDGE_URL) ctx.waitUntil(wake(env.BRIDGE_URL));  // the WhatsApp bridge: Render's free plan sleeps after 15 idle minutes
   },
   // Visiting the worker URL just says whether TRINETRA answered (no details — this URL is public).
   async fetch(_req, env) {
@@ -24,5 +25,13 @@ async function beat(env) {
   } catch (e) {
     console.error("tick error", e);
     return { error: String(e) };
+  }
+}
+
+async function wake(url) {
+  try {
+    await fetch(`${url}/health`, { signal: AbortSignal.timeout(20_000) });
+  } catch (e) {
+    console.error("bridge wake error", String(e));
   }
 }

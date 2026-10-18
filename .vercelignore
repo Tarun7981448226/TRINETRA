@@ -12,3 +12,5 @@ backend/Dockerfile
 ROADMAP.md
 /music
 /training
+/bridge
+/render.yaml

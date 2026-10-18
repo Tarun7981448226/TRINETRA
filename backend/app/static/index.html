@@ -139,6 +139,20 @@
   .orb.showtip .tip { opacity: 1; }
   @media (max-width: 520px) { .orb { --size: 70px; } }
   @media (prefers-reduced-motion: reduce) { .orb.gliding { transition: none; } }
+  /* ---- 💬 WhatsApp autopilot ---- */
+  .wa-card { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; }
+  .wa-card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+  .wa-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 6px 0; }
+  .wa-row + .wa-row { border-top: 1px solid var(--line); }
+  .wa-row small, .wa-card .muted { color: var(--muted); font-size: 12px; }
+  .wa-row input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent-ink); flex: none; }
+  .wa-card .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .wa-card .chips button { background: var(--panel); color: var(--text); border: 1px solid var(--line); padding: 7px 12px; font-size: 13px; font-weight: 500; }
+  .wa-qr { display: block; width: 240px; max-width: 100%; margin: 8px auto; border-radius: 10px; border: 1px solid var(--line); }
+  .wa-item { padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; } .wa-item:first-of-type { border-top: 0; }
+  .wa-item b { font-weight: 600; } .wa-item .did { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-left: 6px; }
+  .wa-item .did.replied { color: var(--proud); } .wa-item .did.for_you { color: var(--accent-ink); }
+  .wa-item .wa-why { color: var(--muted); font-size: 12px; margin-top: 2px; }
   /* ---- 🎨 character screen ---- */
   .chr-stage { height: 190px; display: grid; place-items: center; margin: 6px 0 12px; background: radial-gradient(ellipse at 50% 60%, #f1ece3, transparent 70%); border-radius: 16px; }
   .chr-stage > div { width: 150px; height: 150px; }
@@ -331,6 +345,7 @@
       <button class="icon" id="dayBtn" title="My timetable">📅</button>
       <button class="icon" id="memBtn" title="What I remember">🧠</button>
       <button class="icon" id="visBtn" title="Portfolio visitors">👥</button>
+      <button class="icon" id="waBtn" title="WhatsApp autopilot">💬</button>
       <button class="icon" id="chrBtn" title="My look">🎨</button>
     </div>
   </header>
@@ -365,6 +380,18 @@
       <button type="submit">Save</button></div>
     </form>
     <div id="visitors"></div>
+  </section></div>
+  <div id="waDrawer" class="drawer"><section>
+    <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>WhatsApp autopilot</h2></div>
+    <p>When you're busy and offline, I answer the simple messages the way you write (with a 🤖). Anything urgent, about money, codes, plans, groups or from strangers waits for you. Open WhatsApp and I step back.</p>
+    <div class="wa-card" id="waLink"></div>
+    <div class="wa-card">
+      <div class="wa-row"><span>Autopilot<br><small>Off = I never reply, even when you're busy</small></span><input type="checkbox" id="waAuto" aria-label="Autopilot on"></div>
+    </div>
+    <div class="wa-card" id="waSession"></div>
+    <div class="wa-card"><h3>What happened</h3><div id="waLog"></div></div>
+    <div class="wa-card" id="waStyle"></div>
+    <div class="wa-card"><h3>People</h3><p class="muted" style="margin:0 0 4px">Untick anyone I should never reply to.</p><div id="waPeople"></div></div>
   </section></div>
   <div id="askDrawer" class="drawer"><section>
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>A visitor is asking</h2></div>
@@ -527,7 +554,8 @@
   const LABELS = { start: "▶️ Starting", snooze: "⏰ 10 min", skip: "⏭ Skip", onit: "👍 On it",
                    done: "✅ Done", partly: "◐ Partly", skipped: "⏭ Skipped",
                    approve: "✅ Do it", reject: "✋ Cancel", kept: "✅ Kept it", broken: "❌ Didn't",
-                   accept: "✅ Your version", original: "⚡ Exactly what I said" };
+                   accept: "✅ Your version", original: "⚡ Exactly what I said",
+                   busy30: "⏳ 30 min", busy60: "⏳ 1 hour", busy120: "⏳ 2 hours", busy_tonight: "🌙 Till tonight", not_busy: "🙋 I'll reply" };
 
   const redAlerts = {};  // message id → the alert, for the 🚨 screen
   function add(text, who, mood, meta) {
@@ -1269,7 +1297,7 @@
                     report: ["repDrawer", loadReports], memory: ["drawer", loadMems], wake: ["wakeScreen", loadWake],
                     visitors: ["visDrawer", loadVisitors], ask: ["askDrawer", loadAsk], reply: ["replyDrawer", loadReply],
                     alert: ["alertScreen", loadAlert], courses: ["crsDrawer", loadCourses], proof: ["proofDrawer", loadProof], journal: ["jrnDrawer", loadJournal],
-                    character: ["charDrawer", loadCharacter] };
+                    character: ["charDrawer", loadCharacter], whatsapp: ["waDrawer", loadWhatsApp] };
   function closeScreens() {
     for (const [id] of Object.values(SCREENS)) $(id).classList.remove("open");
     $("plSheet").classList.remove("open"); $("nodeSheet").classList.remove("open");
@@ -1288,12 +1316,13 @@
   addEventListener("popstate", () => { const n = location.hash.slice(1); screenOf(n) ? showScreen(n) : closeScreens(); });
   addEventListener("keydown", (e) => { if (e.key === "Escape") back(); });
   document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
-  for (const id of ["drawer", "repDrawer", "goalDrawer", "wakeScreen", "visDrawer", "askDrawer", "charDrawer"]) $(id).onclick = (e) => { if (e.target.id === id) back(); };
+  for (const id of ["drawer", "repDrawer", "goalDrawer", "wakeScreen", "visDrawer", "askDrawer", "charDrawer", "waDrawer"]) $(id).onclick = (e) => { if (e.target.id === id) back(); };
   $("dayBtn").onclick = () => go("timetable");
   $("goalBtn").onclick = () => go("goals");
   $("repBtn").onclick = () => go("report");
   $("memBtn").onclick = () => go("memory");
   $("visBtn").onclick = () => go("visitors");
+  $("waBtn").onclick = () => go("whatsapp");
   $("crsBtn").onclick = () => go("courses");
   $("chrBtn").onclick = () => go("character");
   {  // deep link (e.g. a notification opens /#report): put the dashboard underneath so Back works
@@ -1394,6 +1423,83 @@
     f.reset();
     $("ownerPassState").textContent = r.ok ? "Saved ✓ Only a hash is kept, so I can't show it to anyone, not even you." : "Couldn't save it. Try again.";
   };
+  // ---- 💬 WhatsApp autopilot ----
+  const waTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const waEl = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  async function waPost(path, body) {
+    const r = await fetch("/whatsapp" + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || "That didn't work.");
+    return d;
+  }
+  async function loadWhatsApp() {
+    let d;
+    try { d = await (await fetch("/whatsapp")).json(); } catch { $("waLink").textContent = "I can't reach my brain right now."; return; }
+    const link = $("waLink"); link.innerHTML = "";
+    link.append(waEl("h3", null, "Link"));
+    if (!d.configured) link.append(waEl("div", "muted", "The WhatsApp bridge isn't set up yet (Render + TRINETRA_BRIDGE_URL / TRINETRA_BRIDGE_KEY)."));
+    else if (d.link.state === "open") link.append(waEl("div", null, `✅ Linked${d.link.me ? " as " + d.link.me : ""}. ${d.online ? "You're on WhatsApp right now." : ""}`));
+    else {
+      link.append(waEl("div", null, d.link.state === "logged_out" ? "You unlinked me. Scan again to link:" : "Scan this in WhatsApp → Settings → Linked devices → Link a device:"));
+      const img = waEl("img", "wa-qr"); img.alt = "QR code to link WhatsApp"; img.src = "/whatsapp/qr?t=" + Date.now();
+      img.onerror = () => { img.replaceWith(waEl("div", "muted", "The bridge is starting — the QR appears in a minute.")); };
+      link.append(img);
+    }
+    $("waAuto").checked = d.autopilot;
+    $("waAuto").onchange = async (e) => { await waPost("/autopilot", { on: e.target.checked }).catch(() => {}); loadWhatsApp(); };
+    const ses = $("waSession"); ses.innerHTML = ""; ses.append(waEl("h3", null, "Right now"));
+    const chips = waEl("div", "chips");
+    if (d.session) {
+      ses.append(waEl("div", null, d.session.state === "paused" ? `⏸ Paused — you're on WhatsApp. I take over again when you leave (until ${waTime(d.session.until)}).`
+                                                               : `🤖 Looking after WhatsApp until ${waTime(d.session.until)}.`));
+      for (const [label, m] of [["+30 min", 30], ["+1 hour", 60], ["End now", 0]]) {
+        const b = waEl("button", null, label); b.onclick = async () => { await waPost("/session", { minutes: m }).catch(() => {}); loadWhatsApp(); }; chips.append(b);
+      }
+    } else {
+      ses.append(waEl("div", "muted", "Not on. Say “I'm busy for 2 hours” to me, or tap:"));
+      for (const [label, m] of [["30 min", 30], ["1 hour", 60], ["2 hours", 120]]) {
+        const b = waEl("button", null, label); b.onclick = async () => { await waPost("/session", { minutes: m }).catch(() => {}); loadWhatsApp(); }; chips.append(b);
+      }
+    }
+    ses.append(chips);
+    const logBox = $("waLog"); logBox.innerHTML = "";
+    if (!d.recent.length) logBox.append(waEl("div", "muted", "Nothing yet."));
+    for (const m of d.recent) {
+      const item = waEl("div", "wa-item"), top = waEl("div");
+      top.append(waEl("b", null, m.name), waEl("span", "did " + m.did, m.did === "replied" ? "I replied" : "for you"), waEl("span", "muted", "  " + waTime(m.at)));
+      item.append(top, waEl("div", null, "“" + m.text + "”"));
+      if (m.note) item.append(waEl("div", "wa-why", m.did === "replied" ? "🤖 " + m.note : m.note));
+      logBox.append(item);
+    }
+    const st = $("waStyle"); st.innerHTML = ""; st.append(waEl("h3", null, "How you write"));
+    const sc = d.style.score;
+    st.append(waEl("div", null, d.style.learned_from ? `Learned from ${d.style.learned_from} of your replies` + (d.style.people ? `, with a style for ${d.style.people} people.` : ".")
+                                                   : "No replies to learn from yet: link WhatsApp, or import a chat below."));
+    if (sc) st.append(waEl("div", null, `Sounds like you: ${sc.value}/100 (tested on ${sc.tested} of your real messages).`));
+    const row = waEl("div", "chips");
+    const test = waEl("button", null, "🧪 Test how much I sound like you");
+    test.onclick = async () => { test.disabled = true; test.textContent = "Testing… (about a minute)";
+      try { const r = await waPost("/style/test", {}); test.textContent = `Sounds like you: ${r.score}/100`; } catch (e) { test.textContent = e.message; } };
+    const pick = waEl("input"); pick.type = "file"; pick.accept = ".txt,text/plain"; pick.hidden = true;
+    const imp = waEl("button", null, "📥 Import a chat export");
+    imp.onclick = () => pick.click();
+    pick.onchange = async () => {
+      const f = pick.files[0]; if (!f) return;
+      const chat = (f.name.match(/with (.+?)(\.txt)?$/i)?.[1] || f.name.replace(/\.txt$/i, "")).trim();
+      imp.textContent = "Reading…";
+      try { const r = await waPost("/import", { text: await f.text(), chat, my_name: "Tarun" }); imp.textContent = `Added ${r.added} messages ✓`; loadWhatsApp(); }
+      catch (e) { imp.textContent = e.message; }
+    };
+    row.append(test, imp, pick); st.append(row);
+    st.append(waEl("div", "muted", "Export: open a chat in WhatsApp → contact name → Export chat → Without media."));
+    const ppl = $("waPeople"); ppl.innerHTML = "";
+    if (!d.contacts.length) ppl.append(waEl("div", "muted", "People appear here once you've chatted with them."));
+    for (const c of d.contacts) {
+      const r = waEl("label", "wa-row"), box = waEl("input"); box.type = "checkbox"; box.checked = c.auto_ok;
+      box.onchange = () => waPost("/contacts", { jid: c.jid, auto_ok: box.checked }).catch(() => { box.checked = !box.checked; });
+      r.append(waEl("span", null, c.name), box); ppl.append(r);
+    }
+  }
   async function loadVisitors() {
     fetch("/visitors/password").then((r) => r.json()).then((d) => {
       if (!d.set) $("ownerPassState").textContent = "Not set yet. Until you set one, I can't tell it's you on the portfolio.";

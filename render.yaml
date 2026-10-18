@@ -1,0 +1,19 @@
+# Render Blueprint: TRINETRA's WhatsApp bridge (bridge/). Free plan; TRINETRA's heartbeat pings /health every minute.
+services:
+  - type: web
+    name: trinetra-whatsapp
+    runtime: node
+    plan: free
+    rootDir: bridge
+    buildCommand: npm ci --omit=dev
+    startCommand: node index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TRINETRA_URL
+        value: https://trinetra-tarun.vercel.app
+      - key: BRIDGE_KEY  # the same value as TRINETRA_BRIDGE_KEY on Vercel
+        sync: false
+      - key: DATABASE_URL  # TRINETRA's Neon database (the bridge keeps WhatsApp's login keys there)
+        sync: false

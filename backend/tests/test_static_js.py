@@ -25,4 +25,5 @@ def test_script_parses(name, code, tmp_path):
     f = tmp_path / "s.mjs" if re.search(r"^\s*(import|export)\s", code, re.M) else tmp_path / "s.js"
     f.write_text(code)
     r = subprocess.run([NODE, "--check", str(f)], capture_output=True, text=True)
-    assert r.returncode == 0, f"{name}: {r.stderr.strip().splitlines()[-1] if r.stderr.strip() else r.stderr}"
+    err = [line for line in r.stderr.splitlines() if "Error" in line or "^" in line or line.strip().startswith(("const", "let", "var"))]
+    assert r.returncode == 0, f"{name}: " + " | ".join(err[:4])

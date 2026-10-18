@@ -9,5 +9,7 @@ crons = ["* * * * *"]
 
 [vars]
 TRINETRA_URL = "https://trinetra-tarun.vercel.app"
+# The WhatsApp bridge on Render (bridge/). Set once it's deployed, then: npx wrangler deploy
+# BRIDGE_URL = "https://trinetra-whatsapp.onrender.com"
 
 # Secret (never commit): npx wrangler secret put TRINETRA_CRON_SECRET

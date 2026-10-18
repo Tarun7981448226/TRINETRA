@@ -17,6 +17,8 @@ Each message goes through these steps:
 - Messages about feelings avoid providers that train on free-tier prompts.
 - Visitors only ever see the public brief.
 
+**WhatsApp autopilot:** while he's busy and offline, TRINETRA answers simple WhatsApp messages the way he writes, with a 🤖. Anything serious goes to him, and it steps back the moment he opens WhatsApp. `bridge/` holds the always-on WhatsApp link (Render); `core/whatsapp.py` makes the decisions and `core/style.py` learns his style.
+
 ## Run it
 ```bash
 cp .env.example .env        # then paste your free GEMINI_API_KEY and/or GROQ_API_KEY

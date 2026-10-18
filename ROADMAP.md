@@ -8,7 +8,7 @@
 | 3b | Emotion Engine ✅ · Mentor ✅ (goals→milestones→approved weekly plan, promises + deadline check-ins, progressive overload, Sunday session, 🎯 screen) | ✅ |
 | 4 | Thinking before acting ✅ (Planner → Sleep Guardian, Buffer Manager, Deadline Tracker, Neural odds → Critic → Arbiter) + timetable dashboard (week grid / phone day view, voice edits) | ✅ |
 | 5 | Monitoring: Focus Guard · red alerts · silence · proof of work (TUF + Coursera) · Focus mode + places | ✅ |
-| 5b | Gmail + WhatsApp + n8n | ⬜ |
+| 5b | Gmail + WhatsApp + n8n | 🟡 WhatsApp autopilot built (2026-10-18); Gmail next |
 | 6 | ML brain: Neural Core ✅ (growing MLP, nightly retrain, completion prediction) · more models + coaching reports ⬜ | 🟡 |
 | 7 | Cloud LIVE ✅ (Vercel + Neon + Cloudflare cron, works with the Mac off) · remaining agents ⬜ | 🟡 |
 
@@ -35,7 +35,7 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 
 **Stage D · Communications** (Phase 5b)
 13. ⬜ Gmail triage + drafts · Google Calendar sync
-14. ⬜ WhatsApp listener/replier (smart-mix: auto-send vs ask first) · Telegram
+14. ✅ WhatsApp autopilot (busy sessions, his style, 🤖 tag, pauses when he's online) · ⬜ Telegram
 
 **Stage E · Ship**
 15. ⬜ Private GitHub repo — local commit done, push waiting on Tarun's OK
@@ -96,3 +96,11 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 - The managers' briefing runs before memory extraction finishes (they run side by side), so "remembered" never reaches TRINETRA's prompt for that turn.
 - No delete-everything action yet (archive ≠ delete); see PRIVACY.md.
 - Model-based evals share production's free-tier keys. Use separate keys before big runs (training/README.md).
+
+## WhatsApp autopilot (2026-10-18)
+- ✅ Bridge (`bridge/`, Baileys v7, Render free via `render.yaml`): login kept in Neon (`wa_auth`), "typing…" + 20–90 s delay, cancels when he shows up, 1 reply/chat/30 s, 20/hour, never groups.
+- ✅ Flow: offline message → "Are you busy?" (buttons: 30 min / 1 h / 2 h / till tonight / I'll reply) or "I'm busy for 2 hours" in chat → a session; he opens WhatsApp → pause; leaves → resume; time's up → summary.
+- ✅ Always his: groups, strangers, OTP/bank, money, plans, emergencies, anything personal; low model confidence.
+- ✅ Style: per-person profile + his most similar past replies (local embeddings); "sounds like you" test; chat-export import. 💬 screen in the app.
+- Next: a delete-my-WhatsApp-data button; maybe fine-tune a small open model on his own replies once there are thousands.
+- Known: WhatsApp refuses the "Desktop" link type now (428), so the bridge links as Chrome, which gets less history at link time. Imports fill the gap.
