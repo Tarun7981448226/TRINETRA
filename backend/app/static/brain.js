@@ -102,6 +102,9 @@
   .tb2-card { position: absolute; transform: translate(-50%, -100%); width: 230px; background: #12141f; color: #eceaf6; border: 1px solid #343850;
     border-radius: 12px; padding: 9px 11px; font-size: 12px; line-height: 1.4; box-shadow: 0 10px 30px rgba(0,0,0,.5); z-index: 8; pointer-events: none; }
   .tb2-card b { font-size: 13px; } .tb2-card .t { color: #f0a83a; font-size: 11px; } .tb2-card .st { font-size: 10.5px; color: #9a98b0; margin-top: 4px; }
+  .tb2-now { padding: 8px 14px; border-top: 1px solid #2c2a3b; font-size: 13px; color: #efedf7; background: #14131d; min-height: 20px; }
+  .tb2-now[hidden] { display: none; }
+  .tb2-now b { color: #7ee0c3; font-weight: 700; margin-right: 6px; }
   .tb2-bar { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid #2c2a3b; flex-wrap: wrap; align-items: center; }
   .tb2-bar input { flex: 1; min-width: 170px; background: #17161f; color: #efedf7; border: 1px solid #343850; border-radius: 16px; padding: 8px 12px; font-size: 16px; outline: none; }
   .tb2-bar input:focus { border-color: #f0a83a; }
@@ -376,6 +379,7 @@
       trace.forEach((st, i) => later(1600 + i * 2300, () => {
         if (run !== replayRun) return;
         const it = items.find((x) => x.t.id === st.team);
+        hooks.caption?.(`Step ${i + 1} of ${trace.length}`, `${it ? it.t.emoji + " " + it.t.title + " · " : ""}${st.did}`);
         const wire = it && wireSvg.querySelector(`.tb2-wire[data-team="${it.t.id}"]`);
         log(`${i + 1}. ${it ? it.t.emoji + " " + it.t.title + " · " : ""}${st.did}`);
         if (!it || it.t.id === "command") { say(ceoEl, short(st.did, 70), 2200, "ceo"); ceo.setEmotion("proud"); return; }
@@ -383,7 +387,7 @@
         wire?.classList.add("hot"); pulse(it.p, hub, 1100, "#7ee0c3");
         later(1500, () => wire?.classList.remove("hot"));
       }));
-      later(1600 + trace.length * 2300 + 600, () => { if (run === replayRun) { ceo.setEmotion("neutral"); mode = "work"; } });
+      later(1600 + trace.length * 2300 + 600, () => { if (run === replayRun) { ceo.setEmotion("neutral"); mode = "work"; hooks.caption?.("Done", "That's every step your message took. ▶ Replay to watch again."); } });
     }
     if (!still) { every(3800, () => signal()); every(330, () => agents[Math.floor(Math.random() * agents.length)]?.api.blink()); }
     if (!hooks.trace?.length) later(500, () => say(ceoEl, `I'm TRINETRA 👁️ ${data.total} agents in ${data.teams.length} teams, working live. Try “assemble”!`, 4000, "ceo"));
@@ -452,6 +456,7 @@
       <div class="tb2-head"><b>🧠 TRINETRA'S BRAIN</b><span class="sub"></span><span class="sp"></span>
         <button class="chat" type="button">💬 Chat</button><button class="x" type="button" aria-label="Close">✕</button></div>
       <div class="tb2-scroll"><div class="tb2-stage"></div></div>
+      <div class="tb2-now" hidden aria-live="polite"></div>
       <div class="tb2-bar"><button data-c="assemble">🧍 Assemble</button><button data-c="roles">❓ What do you do?</button>
         <button data-c="work">💼 Back to work</button><button data-c="report">⚡ Report</button><button data-c="how">📘 How it works</button>${opts.trace?.length ? '<button data-c="replay">▶ Replay my last message</button>' : ""}
         <input placeholder="Give the team an order… (try “assemble”)" aria-label="Order for the team" maxlength="80"></div></div>`;
@@ -465,7 +470,9 @@
       if (closed) return;
       data = d;
       if (!data?.teams?.length) { stage.innerHTML = `<div style="padding:30px;color:#9a98b0">The brain is resting for a moment — try again soon.</div>`; return; }
-      brain = build(stage, data, opts.look || {}, { roster: showRoster, trace: opts.trace });
+      const now = $(".tb2-now");
+      const caption = (head, text) => { now.hidden = false; now.textContent = ""; const b = document.createElement("b"); b.textContent = head; now.append(b, text); };
+      brain = build(stage, data, opts.look || {}, { roster: showRoster, trace: opts.trace, caption });
       if (scroll.scrollWidth > scroll.clientWidth) {  // a phone sees part of it: start on TRINETRA, swipe for the rest
         scroll.scrollLeft = (scroll.scrollWidth - scroll.clientWidth) * 0.45;
         const hint = document.createElement("div"); hint.className = "tb2-swipe"; hint.textContent = "← swipe to see the whole brain →";
