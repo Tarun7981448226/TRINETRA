@@ -59,15 +59,17 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def server_timing(request, call_next):  # where the time goes: the whole request, and opening DB connections
         import time
-        from app.db.session import connects
-        log, t0 = [], time.perf_counter()
-        token = connects.set(log)
+        from app.db.session import connects, queries
+        log, qs, t0 = [], [], time.perf_counter()
+        token, qtoken = connects.set(log), queries.set(qs)
         try:
             response = await call_next(request)
         finally:
             connects.reset(token)
+            queries.reset(qtoken)
         response.headers["Server-Timing"] = (f"app;dur={(time.perf_counter() - t0) * 1000:.0f}, "
-                                             f"db_connect;dur={sum(log) * 1000:.0f};desc=\"{len(log)} new\"")
+                                             f"db_connect;dur={sum(log) * 1000:.0f};desc=\"{len(log)} new\", "
+                                             f"db_query;dur={sum(qs) * 1000:.0f};desc=\"{len(qs)} queries\"")
         return response
     # The portfolio (another site) talks to /guest/* from the visitor's browser. No cookies cross over.
     app.add_middleware(CORSMiddleware, allow_origins=guest_api.ORIGINS, allow_methods=["GET", "POST"],

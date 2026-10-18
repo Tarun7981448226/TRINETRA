@@ -29,11 +29,23 @@ engine = make_engine(get_settings().database_url)
 
 # How many new database connections this request opened, and the time spent opening them (the Server-Timing header).
 connects: ContextVar[list | None] = ContextVar("connects", default=None)
+queries: ContextVar[list | None] = ContextVar("queries", default=None)
 
 
 @event.listens_for(engine, "do_connect")
 def _connect_started(dialect, conn_rec, cargs, cparams):
     conn_rec.info["t0"] = time.perf_counter()
+
+
+@event.listens_for(engine, "before_cursor_execute")
+def _query_started(conn, cursor, statement, params, context, executemany):
+    conn.info["q0"] = time.perf_counter()
+
+
+@event.listens_for(engine, "after_cursor_execute")
+def _query_done(conn, cursor, statement, params, context, executemany):
+    if (log := queries.get()) is not None:
+        log.append(time.perf_counter() - conn.info.pop("q0", time.perf_counter()))
 
 
 @event.listens_for(engine, "connect")
