@@ -231,3 +231,22 @@ def test_reflection_has_its_own_night_beat_once(client, llm_calls, monkeypatch):
         assert asyncio.run(scheduler.reflect_watch(db, core)) is True
         assert asyncio.run(scheduler.reflect_watch(db, core)) is False
     assert client.app.state.orchestrator.registry.specs["reflector"].triggers == ["reflect.nightly"]
+
+
+def test_quiet_mode_also_holds_nudges_from_his_own_taps(client, llm_calls):
+    """'Streak cheers are off' must be true even when the cheer comes from a button tap (source api, not scheduler)."""
+    import asyncio
+    from app.agents.planning import _speak_up
+    from app.config import get_settings
+    from app.core.orchestrator import AgentContext, IncomingEvent
+    with client.session_factory() as db:
+        autonomy.quieter(db)
+        db.commit()
+        ctx = AgentContext(event=IncomingEvent("task.done", {"task_id": 1}, "api"), db=db, settings=get_settings())
+        r = asyncio.run(_speak_up(ctx, instruction="cheer", fallback="🔥 7 days in a row", mood="proud",
+                                  meta={"kind": "streak"}, keep_mood=True, channel="web"))
+        assert r.reply is None and ctx.notes["held_back"]["kind"] == "streak"
+        autonomy.louder(db)
+        r = asyncio.run(_speak_up(ctx, instruction="cheer", fallback="🔥 7 days in a row", mood="proud",
+                                  meta={"kind": "streak"}, keep_mood=True, channel="web"))
+        assert r.reply  # back on: his taps get their cheer again
