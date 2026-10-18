@@ -104,7 +104,7 @@ async def router(ctx: AgentContext) -> None:
         fresh = [m for m in ctx.db.scalars(select(Memory).where(Memory.created_at >= since)) if not m.archived]
         for m in fresh:
             m.archived = True
-        ctx.notes["forgot"] = [m.content for m in fresh] or ["(nothing new to forget)"]
+        ctx.notes["forgotten"] = [m.content for m in fresh] or ["(nothing new to forget)"]
     if text.startswith(("✅", "✋", "⚡")):  # a button answer re-sent as a message isn't a request about nudges
         pass
     elif QUIETER.search(text):  # "stop nagging me": his call — optional nudges go quiet for a few days
@@ -251,7 +251,7 @@ async def core(ctx: AgentContext) -> AgentResult:
         context += (f"\nHe asked you to back off, so you just turned your OPTIONAL nudges (check-in extras, streak cheers, "
                     f"behind-schedule talks, your own ideas) off until {until}. Reminders he set himself and his wake-up "
                     "still come. Tell him that in a sentence, without arguing, and that he can say 'nudge me again' anytime.")
-    if forgot := ctx.notes.get("forgot"):
+    if forgot := ctx.notes.get("forgotten"):
         if FORGET_THAT.search(text):
             context += (f"\nHe asked you to forget what he just told you. You put these away for good (they won't come up "
                         f"again): {forgot}. Confirm in one short, warm sentence; don't repeat what it was.")

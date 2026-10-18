@@ -142,7 +142,7 @@ def test_forget_that_puts_away_what_it_just_learned(client, llm_calls):
         db.add_all([old, Memory(kind="person", content="His friend Ravi owes him money", importance=2)])
         db.commit()
     body = client.post("/chat", json={"text": "actually forget that, it's private"}).json()
-    assert body["notes"]["forgot"] == ["His friend Ravi owes him money"]
+    assert body["notes"]["forgotten"] == ["His friend Ravi owes him money"]
     assert not any("long-term memory" in c["messages"][0]["content"] for c in llm_calls)  # nothing new extracted from it
     assert "put these away for good" in trinetra_prompt(llm_calls)
     with client.session_factory() as db:
