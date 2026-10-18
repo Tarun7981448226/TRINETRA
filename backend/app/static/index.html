@@ -426,6 +426,9 @@
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>What I remember</h2></div>
     <p>I keep these permanently. Tap ✕ if something is wrong — or just tell me.</p>
     <div id="mems"></div>
+    <h3 style="margin:22px 0 4px">How I decide on my own</h3>
+    <p style="margin:0 0 8px">Optional nudges are my call: is it worth it, will you take it well, have you heard enough from me today? I learn from whether you answer.</p>
+    <div id="judge"></div>
   </section></div>
   <div class="orb" id="eye" role="button" aria-label="TRINETRA — tap to talk" title="Tap to talk · drag to move">
     <div class="float"><div class="buddy"></div></div>
@@ -777,7 +780,27 @@
   };
 
   // ---- memory drawer ----
+  async function loadJudge() {  // the Decider's policy and its last decisions, with reasons
+    const box = $("judge"); if (!box) return; box.innerHTML = "";
+    try {
+      const d = await (await fetch("/autonomy")).json();
+      const NAMES = { wellbeing: "💧 Wellbeing nudges", lag: "📉 Behind-schedule talks", initiative: "💡 My own ideas", why: "🎯 Your why", streak: "🔥 Streak cheers" };
+      for (const k of d.kinds) {
+        const row = document.createElement("div"); row.className = "mem";
+        const span = document.createElement("span");
+        span.textContent = `${NAMES[k.kind] || k.kind}: ${Math.round(k.p_engage * 100)}% chance you'll answer` + (k.settled ? ` (${k.engaged}/${k.settled})` : " (still learning)");
+        row.append(span); box.appendChild(row);
+      }
+      for (const r of d.recent.slice(0, 6)) {
+        const row = document.createElement("div"); row.className = "mem"; const span = document.createElement("span");
+        span.innerHTML = "<small></small>"; span.firstChild.textContent = `${r.action === "sent" ? "sent" : "held back"} · ${r.kind}${r.outcome ? " · " + r.outcome : ""}`;
+        span.append(r.reason); row.append(span); box.appendChild(row);
+      }
+    } catch {}
+  }
+
   async function loadMems() {
+    loadJudge();
     const box = $("mems"); box.innerHTML = "";
     const mems = await (await fetch("/memories")).json();
     if (!mems.length) { box.innerHTML = '<p>Nothing yet. Tell me about yourself.</p>'; return; }

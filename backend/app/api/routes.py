@@ -406,7 +406,9 @@ class MemoryIn(BaseModel):
 
 @router.get("/memories", response_model=list[MemoryOut])
 def list_memories(db: Session = Depends(get_db)):
-    return db.scalars(select(Memory).order_by(Memory.importance.desc(), Memory.id.desc())).all()
+    """What it remembers (archived trivia hidden): its own insights first, then by importance."""
+    from app.core import recall
+    return sorted(recall.live(db), key=lambda m: (m.kind != "insight", -(m.importance or 3), -m.id))
 
 
 @router.post("/memories", response_model=MemoryOut, status_code=201)
