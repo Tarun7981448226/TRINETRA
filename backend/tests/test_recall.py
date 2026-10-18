@@ -155,3 +155,11 @@ def test_dont_forget_is_not_forget():
         assert not FORGET_THAT.search(t), t
     for t in ("forget that", "don't remember that", "delete that memory", "that's private"):
         assert FORGET_THAT.search(t), t
+
+
+def test_reader_hears_hinglish_low_moods():
+    from app.core import feel
+    for t in ("bahut udaas hoon aaj", "thak gaya hoon yaar", "rona aa raha hai", "bahut tension ho rahi hai"):
+        assert feel.read(t)["low"], t
+    for t in ("aaj gym gaya, maza aaya", "kal milte hain"):
+        assert not feel.LOW_IDIOMS.search(t), t

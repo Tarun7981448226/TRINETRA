@@ -79,7 +79,10 @@ LOW_IDIOMS = re.compile(
     r"this|my dreams|trying)))|done with (everything|it all|this|life)|nothing matters|what'?s the point|"
     r"can'?t do (this|it) anymore|tired of (everything|it all|trying|life)|i'?m (a|such a) (failure|mess|loser)|"
     r"falling apart|breaking down|hate myself|feel (empty|numb|worthless|useless|stuck|lost|alone)|no one cares|"
-    r"nobody cares|so (alone|lonely)|burn(ed|t)? out)\b", re.I)
+    r"nobody cares|so (alone|lonely)|burn(ed|t)? out|"
+    # Hinglish: sad, exhausted, crying, alone, stressed, low, hurt
+    r"(bahut |bohot |kaafi )?(udaas|udas|dukhi)|thak (gaya|gayi) (hoon|hu|yaar)|rona aa raha|akela(pan)? (feel|lag)|"
+    r"tension (ho rahi|hai|mein)|mann nahi (lag|kar) raha|bura lag raha|dil (toot|dukh))\b", re.I)
 
 
 def read(text: str) -> dict:
