@@ -123,6 +123,11 @@ class RateLimitError(ProviderError):
     pass
 
 
+class JSONModeError(ProviderError):
+    """The model couldn't produce JSON for THIS prompt (e.g. it wanted to refuse a jailbreak in plain words). It says
+    nothing about the model's health, so the model is not benched."""
+
+
 async def _call(model: str, messages: list[dict], temperature: float, max_tokens: int, json_mode: bool,
                 reasoning: str | None = None) -> str:
     import httpx
@@ -144,6 +149,8 @@ async def _call(model: str, messages: list[dict], temperature: float, max_tokens
         r = await client.post(url, headers={"Authorization": f"Bearer {key}"}, json=body)
     if r.status_code == 429:
         raise RateLimitError(f"429 {r.text[:3000]}")  # long enough to include the quota id (PerDay vs per-minute)
+    if r.status_code == 400 and "json_validate_failed" in r.text:
+        raise JSONModeError(f"400 json_validate_failed from {model}")
     if r.status_code >= 400:
         raise ProviderError(f"{r.status_code} {r.text[:200]}")
     data = r.json()
@@ -188,6 +195,8 @@ async def complete(
                 last_model.set(model)
                 return text
             last_error = ProviderError(f"{model} returned an empty reply")
+        except JSONModeError as e:  # this prompt, not this model: try the next one, bench nobody
+            last_error = e
         except Exception as e:  # rate limit, outage, bad key — bench it and try the next one
             _bench(model, e)
             last_error = e
