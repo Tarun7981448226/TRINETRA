@@ -107,3 +107,22 @@ def test_initiative_asks_first_and_a_yes_goes_through_the_pipeline(client, monke
     assert r.status_code == 200
     assert any("Yes, do it: Move DSA practice to 9am" in s for s in seen)
     assert client.post(f"/proposals/{mid}/respond", json={"action": "approve"}).status_code == 409  # once
+
+
+def test_stop_nagging_me_is_respected(client, llm_calls):
+    from tests.conftest import trinetra_prompt
+    body = client.post("/chat", json={"text": "stop nagging me so much"}).json()
+    assert body["notes"]["quieter_until"] and "turned your OPTIONAL nudges" in trinetra_prompt(llm_calls)
+    with client.session_factory() as db:
+        v = autonomy.decide(db, "lag")
+        assert not v.send and "back off" in v.reason
+        assert autonomy.decide(db, "wellbeing", label="comforting").send  # care still gets through
+    client.post("/chat", json={"text": "ok you can nudge me again"})
+    with client.session_factory() as db:
+        assert autonomy.decide(db, "lag").send
+
+
+def test_knowing_nothing_is_said_honestly(client, llm_calls):
+    from tests.conftest import trinetra_prompt
+    client.post("/chat", json={"text": "what do you know about me?"})
+    assert "nothing saved yet" in trinetra_prompt(llm_calls)

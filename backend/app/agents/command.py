@@ -18,6 +18,10 @@ INTENT_PATTERNS: dict[str, str] = {
     "planning": r"\b(plan|schedule|timetable|remind|tomorrow|reschedule|move)\b",
 }
 # Signals that need care, not pressure. Overrides everything else.
+QUIETER = re.compile(r"\b(stop (nagging|pinging|bugging|spamming)( me)?|too many (notifications|reminders|nudges|messages)|"
+                     r"(fewer|less) (notifications|reminders|nudges)|leave me alone|you'?re (too )?(annoying|clingy)|"
+                     r"back off|stop bothering me)\b", re.I)
+LOUDER = re.compile(r"\b(nudge me again|you can (nag|nudge|ping) me again|(more|turn on) (nudges|reminders)|push me (more|harder))\b", re.I)
 CRISIS_LINE = ("If any part of you is thinking about ending your life or hurting yourself, please call or text 988 "
                "(the Suicide & Crisis Lifeline) right now, or reach someone you trust. You don't have to carry this alone.")
 
@@ -84,6 +88,13 @@ async def router(ctx: AgentContext) -> None:
     if demo := mood_modes.detect_demo(text):
         ctx.notes["demo"] = {"mode": demo[0], "target": demo[1]}
         return  # a one-off show — the lasting mode stays as it is
+    if QUIETER.search(text):  # "stop nagging me": his call — optional nudges go quiet for a few days
+        from app.core import autonomy
+        ctx.notes["quieter_until"] = autonomy.quieter(ctx.db)
+    elif LOUDER.search(text):
+        from app.core import autonomy
+        autonomy.louder(ctx.db)
+        ctx.notes["nudges_back"] = True
     asked, mode = mood_modes.detect_request(text)
     if asked:
         mood_modes.set_mode(ctx.db, mode)
@@ -110,6 +121,9 @@ def _today_context(ctx: AgentContext) -> str:
     if memories:
         lines.append("What you know about them:")
         lines += [f"- ({m.kind}) {m.content}" for m in memories]
+    else:
+        lines.append("What you know about them: nothing saved yet. If he asks what you know, say honestly that you're "
+                     "still getting to know him — don't describe his personality or habits.")
     return "\n".join(lines)
 
 
@@ -171,6 +185,12 @@ async def core(ctx: AgentContext) -> AgentResult:
         context += ("\nNothing in the timetable changed for this message. You CAN edit his timetable, so never say you "
                     "can't. If he asked for a change you didn't make, say what's missing (e.g. there's no gym block "
                     "tomorrow) and offer to add or move it.")
+    if until := ctx.notes.get("quieter_until"):
+        context += (f"\nHe asked you to back off, so you just turned your OPTIONAL nudges (check-in extras, streak cheers, "
+                    f"behind-schedule talks, your own ideas) off until {until}. Reminders he set himself and his wake-up "
+                    "still come. Tell him that in a sentence, without arguing, and that he can say 'nudge me again' anytime.")
+    if ctx.notes.get("nudges_back"):
+        context += "\nYou just turned your optional nudges back on because he asked. Say so in a few words."
     if changes := ctx.notes.get("timetable_changes"):
         context += "\nYou JUST made these timetable changes for them in response to this message. Confirm in a few natural words, like a friend would, e.g. Done, gym's on for 6 every weekday.:\n"
         context += "\n".join(f"- {c}" for c in changes)

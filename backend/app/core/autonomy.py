@@ -63,6 +63,38 @@ def p_engage(db: Session, kind: str) -> float:
     return (engaged + 1.5) / (n + 2)
 
 
+QUIET_DAYS = 3
+
+
+def quieter(db: Session, days: int = QUIET_DAYS) -> str:
+    """He said "stop nagging me": optional nudges stay quiet for a few days (care when he's low still gets through)."""
+    from app.core.timeutil import now_local
+    from app.db.models import KeyValue
+    until = _now() + timedelta(days=days)
+    row = db.get(KeyValue, "autonomy_quiet_until")
+    if row is None:
+        db.add(KeyValue(key="autonomy_quiet_until", value=until.isoformat()))
+    else:
+        row.value = until.isoformat()
+    return (now_local() + timedelta(days=days)).strftime("%A")
+
+
+def louder(db: Session) -> None:
+    from app.db.models import KeyValue
+    if row := db.get(KeyValue, "autonomy_quiet_until"):
+        db.delete(row)
+
+
+def quiet_until(db: Session) -> datetime | None:
+    from app.db.models import KeyValue
+    row = db.get(KeyValue, "autonomy_quiet_until")
+    try:
+        t = datetime.fromisoformat(row.value) if row and row.value else None
+    except ValueError:
+        return None
+    return t if t and t > _now() else None
+
+
 def decide(db: Session, kind: str, label: str | None = None) -> Verdict:
     now = _now()
     sent_since = lambda t, *where: db.scalar(select(func.count()).select_from(Decision).where(
@@ -76,6 +108,8 @@ def decide(db: Session, kind: str, label: str | None = None) -> Verdict:
     why = f"value {value:.2f} × P(engage) {p:.2f} − {recent} recent nudge(s) = {score:.2f}"
     if kind == "wellbeing" and label in ("comforting", "gentle"):
         return Verdict(True, max(score, THRESHOLD), "he's low — care always gets through · " + why)
+    if (q := quiet_until(db)) and not (kind == "wellbeing" and label in ("comforting", "gentle")):
+        return Verdict(False, score, f"he asked me to back off until {q:%a %d %b} · " + why)
     if today >= DAILY_BUDGET:
         return Verdict(False, score, f"daily budget used ({today}/{DAILY_BUDGET}) · " + why)
     if score >= THRESHOLD:
