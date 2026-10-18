@@ -60,3 +60,32 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
 - ✅ The Eye: a living amulet that lives in the mic's spot — tap once for a hands-free conversation (it hears when you stop, answers, listens again; 8 s of silence → home), follows your cursor, time ring shows the current block
 - ✅ On tarundeepreddy.com: greets visitors, learns their name, explains TRINETRA, 13-stop guided tour (~10 s a stop, architecture diagram per project), "what is Tarun doing now?" relayed live to the iPhone (60 s → asks for their email), 👥 visitor log, 21:30 digest, forgets visitors when they leave
 - Edit what visitors hear: backend/app/guest_brief.md (facts) and backend/app/core/tour.py (tour)
+
+## Thinks, remembers and decides on its own (overnight 2026-10-18)
+- ✅ Portfolio: one model call per turn reads the whole conversation (no more "Testing You" as a name). The doll opens the chat; 🧠 shows "How I think", and "how I answered ▶" replays the real steps live.
+- ✅ Own models, numpy only:
+  - private memory embeddings (Model2Vec potion-base-8M, int8)
+  - emotion reader trained on GoEmotions (test macro-F1 0.439, about 95% of BERT), plus rules for negation and despair idioms
+- ✅ Memory: Generative Agents retrieval, nightly Reflector insights, Forgetter, Mem0-style retire-when-untrue.
+- ✅ Decisions:
+  - The Decider for optional nudges learns P(reply) per kind and time of day.
+  - "stop nagging me" / "nudge me again".
+  - Initiative proposes one evening idea and asks first.
+  - Self-critique checks the tone of judgmental nudges.
+- ✅ Managers report to TRINETRA at run time; the app shows "🧠 how I decided".
+- ✅ Safety:
+  - crisis line (988 / Tele-MANAS)
+  - staged emotional support (explore → comfort → act)
+  - no invented history
+  - portfolio never claims an unlisted skill
+- ✅ Timetable guards (exact time, named day, no surprise routine wipes, whole-routine moves, confirmations true to changes), each from a live eval with real models.
+- ✅ Reliability:
+  - heartbeat lease, per-call timeouts and budget, rate-limit memory across cold starts, agent failures roll back
+  - memory extraction runs alongside the reply (3.3 s → 1.3 s)
+  - 306 tests pass on SQLite and Postgres in 3 time zones
+- Next, for the startup:
+  - Paid or no-training LLM tier before real users.
+  - An on-device open model for the most private data.
+  - LoRA fine-tune on consented conversations.
+  - Per-user data isolation; a consent and export / delete flow.
+  - Eval runs in CI.
