@@ -773,6 +773,13 @@ class ModeIn(BaseModel):
     mode: str | None = Field(None, pattern="^(angry|strict|gentle|hype)$")
 
 
+@router.get("/autonomy")
+def autonomy_policy(db: Session = Depends(get_db)):
+    """What TRINETRA has learned about when to speak up on its own, and its recent decisions with their reasons."""
+    from app.core import autonomy
+    return autonomy.policy(db)
+
+
 @router.get("/mode")
 def get_mode(db: Session = Depends(get_db)):
     mode = mood_modes.get_mode(db)

@@ -115,7 +115,17 @@ async def timetable_builder(ctx: AgentContext) -> None:
 
 async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: str, meta: dict,
                     keep_mood: bool = False, channel: str = "reminder") -> AgentResult:
-    """Compose a short proactive line in TRINETRA's voice; fall back to a template if the LLM is down."""
+    """Compose a short proactive line in TRINETRA's voice; fall back to a template if the LLM is down.
+    Optional nudges the scheduler raises are TRINETRA's own decision (core/autonomy.py): it may hold back."""
+    from app.core import autonomy
+    kind = (meta or {}).get("kind")
+    verdict = None
+    if kind in autonomy.OPTIONAL and ctx.event.source == "scheduler":
+        verdict = autonomy.decide(ctx.db, kind, ctx.notes.get("expression_label"))
+        if not verdict.send:
+            autonomy.record(ctx.db, kind, verdict)
+            ctx.notes["held_back"] = {"kind": kind, "reason": verdict.reason}
+            return AgentResult()
     if not keep_mood and ctx.notes.get("expression_label") not in (None, "calm"):
         mood = ctx.notes["expression"]  # after a string of skips, reminders get an edge
     mood = mood_modes.apply(ctx.db, mood, ctx.notes.get("expression_label"))  # a mode you asked for wins (unless he's low)
@@ -129,7 +139,11 @@ async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: st
             text = humanize(text) or fallback
         except llm.LLMUnavailable:
             pass
-    ctx.db.add(Message(role="trinetra", content=text, channel=channel, mood=mood, meta=meta))
+    msg = Message(role="trinetra", content=text, channel=channel, mood=mood, meta=meta)
+    ctx.db.add(msg)
+    if verdict is not None:
+        ctx.db.flush()
+        autonomy.record(ctx.db, kind, verdict, msg.id)
     ctx.notes["proactive"] = {"text": text, "mood": mood, "meta": meta}  # the Push Agent delivers it
     return AgentResult(reply=text, mood=mood)
 

@@ -130,6 +130,21 @@ class Memory(Base):
     archived: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
 
 
+class Decision(Base):
+    """One thing TRINETRA decided on its own (core/autonomy.py): speak up or hold back, why, and how it turned out."""
+
+    __tablename__ = "decisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(40))  # free_checkin, wellbeing, streak, lag, why
+    action: Mapped[str] = mapped_column(String(10))  # sent / held
+    score: Mapped[float] = mapped_column(Float, default=0)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(10), nullable=True)  # engaged / ignored (sent ones, after 30 min)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class PushSubscription(Base):
     """A device that receives TRINETRA's notifications (e.g. your iPhone's home-screen app)."""
 

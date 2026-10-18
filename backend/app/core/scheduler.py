@@ -425,11 +425,13 @@ async def _beat(db: Session, core: Orchestrator, now: datetime | None) -> dict:
     free = await free_watch(db, core, now)
     silence = await silence_watch(db, core, now)
     wellbeing = await wellbeing_watch(db, core, now)
+    from app.core import autonomy
+    settled = autonomy.settle(db, now)  # how did its own decisions land? (teaches the policy)
     forgotten = guest.sweep(db, now)
     digest = guest.digest(db, now)
     db.commit()
     return {"fired": fired, "routines_extended": extended, "nightly": nightly_ran, "planned_tomorrow": planned, "weekly": weekly_ran,
-            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "visitor_digest": bool(digest)}
+            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "decisions_settled": settled, "visitor_digest": bool(digest)}
 
 
 async def run_forever(session_factory: sessionmaker, core: Orchestrator) -> None:
