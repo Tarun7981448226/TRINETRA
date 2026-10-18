@@ -18,13 +18,15 @@ Read the user's latest message and pull out facts worth remembering for weeks or
 who they are, goals, habits, promises they made, preferences, important people, health, key life events.
 Ignore small talk, questions, and passing moods (moods are tracked elsewhere).
 Do NOT repeat anything already in memory. If a fact updates an existing one, set "replaces" to that id.
+If the message makes an existing memory no longer true (e.g. "I quit the gym" vs "Goes to the gym at 6pm"), put its id
+in "forget".
 
 Already in memory:
 {existing}
 
 Return JSON only: {{"facts": [{{"kind": one of {kinds}, "content": short third-person fact, \
-"importance": 1-5, "replaces": id or null}}]}}
-Return {{"facts": []}} if nothing is worth remembering."""
+"importance": 1-5, "replaces": id or null}}], "forget": [ids]}}
+Return {{"facts": [], "forget": []}} if nothing is worth remembering."""
 
 
 @agent("long_term_memory")
@@ -47,14 +49,18 @@ async def long_term_memory(ctx: AgentContext) -> None:
             json_mode=True,
             sensitive=bool(ctx.notes.get("distress") or (ctx.notes.get("felt") or {}).get("low")),
         )
-        facts = json.loads(raw).get("facts", [])
+        parsed = json.loads(raw)
+        facts = parsed.get("facts", []) if isinstance(parsed, dict) else []
+        forget = parsed.get("forget", []) if isinstance(parsed, dict) else []
     except (llm.LLMUnavailable, json.JSONDecodeError, AttributeError) as e:
         log.warning("memory extraction skipped: %s", e)
         return
 
     by_id = {m.id: m for m in existing}
     saved = []
-    for f in facts:
+    for f in facts if isinstance(facts, list) else []:
+        if not isinstance(f, dict):
+            continue
         content = str(f.get("content", "")).strip()
         if not content:
             continue
@@ -66,6 +72,17 @@ async def long_term_memory(ctx: AgentContext) -> None:
         else:
             ctx.db.add(Memory(kind=kind, content=content, importance=importance))
         saved.append(content)
+    retired = []
+    for i in forget if isinstance(forget, list) else []:  # Mem0's DELETE — archived, so it can come back
+        try:
+            m = by_id.get(int(i))
+        except (TypeError, ValueError):
+            continue
+        if m is not None and m.kind != "insight":
+            m.archived = True
+            retired.append(m.content)
+    if retired:
+        ctx.notes["forgot"] = retired
     if saved:
         ctx.notes["remembered"] = saved
 

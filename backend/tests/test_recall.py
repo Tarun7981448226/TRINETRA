@@ -102,3 +102,25 @@ def test_reader_hears_negation():
     from app.core import feel
     for t in ("not feeling good today", "I am not happy with my progress", "I don't feel ready for this"):
         assert feel.read(t)["low"], t
+
+
+def test_a_fact_that_stops_being_true_is_retired(client, monkeypatch):
+    import json
+    from app.config import get_settings
+    from app.core import llm
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "x")
+    with client.session_factory() as db:
+        gym = Memory(kind="habit", content="Goes to the gym at 6pm", importance=3)
+        db.add(gym); db.commit(); gid = gym.id
+
+    async def model(messages, json_mode=False, **kw):
+        if json_mode and "long-term memory" in messages[0]["content"]:
+            return json.dumps({"facts": [{"kind": "habit", "content": "Quit the gym; runs in the mornings now", "importance": 3}],
+                               "forget": [gid]})
+        return "{}" if json_mode else "Got it."
+    monkeypatch.setattr(llm, "complete", model)
+    body = client.post("/chat", json={"text": "I quit the gym, I run in the mornings now"}).json()
+    assert body["notes"]["forgot"] == ["Goes to the gym at 6pm"]
+    with client.session_factory() as db:
+        assert "Goes to the gym at 6pm" not in {m.content for m in recall.live(db)}
+        assert db.get(Memory, gid).archived  # kept, not deleted

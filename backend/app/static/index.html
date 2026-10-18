@@ -643,6 +643,7 @@
       if (d.notes?.show) window.trinetraShow?.(d.notes.show);  // dance · play an instrument · a little move
       if (d.notes?.timetable_changes?.length) note("📅 " + d.notes.timetable_changes.join(" · "));
       if (d.notes?.remembered?.length) note("🧠 remembered: " + d.notes.remembered.join(" · "));
+      if (d.notes?.forgot?.length) note("🗂 no longer true, put away: " + d.notes.forgot.join(" · "));
       $("mood").textContent = d.mood ? d.mood.split(" — ")[0].toLowerCase() : "";
       if (d.notes?.goal_created) note("🎯 goal saved: " + d.notes.goal_created.title);
       if (d.notes?.promises_saved?.length) note("🤝 I'll hold you to: " + d.notes.promises_saved.join(" · "));
