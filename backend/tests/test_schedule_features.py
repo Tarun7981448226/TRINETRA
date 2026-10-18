@@ -64,7 +64,8 @@ def test_sleep_shows_on_the_timetable_and_moves_with_the_window(client):
         deliberation.apply(db, [{"op": "set_sleep", "start": "23:30", "end": "06:30"}])
         sleeps = db.scalars(select(Task).where(Task.category == "sleep")).all()
         assert {local(t.planned_start).time() for t in sleeps} == {time(23, 30)}
-        assert all((t.planned_end - t.planned_start) == timedelta(hours=7) for t in sleeps)
+        # 23:30–06:30 local every night (a daylight-saving night is 8 real hours, and that's right)
+        assert all(local(t.planned_end).time() == time(6, 30) for t in sleeps)
 
 
 def test_bedtime_reminder_is_spoken_but_never_nags(client, llm_calls):

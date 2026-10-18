@@ -58,8 +58,10 @@ def test_naive_times_are_read_as_local_and_returned_in_utc(client):
         "/tasks",
         json={"title": "Gym", "planned_start": "2026-10-20T06:00:00", "planned_end": "2026-10-20T07:00:00"},
     )
-    # Asia/Kolkata is UTC+5:30
-    assert r.json()["planned_start"].startswith("2026-10-20T00:30:00")
+    from datetime import datetime, timezone
+    from app.core.timeutil import user_tz
+    want = datetime(2026, 10, 20, 6, tzinfo=user_tz()).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    assert r.json()["planned_start"].startswith(want)  # e.g. 00:30Z in India, 13:00Z in Los Angeles
 
 
 def test_task_lifecycle_emits_events(client):

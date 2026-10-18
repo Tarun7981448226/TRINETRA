@@ -1,7 +1,7 @@
 import os
 
 # Tests never use your real keys, timezone or database.
-os.environ.update(GEMINI_API_KEY="", GROQ_API_KEY="test-key", TRINETRA_TIMEZONE="Asia/Kolkata",
+os.environ.update(GEMINI_API_KEY="", GROQ_API_KEY="test-key", TRINETRA_TIMEZONE=os.environ.get("TEST_TZ", "Asia/Kolkata"),
                   DATABASE_URL="sqlite://", TRINETRA_SCHEDULER="false", TRINETRA_PASSCODE="")
 
 import pytest
