@@ -24,12 +24,30 @@ FALLBACK = [
 ]
 
 
+READER_MOOD = {"sadness": "sad", "fear": "anxious", "anger": "frustrated", "joy": "happy", "surprise": "neutral",
+               "neutral": "neutral"}
+READER_FINE = {"gratitude": "grateful", "pride": "proud", "excitement": "excited", "nervousness": "anxious", "grief": "hurt",
+               "disappointment": "low", "remorse": "low", "embarrassment": "low", "annoyance": "frustrated"}
+
+
+def _from_reader(felt: dict) -> tuple[str, float]:
+    """Only clear feelings count: real sadness / fear, or clear joy. Anger and the rest are too often sarcasm or a
+    command ("be angry with me") in the Reddit data the reader learned from."""
+    if not (felt["low"] or (felt["group"] == "joy" and felt["strength"] >= 1.5)):
+        return "neutral", 0.0
+    first = felt["emotions"][0] if felt["emotions"] else None
+    return READER_FINE.get(first, READER_MOOD[felt["group"]]), round(min(1.0, 0.35 + (felt["strength"] - 1) * 0.3), 2)
+
+
 @agent("empathy_detector")
 async def empathy_detector(ctx: AgentContext) -> None:
     text = str(ctx.event.payload.get("text", "")).strip()
     if len(text) < 3 or ctx.event.payload.get("button"):
         return
     mood, intensity, distress = "neutral", 0.0, False
+    from app.core import feel
+    felt = feel.read(text)  # local, private, instant (trained on GoEmotions)
+    ctx.notes["felt"] = felt
     try:
         if not ctx.settings.llm_available:
             raise llm.LLMUnavailable("offline")
@@ -46,6 +64,12 @@ async def empathy_detector(ctx: AgentContext) -> None:
             if pattern.search(text):
                 mood, intensity = name, 0.6
                 break
+        else:  # no keyword: TRINETRA's own trained reader decides (not for commands: "be angry with me")
+            if not any(k in ctx.notes for k in ("show", "perform", "demo", "mode_changed")):
+                mood, intensity = _from_reader(felt)
+    # A second opinion: the model said "neutral" but the trained reader clearly hears something heavy → believe it.
+    if mood == "neutral" and felt["low"] and felt["strength"] >= 1.8:
+        mood, intensity = _from_reader(felt)
     ctx.notes["user_mood"], ctx.notes["user_mood_intensity"] = mood, intensity
     if distress:
         ctx.notes["distress"] = True

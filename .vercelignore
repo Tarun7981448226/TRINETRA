@@ -2,8 +2,8 @@
 .git
 **/__pycache__
 *.db
-data
-models
+/data
+/models
 deploy
 backend/tests
 backend/Dockerfile
@@ -11,3 +11,4 @@ backend/Dockerfile
 .env.*
 ROADMAP.md
 /music
+/training

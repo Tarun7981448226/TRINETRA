@@ -6,8 +6,8 @@ __pycache__/
 .DS_Store
 node_modules/
 .pytest_cache/
-models/
-data/
+/models/
+/data/
 deploy/server.env
 .vercel
 shortcuts/out/

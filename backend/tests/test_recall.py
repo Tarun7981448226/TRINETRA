@@ -79,3 +79,18 @@ def test_reflector_writes_supported_insights(client, monkeypatch):
         asyncio.run(reflector(AgentContext(event=IncomingEvent("cron.nightly"), db=db, settings=get_settings())))
         insights = [m.content for m in recall.live(db) if m.kind == "insight"]
         assert insights == ["Late nights wreck his next-day DSA practice; protecting sleep protects the streak."]
+
+
+def test_trained_emotion_reader():
+    from app.core import feel
+    assert feel.read("I failed the exam again. I am such a disappointment")["low"]
+    assert feel.read("im kinda nervous about tmrw interview")["group"] == "fear"
+    assert feel.read("thanks a lot man, really appreciate it")["group"] == "joy"
+    assert feel.read("what time is my next class")["group"] == "neutral"
+    assert feel.read("")["group"] == "neutral"
+
+
+def test_reader_is_the_fallback_and_second_opinion(client, llm_calls):
+    """Offline (the stub LLM returns non-JSON), a sad message without keywords is still heard."""
+    body = client.post("/chat", json={"text": "I failed the exam again. I am such a disappointment"}).json()
+    assert body["notes"]["felt"]["low"] and body["notes"]["user_mood"] in ("low", "sad")
