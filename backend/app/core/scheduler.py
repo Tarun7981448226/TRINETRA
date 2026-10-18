@@ -345,6 +345,22 @@ async def plan_tomorrow(db: Session, core: Orchestrator) -> bool:
     return True
 
 
+INITIATIVE_AT = time(20, 0)  # its own beat, away from the day review + planning (one Vercel request has 60 s)
+
+
+async def initiative_watch(db: Session, core: Orchestrator) -> bool:
+    """Once each evening from 20:00: TRINETRA's own idea (the agent itself checks it hasn't run today)."""
+    now = now_local()
+    if not (INITIATIVE_AT <= now.time() <= time(22, 30)):
+        return False
+    tried = f"initiative_tried:{now.date().isoformat()}"
+    if db.get(KeyValue, tried) is not None or db.get(KeyValue, f"initiative:{now.date().isoformat()}") is not None:
+        return False
+    db.add(KeyValue(key=tried, value="1"))  # one try per evening, even when there's too little to go on yet
+    await core.dispatch(IncomingEvent("initiative.evening", {"date": now.date().isoformat()}, "scheduler"), db)
+    return True
+
+
 NIGHTLY_HOUR = 3  # local time: the brain retrains while you sleep
 
 
@@ -440,11 +456,12 @@ async def _beat(db: Session, core: Orchestrator, now: datetime | None) -> dict:
     wellbeing = await wellbeing_watch(db, core, now)
     from app.core import autonomy
     settled = autonomy.settle(db, now)  # how did its own decisions land? (teaches the policy)
+    idea = await initiative_watch(db, core)
     forgotten = guest.sweep(db, now)
     digest = guest.digest(db, now)
     db.commit()
     return {"fired": fired, "routines_extended": extended, "nightly": nightly_ran, "planned_tomorrow": planned, "weekly": weekly_ran,
-            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "decisions_settled": settled, "visitor_digest": bool(digest)}
+            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "decisions_settled": settled, "initiative": idea, "visitor_digest": bool(digest)}
 
 
 async def run_forever(session_factory: sessionmaker, core: Orchestrator) -> None:

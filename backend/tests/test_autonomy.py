@@ -101,8 +101,8 @@ def test_initiative_asks_first_and_a_yes_goes_through_the_pipeline(client, monke
         db.add(Memory(kind="insight", content="He finishes morning blocks, skips night ones", importance=4))
         db.commit()
         core = client.app.state.orchestrator
-        asyncio.run(core.dispatch(IncomingEvent("plan.nightly", {}, "scheduler"), db))
-        asyncio.run(core.dispatch(IncomingEvent("plan.nightly", {}, "scheduler"), db))  # once a day
+        asyncio.run(core.dispatch(IncomingEvent("initiative.evening", {}, "scheduler"), db))
+        asyncio.run(core.dispatch(IncomingEvent("initiative.evening", {}, "scheduler"), db))  # once a day
         msgs = [m for m in db.query(Message).all() if (m.meta or {}).get("kind") == "initiative"]
         assert len(msgs) == 1 and "Want me to set that up?" in msgs[0].content
         assert db.query(Decision).filter(Decision.kind == "initiative", Decision.action == "sent").count() == 1
@@ -189,3 +189,18 @@ def test_a_harsh_nudge_is_rewritten_by_the_critic(monkeypatch):
         return json.dumps({"ok": True})
     monkeypatch.setattr(llm, "complete", fine)
     assert asyncio.run(planning._critique("Two blocks behind — one tonight?", "lag")) == "Two blocks behind — one tonight?"
+
+
+def test_initiative_has_its_own_evening_beat_once(client, llm_calls, monkeypatch):
+    import asyncio
+    from datetime import datetime as _dt
+    from app.core import scheduler, timeutil
+    evening = _dt.now(timeutil.user_tz()).replace(hour=20, minute=5)
+    monkeypatch.setattr(scheduler, "now_local", lambda: evening)
+    with client.session_factory() as db:
+        core = client.app.state.orchestrator
+        assert asyncio.run(scheduler.initiative_watch(db, core)) is True
+        assert asyncio.run(scheduler.initiative_watch(db, core)) is False  # once per evening
+    monkeypatch.setattr(scheduler, "now_local", lambda: evening.replace(hour=15))
+    with client.session_factory() as db:
+        assert asyncio.run(scheduler.initiative_watch(db, client.app.state.orchestrator)) is False
