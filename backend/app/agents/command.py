@@ -104,6 +104,36 @@ def _today_context(ctx: AgentContext) -> str:
     return "\n".join(lines)
 
 
+# Emotional support in stages (Hill's Helping Skills; the ESConv study of real supporters): explore → comfort → act.
+# Jumping to advice on the first sad message feels dismissive; never moving on to a small step feels stuck.
+SUPPORT_STEPS = [
+    "Support stage 1, explore: don't advise yet. Reflect the feeling you hear in your own words, then ask ONE gentle, "
+    "open question about what's going on.",
+    "Support stage 2, comfort: affirm him — it makes sense to feel this way, and name something real he's done well or "
+    "is carrying. Reassure without brushing it off. Still no to-do list.",
+    "Support stage 3, act: now offer ONE small, concrete next step (tiny and doable tonight), or ask if he wants one. "
+    "Keep the warmth.",
+]
+
+
+def support_step(ctx: AgentContext) -> str | None:
+    """Where we are in a low moment: count my caring replies in the last 2 hours."""
+    if ctx.notes.get("distress") or ctx.notes.get("expression_label") not in ("comforting", "gentle"):
+        return None
+    from datetime import datetime, timedelta, timezone
+    since = datetime.now(timezone.utc) - timedelta(hours=2)
+    recent = ctx.db.scalars(select(Message).where(Message.role == "trinetra", Message.created_at >= since)
+                            .order_by(Message.id.desc()).limit(6)).all()
+    caring = 0
+    for m in recent:  # consecutive caring replies, newest first
+        if m.mood and ("comfort" in m.mood or "gentle" in m.mood or "no pressure" in m.mood):
+            caring += 1
+        else:
+            break
+    ctx.notes["support_stage"] = min(caring, 2) + 1
+    return SUPPORT_STEPS[min(caring, 2)]
+
+
 @agent("core_orchestrator")
 async def core(ctx: AgentContext) -> AgentResult:
     text = str(ctx.event.payload.get("text", "")).strip()
@@ -123,6 +153,8 @@ async def core(ctx: AgentContext) -> AgentResult:
 
     history = ctx.db.scalars(select(Message).order_by(Message.id.desc()).limit(12)).all()
     context = _today_context(ctx)
+    if (step := support_step(ctx)) is not None:
+        context += "\n" + step
     from app.core import briefing
     if reports := briefing.as_text(ctx.notes.get("briefing") or []):
         context += "\n" + reports

@@ -144,3 +144,14 @@ def test_overlapping_plan_blocks_are_untangled(client):
         wed = [t for t in db.scalars(select(Task)) if local(t.planned_start).weekday() == 2]
         spans = sorted((local(t.planned_start), local(t.planned_end)) for t in wed if local(t.planned_start).date() == local(wed[0].planned_start).date())
         assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:]))
+
+
+def test_support_moves_explore_comfort_act(client, llm_calls):
+    """A low moment over several messages: ask first, then comfort, then one small step (ESConv stages)."""
+    from tests.conftest import trinetra_prompt
+    stages = []
+    for text in ("I feel so sad today", "everything went wrong, I feel so sad", "I'm still really sad and down"):
+        body = client.post("/chat", json={"text": text}).json()
+        stages.append(body["notes"].get("support_stage"))
+    assert stages == [1, 2, 3]
+    assert "Support stage 3, act" in trinetra_prompt(llm_calls)
