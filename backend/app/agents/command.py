@@ -15,7 +15,8 @@ INTENT_PATTERNS: dict[str, str] = {
     "feeling_low": r"\b(tired|sad|low|stressed|anxious|exhausted|depressed|lonely|overwhelmed|can'?t do)\b",
     "slacking": r"\b(skip(ped)?|lazy|procrastinat\w*|bunk(ed)?|wasted (my )?time|didn'?t (study|work|do it|go))\b",
     "progress": r"\b(done|finished|completed|nailed|achieved)\b",
-    "planning": r"\b(plan|schedule|timetable|remind|tomorrow|reschedule|move)\b",
+    "planning": r"\b(plan|schedule|timetable|remind|tomorrow|tonight|reschedule|move|shift|postpone|push back|cancel|"
+                r"add|block|free up|clear my)\b",
 }
 # Signals that need care, not pressure. Overrides everything else.
 QUIETER = re.compile(r"\b(stop (nagging|pinging|bugging|spamming)( me)?|too many (notifications|reminders|nudges|messages)|"
@@ -73,8 +74,10 @@ async def router(ctx: AgentContext) -> None:
     """Cheap, instant intent tagging — no LLM call needed."""
     text = str(ctx.event.payload.get("text", ""))
     ctx.notes["distress"] = bool(DISTRESS.search(text))
+    from app.core import show as _show
+    plain = " ".join(_show.normalise(text))  # "cn u mve my gym tmrw" → "can you move my gym tomorrow"
     ctx.notes["intent"] = next(
-        (name for name, pat in INTENT_PATTERNS.items() if re.search(pat, text, re.I)), "chat"
+        (name for name, pat in INTENT_PATTERNS.items() if re.search(pat, plain, re.I)), "chat"
     )
     from app.core import show
     # a mood mode ("be angry with me", "hype mode") or a one-off demo ("scold Rahul") wins over a face or a show
@@ -154,7 +157,15 @@ def support_step(ctx: AgentContext) -> str | None:
         else:
             break
     ctx.notes["support_stage"] = min(caring, 2) + 1
-    return SUPPORT_STEPS[min(caring, 2)]
+    text = str(ctx.event.payload.get("text", ""))
+    if "?" in text or re.search(r"\b(should i|what do i|or)\b.{0,40}$", text, re.I):  # "gym or sleep?" — a direct ask
+        return ("He asked you something directly while he's low: answer it first, clearly (if he asks you to choose, "
+                "choose for him and say why in a few words), kindly — then one gentle line about how he's doing.")
+    step = SUPPORT_STEPS[min(caring, 2)]
+    if now_local().hour < 5 or now_local().hour >= 23:  # the middle of the night: short, calming, protect his sleep
+        step += (" It's the middle of the night: keep it short and include one tiny calming step (a slow breath out, or "
+                 "writing the worry down for the morning), and nudge him gently towards sleep.")
+    return step
 
 
 @agent("core_orchestrator")

@@ -79,7 +79,10 @@ FILLER = {"can", "could", "will", "would", "you", "please", "now", "go", "let", 
           "bit", "time", "show", "see", "want", "i", "like", "love", "id", "around", "too", "also", "and", "are", "able", "how", "know"}
 NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "fifteen": 15,
            "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "a": 1, "half": 0.5}
-SLANG = {"wat": "what", "wut": "what", "wht": "what", "whats": "what is", "hw": "how", "y": "why", "cn": "can", "cud": "could",
+SLANG = {"tmrw": "tomorrow", "tmr": "tomorrow", "tmrrw": "tomorrow", "tomoro": "tomorrow", "2moro": "tomorrow", "tmo": "tomorrow",
+         "tdy": "today", "2day": "today", "tonite": "tonight", "2nite": "tonight", "mve": "move", "mov": "move",
+         "resched": "reschedule", "sched": "schedule", "skd": "schedule", "rmd": "remind", "rmnd": "remind",
+         "wat": "what", "wut": "what", "wht": "what", "whats": "what is", "hw": "how", "y": "why", "cn": "can", "cud": "could",
          "sho": "show", "shw": "show", "pl": "please", "u": "you", "ya": "you", "yu": "you", "ur": "your", "yr": "your", "pls": "please", "plz": "please", "plez": "please", "pleas": "please",
          "wanna": "want to", "gonna": "going to", "lemme": "let me", "gimme": "give me", "r": "are", "im": "i am", "ill": "i will",
          "dont": "do not", "cant": "can not", "cannot": "can not", "wont": "will not", "doesnt": "does not", "didnt": "did not",

@@ -143,3 +143,8 @@ def test_guest_chat_gets_the_show(client):
     assert d["show"]["partner"] is False and d["reply"] == "💃 Dance solo"
     d = client.post("/guest/chat", json={"token": tok, "text": "show me angery"}).json()
     assert d["perform"] == ["angry"] and d["reply"] == "😠 Angry"
+
+
+def test_planning_intent_survives_texting_style(client, llm_calls):
+    for t in ("cn u mve my gym to 7pm tmrw", "pls shift my dsa to 9", "cancel gym tmrw", "resched my run 2nite"):
+        assert client.post("/chat", json={"text": t}).json()["notes"]["intent"] == "planning", t
