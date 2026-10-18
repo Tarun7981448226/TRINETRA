@@ -58,9 +58,14 @@ class Orchestrator:
         self.registry = registry
         self.settings = settings
 
-    async def dispatch(self, event: IncomingEvent, db: Session, notes: dict[str, Any] | None = None) -> DispatchResult:
+    async def dispatch(self, event: IncomingEvent, db: Session, notes: dict[str, Any] | None = None,
+                       commit: bool = True) -> DispatchResult:
         """Run every agent listening to `event`. `notes` pre-loads the blackboard (in-memory objects that
-        shouldn't go into the event log, e.g. a draft plan under review)."""
+        shouldn't go into the event log, e.g. a draft plan under review). A nested review (`commit=False`) leaves
+        committing to the request that convened it, so a half-finished outer request is never committed early."""
+        from app.core import llm
+        if commit:
+            llm.load_bench(db)
         ctx = AgentContext(event=event, db=db, settings=self.settings, notes=dict(notes or {}), core=self)
         ran: list[str] = []
         actions: list[dict[str, Any]] = []
@@ -76,6 +81,8 @@ class Orchestrator:
             except Exception:
                 # One broken agent must never take TRINETRA down.
                 log.exception("Agent %s failed on %s", spec.id, event.type)
+                if not db.is_active:  # a failed flush poisons the session: roll back so the rest (and the commit) still work
+                    db.rollback()
                 continue
             finally:
                 ctx.notes.setdefault("timings_ms", {})[spec.id] = round((time.perf_counter() - t0) * 1000)
@@ -86,7 +93,9 @@ class Orchestrator:
             if result.reply and winner is None:
                 winner = (spec, result)
 
-        db.commit()
+        if commit:
+            llm.save_bench(db)
+            db.commit()
         return DispatchResult(
             reply=winner[1].reply if winner else None,
             mood=winner[1].mood if winner else None,

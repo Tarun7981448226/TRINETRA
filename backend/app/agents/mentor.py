@@ -172,7 +172,8 @@ async def mentor_voice(ctx: AgentContext) -> AgentResult:
     """The Sunday-evening session: what you won, where you lagged and why, and one challenge."""
     summary = mentor.week_summary(ctx.db)
     challenges = ctx.notes.get("challenges", [])
-    mood = mood_modes.apply(ctx.db, ctx.notes.get("expression") or "calm, proud where earned, honest where not")
+    mood = mood_modes.apply(ctx.db, ctx.notes.get("expression") or "calm, proud where earned, honest where not",
+                           ctx.notes.get("expression_label"))
     fallback = (f"Weekly check-in: you finished {summary['done']} blocks and skipped {summary['skipped']}. "
                 "Let's make next week sharper.")
     text = fallback

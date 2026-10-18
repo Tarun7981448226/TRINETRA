@@ -360,8 +360,53 @@ async def nightly(db: Session, core: Orchestrator) -> bool:
     return True
 
 
+LEASE = timedelta(seconds=110)  # longer than any beat should take (Vercel stops a function at 60 s)
+
+
+def _take_lease(db: Session) -> bool:
+    """Only one beat at a time. If a slow beat (LLM calls) is still running when the next minute's cron arrives, the
+    second one skips instead of double-firing nightly / weekly / routine extension. Atomic: one UPDATE … WHERE."""
+    from sqlalchemy import update
+    from sqlalchemy.exc import IntegrityError
+    t = datetime.now(timezone.utc)
+    until = (t + LEASE).isoformat()
+    took = db.execute(update(KeyValue).where(KeyValue.key == "heartbeat_lease", KeyValue.value < t.isoformat())
+                      .values(value=until)).rowcount
+    if not took and db.get(KeyValue, "heartbeat_lease") is None:
+        try:
+            db.add(KeyValue(key="heartbeat_lease", value=until))
+            db.flush()
+            took = 1
+        except IntegrityError:  # another beat created it a moment ago
+            db.rollback()
+            return False
+    db.commit()
+    return bool(took)
+
+
+def _release_lease(db: Session) -> None:
+    row = db.get(KeyValue, "heartbeat_lease")
+    if row is not None:
+        row.value = datetime.now(timezone.utc).isoformat()
+        db.commit()
+
+
 async def heartbeat(db: Session, core: Orchestrator, now: datetime | None = None) -> dict:
     """Everything one beat does. Called every 30s locally, or every minute by the Cloudflare cron in the cloud."""
+    if not _take_lease(db):
+        log.warning("heartbeat skipped: the previous beat is still running")
+        return {"skipped": "previous beat still running", "fired": []}
+    try:
+        return await _beat(db, core, now)
+    finally:
+        try:
+            db.rollback()  # anything a failed beat left half-done
+            _release_lease(db)
+        except Exception:
+            log.exception("could not release the heartbeat lease (it expires by itself)")
+
+
+async def _beat(db: Session, core: Orchestrator, now: datetime | None) -> dict:
     now = now or datetime.now(timezone.utc)
     extended = 0
     row = db.get(KeyValue, "last_extend")

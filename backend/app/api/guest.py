@@ -163,7 +163,12 @@ async def chat(body: GuestText, db: Session = Depends(get_db)):
     v = _visit(db, body.token)
     if v.turns >= guest.MAX_TURNS:
         raise HTTPException(429, "That's a lot of questions! Email Tarun at tarundeepreddybv@gmail.com to keep talking.")
-    return await guest.chat(db, v, body.text)
+    from app.core import llm
+    llm.load_bench(db)
+    out = await guest.chat(db, v, body.text)
+    llm.save_bench(db)
+    db.commit()
+    return out
 
 
 class RoleIn(BaseModel):

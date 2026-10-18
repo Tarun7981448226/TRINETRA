@@ -91,7 +91,12 @@ def set_mode(db: Session, mode: str | None) -> None:
     db.flush()
 
 
-def apply(db: Session, default_mood: str) -> str:
-    """The mood to speak in: a requested mode wins over the situational default."""
+CARING = {"comforting", "gentle"}  # the Emotion Engine sees he's hurting: no requested mode (angry, savage…) overrides that
+
+
+def apply(db: Session, default_mood: str, label: str | None = None) -> str:
+    """The mood to speak in: a requested mode wins over the situational default — except when he's sad or low."""
     mode = get_mode(db)
+    if label in CARING:
+        return default_mood
     return MODES[mode] if mode else default_mood

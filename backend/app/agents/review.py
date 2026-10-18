@@ -115,7 +115,7 @@ async def arbiter(ctx: AgentContext) -> None:
         fixed = deliberation.build(ctx.db, verdict["ops"])
         recheck = await ctx.core.dispatch(
             IncomingEvent("plan.proposed", {"request": "critic re-check", "ops_count": len(fixed.ops)}, "critic"),
-            ctx.db, notes={"proposal": fixed, "no_critic": True},
+            ctx.db, notes={"proposal": fixed, "no_critic": True}, commit=False,
         )
         still = [f for f in recheck.notes.get("findings", []) if f.severity == "block"]
         decision["ops"] = fixed.ops

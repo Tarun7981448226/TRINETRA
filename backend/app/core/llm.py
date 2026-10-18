@@ -55,6 +55,39 @@ def pool(tier: Tier) -> list[str]:
     return ordered
 
 
+def load_bench(db) -> None:
+    """Serverless instances start empty: pick up which models are resting from the database, so a fresh instance doesn't
+    spend its first seconds on a model whose daily quota is already gone."""
+    import json
+    from app.db.models import KeyValue
+    try:
+        row = db.get(KeyValue, "llm_bench")
+        if row and row.value:
+            now = time.time()
+            for m, until in json.loads(row.value).items():
+                if until > now:
+                    _benched_until[m] = max(_benched_until.get(m, 0), until)
+    except Exception:
+        log.debug("no saved bench", exc_info=True)
+
+
+def save_bench(db) -> None:
+    """Store the models still resting (the caller commits)."""
+    import json
+    from app.db.models import KeyValue
+    now = time.time()
+    resting = {m: t for m, t in _benched_until.items() if t > now}
+    try:
+        row = db.get(KeyValue, "llm_bench")
+        value = json.dumps(resting)
+        if row is None:
+            db.add(KeyValue(key="llm_bench", value=value))
+        elif row.value != value:
+            row.value = value
+    except Exception:
+        log.debug("could not save bench", exc_info=True)
+
+
 def _bench(model: str, error: Exception) -> None:
     msg = str(error)
     if "PerDay" in msg or "per day" in msg.lower():
@@ -73,6 +106,10 @@ ENDPOINTS = {
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     "groq": "https://api.groq.com/openai/v1/chat/completions",
 }
+
+
+CALL_TIMEOUT = 20  # seconds per model; a request may chain several agents inside Vercel's 60 s limit
+BUDGET = 30  # seconds for one complete() across all the models it tries
 
 
 class ProviderError(RuntimeError):
@@ -100,7 +137,7 @@ async def _call(model: str, messages: list[dict], temperature: float, max_tokens
         body["response_format"] = {"type": "json_object"}
     if reasoning and (name.startswith("gemini-3") or name.startswith("openai/gpt-oss")):
         body["reasoning_effort"] = reasoning  # thinking models: less thinking = much faster replies
-    async with httpx.AsyncClient(timeout=45) as client:
+    async with httpx.AsyncClient(timeout=CALL_TIMEOUT) as client:
         r = await client.post(url, headers={"Authorization": f"Bearer {key}"}, json=body)
     if r.status_code == 429:
         raise RateLimitError(f"429 {r.text[:3000]}")  # long enough to include the quota id (PerDay vs per-minute)
@@ -128,7 +165,10 @@ async def complete(
     candidates = ready or sorted(models, key=lambda m: _benched_until.get(m, 0))[:1]
 
     last_error: Exception | None = None
+    started = time.time()
     for model in candidates:
+        if time.time() - started > BUDGET:  # out of time: better a fallback line than a killed request
+            break
         try:
             text = await _call(model, messages, temperature, max_tokens, json_mode, reasoning)
             if text.strip():

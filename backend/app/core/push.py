@@ -72,5 +72,7 @@ def send(db: Session, title: str, body: str, url: str = "/", tag: str | None = N
             if status in (404, 410):  # device unsubscribed or app deleted
                 db.delete(sub)
             log.warning("push failed (%s): %s", status, e)
+        except Exception as e:  # network error / timeout: never let one phone stop the heartbeat
+            log.warning("push failed: %s", e)
     db.flush()
     return delivered

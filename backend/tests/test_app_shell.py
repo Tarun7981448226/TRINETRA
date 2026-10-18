@@ -161,3 +161,14 @@ def test_export_has_everything_but_device_keys_and_needs_the_passcode(client, lo
     assert r.status_code == 200
     t = r.json()["tables"]
     assert "messages" in t and "journal_entries" in t and "study_items" in t and "push_subscriptions" not in t
+
+
+def test_overlapping_beats_dont_double_fire(client):
+    """A beat still running (slow LLM calls) when the next cron arrives: the second one skips."""
+    from app.core import scheduler
+    with client.session_factory() as db:
+        assert scheduler._take_lease(db) is True
+        assert scheduler._take_lease(db) is False  # held
+        scheduler._release_lease(db)
+        assert scheduler._take_lease(db) is True  # free again once the first beat finished
+        scheduler._release_lease(db)

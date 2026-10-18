@@ -92,7 +92,7 @@ async def timetable_builder(ctx: AgentContext) -> None:
         proposal = deliberation.build(ctx.db, ops)
         review = await ctx.core.dispatch(
             IncomingEvent("plan.proposed", {"request": text[:300], "ops_count": len(ops)}, "planner"),
-            ctx.db, notes={"proposal": proposal, "request": text},
+            ctx.db, notes={"proposal": proposal, "request": text}, commit=False,
         )
         decision = review.notes.get("decision") or {"action": "apply", "ops": ops, "original_ops": ops}
         ctx.notes["deliberation"] = {k: decision.get(k) for k in ("action", "reasoning", "question", "findings")}
@@ -118,7 +118,7 @@ async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: st
     """Compose a short proactive line in TRINETRA's voice; fall back to a template if the LLM is down."""
     if not keep_mood and ctx.notes.get("expression_label") not in (None, "calm"):
         mood = ctx.notes["expression"]  # after a string of skips, reminders get an edge
-    mood = mood_modes.apply(ctx.db, mood)  # a mode you asked for wins
+    mood = mood_modes.apply(ctx.db, mood, ctx.notes.get("expression_label"))  # a mode you asked for wins (unless he's low)
     text = fallback
     if ctx.settings.llm_available:
         try:
@@ -422,8 +422,8 @@ async def weekly_planner(ctx: AgentContext) -> AgentResult | None:
         need = sum(i.est_min or 10 for i in its if i.planned_date <= days[-1].isoformat())
         cap = sum(planner.load(ctx.db, c, d)["capacity_min"] for d in days)
         short = round(need - cap)
-        sections = sorted({re.match(r"(Sprint \d+)", i.section or "").group(1) for i in its
-                           if days[0].isoformat() <= i.planned_date <= days[-1].isoformat() and re.match(r"Sprint", i.section or "")})
+        sections = sorted({m.group(1) for i in its if days[0].isoformat() <= i.planned_date <= days[-1].isoformat()
+                           and (m := re.match(r"(Sprint \d+)", i.section or ""))})  # "Sprint" with no number is skipped
         if short > 60:
             ops = []
             for d in [x for x in days if x.weekday() >= 5]:  # Saturday, Sunday

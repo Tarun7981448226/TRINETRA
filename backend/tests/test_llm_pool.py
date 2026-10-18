@@ -72,3 +72,15 @@ def test_everything_down_raises_cleanly(fake_litellm):
 def test_guest_pool_puts_its_own_models_first(fake_litellm, monkeypatch):
     monkeypatch.setattr(get_settings(), "trinetra_models_guest", "groq/b,gemini/z")
     assert llm.pool("guest") == ["groq/b", "gemini/z", "gemini/a", "groq/c"]
+
+
+def test_resting_models_survive_a_cold_start(fake_litellm, client):
+    """Serverless: a new instance must know a model's daily quota is gone."""
+    import time
+    with client.session_factory() as db:
+        llm._benched_until["gemini/a"] = time.time() + 3600
+        llm.save_bench(db)
+        db.commit()
+        llm._benched_until.clear()  # a fresh instance
+        llm.load_bench(db)
+        assert llm._benched_until["gemini/a"] > time.time() + 3000

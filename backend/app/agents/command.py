@@ -115,7 +115,7 @@ async def core(ctx: AgentContext) -> AgentResult:
         felt = ctx.notes.get("expression")
         if not felt or (ctx.notes.get("expression_label") == "calm" and intent in ("planning", "chat")):
             felt = MOOD_FOR_INTENT[intent]
-        mood = mood_modes.apply(ctx.db, felt)
+        mood = mood_modes.apply(ctx.db, felt, ctx.notes.get("expression_label"))
 
     history = ctx.db.scalars(select(Message).order_by(Message.id.desc()).limit(12)).all()
     context = _today_context(ctx)

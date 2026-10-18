@@ -51,6 +51,14 @@ def test_distress_beats_angry_mode(client, llm_calls):
     assert "no pressure" in body["mood"]
 
 
+def test_sadness_beats_angry_mode(client, llm_calls):
+    """Not crisis-level, just sad: the Emotion Engine says 'comforting', and a requested angry mode must not override it."""
+    client.post("/chat", json={"text": "angry mode"})
+    body = client.post("/chat", json={"text": "I feel so sad and lonely today"}).json()
+    assert not body["mood"].startswith("ANGRY") and "comfort" in body["mood"]
+    assert client.get("/mode").json()["mode"] == "angry"  # the mode is still there for when he's better
+
+
 def test_chip_reset_and_validation(client):
     assert client.post("/mode", json={"mode": "angry"}).json()["mode"] == "angry"
     assert client.post("/mode", json={"mode": None}).json()["mode"] is None

@@ -329,6 +329,8 @@ async def answer_promise(promise_id: int, body: PromiseAnswer, db: Session = Dep
     promise = db.get(Promise, promise_id)
     if promise is None:
         raise HTTPException(404, "promise not found")
+    if promise.status != "open":  # a double tap must not count twice (pride / frustration, training data)
+        raise HTTPException(409, "already answered")
     promise.status = body.action
     for m in db.scalars(select(Message).where(Message.meta.is_not(None)).order_by(Message.id.desc()).limit(30)):
         if (m.meta or {}).get("promise_id") == promise.id and not m.meta.get("answered"):
@@ -496,6 +498,8 @@ async def respond(
     if task is None:
         raise HTTPException(404, "task not found")
     status, phrase = QUICK_ACTIONS[body.action]
+    if status is not None and task.status == status and body.action != "onit":  # double tap
+        raise HTTPException(409, "already answered")
     if status is None:  # snooze: push the block 10 minutes later, keep its length
         start = max(local(task.planned_start), now_local()) + timedelta(minutes=10)
         timetable.move(task, start, start + (from_db(task.planned_end) - from_db(task.planned_start)))
