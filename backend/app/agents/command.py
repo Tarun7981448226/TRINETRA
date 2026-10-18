@@ -204,7 +204,9 @@ async def core(ctx: AgentContext) -> AgentResult:
     messages.append({"role": "user", "content": text})
 
     try:
-        reply = humanize(await llm.complete(messages, tier="smart", reasoning="low"))  # conversation: fast > deep
+        sensitive = bool(ctx.notes.get("distress")) or ctx.notes.get("expression_label") in ("comforting", "gentle") \
+            or bool((ctx.notes.get("felt") or {}).get("low"))  # his feelings stay with providers that don't train on them
+        reply = humanize(await llm.complete(messages, tier="smart", reasoning="low", sensitive=sensitive))  # conversation: fast > deep
     except llm.LLMUnavailable as e:
         reply = str(e) if not ctx.settings.llm_available else (
             "I'm having trouble thinking right now — my model providers are busy. Try me again in a minute."

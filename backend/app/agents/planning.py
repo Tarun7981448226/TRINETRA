@@ -135,6 +135,7 @@ async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: st
             text = await llm.complete(
                 [{"role": "system", "content": system_prompt(mood)}, {"role": "user", "content": instruction}],
                 tier="fast", temperature=0.8, max_tokens=300,
+                sensitive=kind in ("journal_ack", "wellbeing") or ctx.notes.get("expression_label") in ("comforting", "gentle"),
             )
             text = humanize(text) or fallback
         except llm.LLMUnavailable:

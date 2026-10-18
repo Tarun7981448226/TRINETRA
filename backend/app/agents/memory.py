@@ -124,7 +124,7 @@ async def reflector(ctx: AgentContext) -> None:
             name=ctx.settings.trinetra_user_name,
             facts="\n".join(f"{m.id}: ({m.kind}) {m.content}" for m in facts),
             messages="\n".join(f"- {m.content[:200]}" for m in reversed(said)) or "(none)")}],
-            tier="smart", temperature=0.3, max_tokens=700, json_mode=True)
+            tier="smart", temperature=0.3, max_tokens=700, json_mode=True, sensitive=True)  # his whole memory
         insights = json.loads(raw).get("insights", [])
     except (llm.LLMUnavailable, json.JSONDecodeError, AttributeError) as e:
         log.warning("reflection skipped: %s", e)

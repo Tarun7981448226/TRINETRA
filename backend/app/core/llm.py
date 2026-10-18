@@ -112,6 +112,9 @@ CALL_TIMEOUT = 20  # seconds per model; a request may chain several agents insid
 BUDGET = 30  # seconds for one complete() across all the models it tries
 
 
+TRAINS_ON_FREE = {"gemini"}  # free-tier prompts may be used to improve the provider's products (paid tiers: not)
+
+
 class ProviderError(RuntimeError):
     pass
 
@@ -153,9 +156,15 @@ async def complete(
     max_tokens: int = 800,
     json_mode: bool = False,
     reasoning: str | None = None,
+    sensitive: bool = False,
 ) -> str:
-    """`reasoning` ("minimal"/"low"/"medium"/"high") caps how long thinking models think; None = their default."""
+    """`reasoning` ("minimal"/"low"/"medium"/"high") caps how long thinking models think; None = their default.
+    `sensitive`: his feelings, health, journal, or his whole memory are in the prompt. Providers whose free tier may use
+    prompts for training (Gemini's free API terms) go to the back of the line; they're used only if nothing else answers."""
     models = pool(tier)
+    if sensitive:
+        models = [m for m in models if m.split("/", 1)[0] not in TRAINS_ON_FREE] + \
+                 [m for m in models if m.split("/", 1)[0] in TRAINS_ON_FREE]
     if not models:
         raise LLMUnavailable(OFFLINE_REPLY)
 

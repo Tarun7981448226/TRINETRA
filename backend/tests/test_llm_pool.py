@@ -84,3 +84,12 @@ def test_resting_models_survive_a_cold_start(fake_litellm, client):
         llm._benched_until.clear()  # a fresh instance
         llm.load_bench(db)
         assert llm._benched_until["gemini/a"] > time.time() + 3000
+
+
+def test_sensitive_prompts_avoid_providers_that_train_on_free_prompts(fake_litellm):
+    calls, broken = fake_litellm
+    assert asyncio.run(llm.complete([{"role": "user", "content": "I feel hopeless"}], tier="smart", sensitive=True)) == "hi from groq/b"
+    broken["groq/b"] = RuntimeError("down")
+    broken["groq/c"] = RuntimeError("down")
+    llm._benched_until.clear()
+    assert asyncio.run(llm.complete([{"role": "user", "content": "x"}], tier="smart", sensitive=True)) == "hi from gemini/a"  # only if nothing else
