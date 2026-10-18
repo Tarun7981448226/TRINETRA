@@ -35,6 +35,6 @@ This is an internal map of what TRINETRA stores and who sees it, drawn from the 
 ## Before TRINETRA has other users
 - Separate data per user (row-level ownership, or a database per user).
 - Explicit consent at sign-up for each kind of data, and for fine-tuning on their conversations.
-- Export and delete-everything in the app (archive is not enough for "delete my data").
+- Export already exists (`GET /export`, which the nightly backup uses; it covers every table except device push keys). Still missing: a delete-everything action in the app, since archiving is not enough for "delete my data".
 - A no-training LLM tier; optionally an on-device model for the most private turns.
 - Encrypt memories and the journal at rest.
