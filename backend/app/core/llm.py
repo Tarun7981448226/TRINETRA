@@ -3,6 +3,7 @@
 Tiers:
   smart — deeper thinking (talking to you, planning, coaching)
   fast  — quick, frequent jobs (classify, extract memories, read your mood)
+  guest — visitors on the portfolio (its own order, so strangers don't spend Tarun's scarce daily requests)
 
 Each tier is an ordered pool (TRINETRA_MODELS_SMART / TRINETRA_MODELS_FAST in .env). Free tiers have
 small per-model allowances (e.g. 20 requests/day on some Gemini models, 8k tokens/minute on Groq), so a
@@ -11,19 +12,21 @@ next model in the pool answers instead. Add Claude later with e.g. anthropic/cla
 """
 import logging
 import time
+from contextvars import ContextVar
 from typing import Literal
 
 from app.config import get_settings
 
 log = logging.getLogger("trinetra.llm")
 
-Tier = Literal["smart", "fast"]
+Tier = Literal["smart", "fast", "guest"]
 
 OFFLINE_REPLY = (
     "My thinking engine isn't connected yet — add a free GEMINI_API_KEY or GROQ_API_KEY "
     "to .env and I'll come fully alive."
 )
 
+last_model: ContextVar[str | None] = ContextVar("last_model", default=None)  # who answered the last call (shown in traces)
 _benched_until: dict[str, float] = {}  # model → unix time it may be tried again
 
 
@@ -41,8 +44,11 @@ def pool(tier: Tier) -> list[str]:
     s = get_settings()
     primary = s.trinetra_models_smart if tier == "smart" else s.trinetra_models_fast
     backup = s.trinetra_models_fast if tier == "smart" else s.trinetra_models_smart
+    chain = [*primary.split(","), *backup.split(",")]
+    if tier == "guest":  # its own preferred models, then the smart pool, then the fast one
+        chain = [*s.trinetra_models_guest.split(","), *s.trinetra_models_smart.split(","), *s.trinetra_models_fast.split(",")]
     ordered = []
-    for m in [*primary.split(","), *backup.split(",")]:  # the other tier's pool is the last resort
+    for m in chain:  # the other tier's pool is the last resort
         m = m.strip()
         if m and m not in ordered and _has_key(m):
             ordered.append(m)
@@ -126,6 +132,8 @@ async def complete(
         try:
             text = await _call(model, messages, temperature, max_tokens, json_mode, reasoning)
             if text.strip():
+                log.info("answered by %s", model)
+                last_model.set(model)
                 return text
             last_error = ProviderError(f"{model} returned an empty reply")
         except Exception as e:  # rate limit, outage, bad key — bench it and try the next one

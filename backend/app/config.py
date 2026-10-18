@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     trinetra_models_fast: str = (
         "groq/openai/gpt-oss-20b,gemini/gemini-3.5-flash-lite,gemini/gemini-flash-lite-latest,groq/qwen/qwen3.8-27b"
     )
+    # Visitors on the portfolio: Groq's big model first (fast, ~1,000 free requests a day) so strangers don't use up the
+    # few daily Gemini requests that Tarun's own conversations need. Then the smart pool.
+    trinetra_models_guest: str = "groq/openai/gpt-oss-120b,gemini/gemini-2.5-flash"
     database_url: str = f"sqlite:///{ROOT / 'trinetra.db'}"
     trinetra_timezone: str = "Asia/Kolkata"
     trinetra_user_name: str = "Tarun"

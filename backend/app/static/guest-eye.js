@@ -47,6 +47,8 @@
   .log { flex: 1; overflow-y: auto; padding: 14px 14px 6px; display: flex; flex-direction: column; gap: 10px; min-height: 160px; }
   .msg { max-width: 86%; padding: 9px 13px; border-radius: 15px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
   .tri { align-self: flex-start; background: var(--panel); border-left: 3px solid var(--gold); border-bottom-left-radius: 4px; }
+  .why { align-self: flex-start; margin: -6px 0 0 4px; background: none; border: 0; padding: 2px 4px; color: var(--muted); font-size: 11.5px; cursor: pointer; }
+  .why:hover { color: var(--gold); }
   .me { align-self: flex-end; background: #2b2a42; border-bottom-right-radius: 4px; }
   .tri.tarun { border-left-color: #4ade80; background: #13261b; }
   .dots { align-self: flex-start; color: var(--muted); font-size: 13px; padding: 0 4px; }
@@ -120,6 +122,7 @@
 <div class="wrap">
   <section class="panel" role="dialog" aria-label="Chat with TRINETRA, Tarun's AI mentor">
     <div class="head"><div><b>TRINETRA</b><small>Tarun's AI mentor</small></div><span class="sp"></span>
+      <button class="icon brainbtn" type="button" aria-label="See how I think: my brain and agents, live" title="How I think (live)">🧠</button>
       <button class="icon mute" type="button" aria-label="Mute voice">🔊</button>
       <button class="icon close" type="button" aria-label="Close chat">✕</button></div>
     <div class="log" aria-live="polite"></div>
@@ -131,7 +134,7 @@
       <textarea name="message" placeholder="Your message for Tarun (optional)" maxlength="1000" aria-label="Message for Tarun"></textarea>
       <button class="send" type="submit">Leave it for Tarun</button></form>
   </section>
-  <div class="nudge">Hi, I'm Tarun's AI. Click to see my brain 🧠</div>
+  <div class="nudge">Hi, I'm Tarun's AI. Click to talk to me 👋</div>
   <button class="orb" type="button" aria-label="Talk to TRINETRA, Tarun's AI mentor" aria-expanded="false"><div class="float"><div class="buddy"></div></div></button>
 </div>`;
 
@@ -195,7 +198,7 @@
 
   // ---- its brain (static/brain.js): a click on the doll opens TRINETRA's Brain inside the portfolio — the real 66 agents in 10
   //      teams, placed in the brain regions that match their jobs, managers reporting to TRINETRA at the thalamus. 💬 there = chat ----
-  let brainReady = null, bigBrain = null;
+  let brainReady = null, bigBrain = null, lastTrace = null;
   const BRAIN_ON = me?.dataset.world !== "off";
   function loadWorld() {
     return (brainReady ??= new Promise((ok) => {
@@ -203,15 +206,15 @@
       const sc = document.createElement("script"); sc.src = `${API}/static/brain.js`; sc.onload = ok; sc.onerror = ok; document.head.appendChild(sc);
     }));
   }
-  async function openWorld(cmd) {
+  async function openWorld(cmd, trace) {
     if (!BRAIN_ON) return open();
     nudge.classList.remove("on");
     await loadWorld();
     if (!window.TrinetraBrain) return open();
-    if (bigBrain) { if (cmd) bigBrain.ready.then(() => bigBrain?.order(cmd)); return; }  // after the team has loaded
+    if (bigBrain) { if (cmd) bigBrain.ready.then(() => bigBrain?.order(cmd)); else if (trace) bigBrain.ready.then(() => bigBrain?.brain?.replay(trace)); return; }
     bigBrain = TrinetraBrain.open(wrap, {
       agents: fetch(`${API}/guest/agents`).then((r) => (r.ok ? r.json() : null)),
-      look: { style: LOOK.style || "pixel", palette: LOOK.palette || "saffron" }, cmd,
+      look: { style: LOOK.style || "pixel", palette: LOOK.palette || "saffron" }, cmd, trace,
       onChat: () => later(50, open), onClose: () => { bigBrain = null; },
     });
   }
@@ -648,6 +651,12 @@
   function afterReply(d) {  // whatever TRINETRA said, plus what comes with it
     if (d.eject) { add(d.reply, "tri"); return throwOut(); }
     add(d.reply, "tri");
+    if (d.trace?.length && BRAIN_ON) {  // what really happened to their message — watch it live in the Brain
+      lastTrace = d.trace;
+      const why = document.createElement("button"); why.type = "button"; why.className = "why"; why.textContent = "🧠 how I answered ▶";
+      why.onclick = () => openWorld(null, d.trace);
+      log.appendChild(why); log.scrollTop = log.scrollHeight;
+    }
     if (d.show) return runShow(d.show);  // just the name; the character performs it (no voice)
     if (d.perform?.length) return perform(d.perform);  // just the names, and the face acts them out (no voice)
     speak();
@@ -729,8 +738,10 @@
     wrap.classList.remove("open", "speaking"); panel.classList.remove("on"); orb.setAttribute("aria-expanded", "false");
     look(0, 0); orb.focus({ preventScroll: true });
   }
-  // tap mid-show = stop the show; chat open = close it; otherwise its Brain opens, and 💬 there starts the chat
-  orb.onclick = () => (window.TrinetraMusic?.playing ? stopShow() : has("open") ? close() : openWorld());
+  // tap mid-show = stop the show; otherwise the chat opens (or closes). The 🧠 in the chat's header shows how it thinks, live.
+  orb.onclick = () => (window.TrinetraMusic?.playing ? stopShow() : has("open") ? close() : open());
+  $(".brainbtn").onclick = () => openWorld(null, lastTrace);
+  if (!BRAIN_ON) $(".brainbtn").hidden = true;
   $(".close").onclick = close;
   root.addEventListener("keydown", (e) => { if (e.key === "Escape" && has("open")) close(); });
 

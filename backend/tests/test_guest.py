@@ -368,3 +368,56 @@ def test_emotions_on_request_are_just_names(client, llm_calls):
     assert r["perform"] == ["shy"] and r["reply"] == "☺️ Shy"
     r = client.post("/chat", json={"text": "show me all your emotions"}).json()
     assert r["reply"].startswith("😊 Happy · 🤩 Excited") and len(r["notes"]["perform"]) == 10
+
+
+def test_testing_you_is_not_a_name_offline(client, llm_calls, monkeypatch):
+    """The screenshot bug: "tarun is a liar" → "testing you" became "Nice to meet you, Testing You!"."""
+    from app.core import push
+    pushed = []
+    monkeypatch.setattr(push, "send", lambda db, title, body, url="/", tag=None: pushed.append(body) or 1)
+    token = hello(client)
+    client.post("/guest/chat", json={"token": token, "text": "tarun is a liar"})
+    r = client.post("/guest/chat", json={"token": token, "text": "testing you"}).json()
+    assert "Testing You" not in r["reply"] and not pushed
+    for bare in ("just looking", "hello there", "who are you", "nothing"):
+        assert guest._guess_name(bare)[0] is None, bare
+    assert guest._guess_name("Sathwik")[0] == "Sathwik" and guest._guess_name("priya shah")[0] == "Priya Shah"
+    assert guest._guess_name("I'm Sam from Google") == ("Sam", "Google")
+
+
+def test_the_model_reads_the_whole_conversation(client, monkeypatch):
+    """With models up, one smart call sees the full conversation and says what the last message meant."""
+    import json as _json
+    from app.core import llm, push
+    from app.config import get_settings
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "x")
+    monkeypatch.setattr(push, "send", lambda *a, **k: 1)
+    seen = []
+
+    async def model(messages, tier="smart", json_mode=False, **kw):
+        seen.append((messages, tier, json_mode))
+        last = messages[-1]["content"]
+        if "testing" in last:  # a model that (wrongly) calls it a name still can't make it one
+            return _json.dumps({"intent": "testing", "name": "Testing You", "reply": "Test away. I don't break easily."})
+        if "Priya" in last:
+            return _json.dumps({"intent": "introduce", "name": "Priya", "company": "Google", "role": "recruiter",
+                                "reply": "Hi Priya!"})
+        if "what does he do" in last:  # a name that isn't in what they typed is never taken
+            return _json.dumps({"intent": "question", "name": "Ravi", "reply": "Good question."})
+        return _json.dumps({"intent": "question", "name": None, "reply": "He builds real AI systems."})
+
+    monkeypatch.setattr(llm, "complete", model)
+    token = hello(client)
+    r = client.post("/guest/chat", json={"token": token, "text": "testing you"}).json()
+    assert r["reply"].startswith("Test away") and "Nice to meet you" not in r["reply"]
+    msgs, tier, json_mode = seen[-1]
+    assert tier == "guest" and json_mode and "host on Tarun's portfolio" in msgs[0]["content"]
+    assert [m["content"] for m in msgs[1:]][-1] == "testing you" and msgs[1]["role"] == "assistant"  # the greeting too
+    r = client.post("/guest/chat", json={"token": token, "text": "ok fine, I'm Priya, recruiting at Google"}).json()
+    log = client.get("/visitors").json()[0]
+    assert log["name"] == "Priya" and log["company"] == "Google"
+    assert "Nice to meet you" not in r["reply"]  # role known → straight to the pitch
+
+    token = hello(client)
+    r = client.post("/guest/chat", json={"token": token, "text": "what does he do?"}).json()
+    assert r["reply"].startswith("Good question") and all(x["name"] != "Ravi" for x in client.get("/visitors").json())

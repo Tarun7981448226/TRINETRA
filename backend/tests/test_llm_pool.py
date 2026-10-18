@@ -67,3 +67,8 @@ def test_everything_down_raises_cleanly(fake_litellm):
         broken[m] = RuntimeError("503 overloaded")
     with pytest.raises(llm.LLMUnavailable):
         asyncio.run(llm.complete([{"role": "user", "content": "x"}]))
+
+
+def test_guest_pool_puts_its_own_models_first(fake_litellm, monkeypatch):
+    monkeypatch.setattr(get_settings(), "trinetra_models_guest", "groq/b,gemini/z")
+    assert llm.pool("guest") == ["groq/b", "gemini/z", "gemini/a", "groq/c"]

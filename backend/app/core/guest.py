@@ -31,6 +31,7 @@ GREETING = ("Hey there! I'm TRINETRA, Tarun's AI mentor. He built me to run his 
             "Before I tell you more, what's your name?")
 CHECKING = "Good question. Let me check with him right now, one moment."
 TOUR_OFFER = "Would you like a quick tour of Tarun's portfolio? I can show you around."
+FALLBACK_ANSWER = "I'm not sure about that one. The best way is to ask Tarun directly at tarundeepreddybv@gmail.com."
 FALLBACK = ("I think he's at work right now. Please leave him a message and he'll get back to you. "
             "May I have your email?")
 
@@ -102,17 +103,39 @@ def _remember(v: GuestVisit, role: str, text: str) -> None:
 
 
 NOT_NAMES = {"from", "at", "with", "and", "here", "the", "a", "an", "hi", "hello", "hey", "working", "recruiter"}
+NEVER_NAMES = {"i", "me", "my", "you", "u", "your", "ur", "he", "him", "his", "she", "it", "this", "that", "there", "we",
+               "they", "what", "who", "why", "how", "is", "are", "am", "test", "testing", "tested", "just", "looking", "ok",
+               "okay", "yes", "no", "nope", "sure", "thanks", "thank", "cool", "nice", "lol", "hmm", "bot", "ai", "nothing",
+               "nobody", "none", "anonymous", "guess", "skip", "later", "not", "dont", "don't", "why", "liar", "fake"}
+
+
+TITLES = {"dr", "mr", "mrs", "ms", "miss", "prof", "professor", "sir", "madam"}
+
+
+def _plausible_name(name: str, typed: str) -> bool:
+    """A name has to be in what they typed, and can't be words like "testing you" or "just looking"."""
+    words = [w.strip(".,'-") for w in name.split()]
+    words = [w for w in words if w and w.lower() not in TITLES] or words
+    return (0 < len(words) <= 3 and all(w.lower() not in NEVER_NAMES for w in words)
+            and all(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", typed, re.I) for w in words))
 
 
 def _guess_name(text: str) -> tuple[str | None, str | None]:
-    """Offline fallback: "I'm Priya from Google" → ("Priya", "Google")."""
+    """Offline fallback: "I'm Priya from Google" → ("Priya", "Google"). A bare reply ("Sathwik") counts only when every
+    word is unusual or typed with a capital — "testing you" or "just looking" is not a name."""
+    from app.core.show import _common
     t = text.strip().strip(".!")
     m = re.search(r"(?:i'?m|i am|my name is|this is|it'?s|name'?s|call me)\s+([A-Za-z][A-Za-z'\-]+(?:\s+[A-Z][a-z'\-]+)?)",
                   t, re.I)
-    name = m.group(1) if m else (t if re.fullmatch(r"[A-Za-z][A-Za-z'\-]{1,20}(\s+[A-Za-z][A-Za-z'\-]{1,20})?", t) else None)
+    name = m.group(1) if m else None
+    if not m and re.fullmatch(r"[A-Za-z][A-Za-z'\-]{1,20}(\s+[A-Za-z][A-Za-z'\-]{1,20})?", t):
+        if all(w.lower() not in _common() or w[0].isupper() for w in t.split()):
+            name = t
     if name:  # "Priya from" → "Priya"
         words = [w for w in name.split() if w.lower() not in NOT_NAMES]
         name = " ".join(words) or None
+    if name and not _plausible_name(name, t):
+        name = None
     c = re.search(r"\b(?:from|at|with|work at|working at)\s+([A-Z][\w&.\- ]{1,40})", t)
     return (name.title() if name else None), (c.group(1).strip() if c else None)
 
@@ -163,25 +186,45 @@ def _role_from_words(text: str) -> str | None:
     return None
 
 
-async def _extract_identity(text: str) -> tuple[str | None, str | None, str | None]:
-    """(name, company, role) from what they typed. The model first, then plain pattern matching."""
+UNDERSTAND = """
+
+Right now, before you answer, read the WHOLE conversation and work out what the visitor's last message means. Reply ONLY with JSON:
+{{"intent": "introduce" | "role" | "question" | "smalltalk" | "testing" | "feedback" | "other",
+  "name": string or null,     // their OWN name, only if they clearly told you it (e.g. "I'm Priya", or just "Priya" right after you asked). Never a phrase like "testing you", "just looking", "a recruiter". No guessing.
+  "company": string or null,  // only if they said where they work or study
+  "role": "recruiter" | "manager" | "founder" | "researcher" | "ml_engineer" | "swe" | "mentor" | "student" | "other" | null,
+  "reply": string}}           // what you say back, following every rule above (1–3 short spoken sentences, plain text)
+If they're testing you or being sceptical ("testing you", "is this real?", "tarun is a liar"), answer that with calm, \
+good-humoured confidence; don't treat it as a name. Known so far: {known}"""
+
+
+def _model_name() -> str:
+    m = llm.last_model.get() or "a model"
+    return m.split("/")[-1]
+
+
+async def _understand(v: GuestVisit) -> dict | None:
+    """One call to the smart model with the whole conversation: what they meant (who they are, if they said) and the reply.
+    None when the models are down or don't answer in JSON — the plain pattern matching takes over."""
+    known = ", ".join(f"{k}: {x}" for k, x in (("name", v.name), ("company", v.company), ("role", v.role)) if x) or "nothing yet"
+    if _said(v, ROLE_Q) and not v.role:
+        known += f' (you just asked "{ROLE_Q}")'
+    history = [{"role": "assistant" if m["role"] == "trinetra" else "user", "content": m["text"]} for m in (v.messages or [])[-12:]]
     try:
-        raw = await llm.complete(
-            [{"role": "system", "content": "From a visitor's message to a portfolio website's assistant, extract their own "
-                                           "first name (or full name), company, and role. role is one of: recruiter, manager, "
-                                           "founder, researcher, engineer, student, other — or null if not stated. Reply as "
-                                           'JSON: {"name": string|null, "company": string|null, "role": string|null}. No guessing.'},
-             {"role": "user", "content": text[:300]}],
-            tier="fast", temperature=0, max_tokens=80, json_mode=True)
-        d = json.loads(raw)
-        name, company, role = d.get("name") or None, d.get("company") or None, d.get("role") or None
-        if name or company or role:
-            role = role if role in ROLES else _role_from_words(text)
-            return (str(name)[:80] if name else None), (str(company)[:120] if company else None), role
-    except Exception:  # offline, rate-limited or not JSON: the pattern guess below is fine
-        pass
-    name, company = _guess_name(text)
-    return name, company, _role_from_words(text)
+        raw = await llm.complete([{"role": "system", "content": guest_prompt(brief(), v.name, v.company, v.role)
+                                   + UNDERSTAND.format(known=known)}, *history],
+                                 tier="guest", temperature=0.6, max_tokens=500, json_mode=True, reasoning="low")
+        d = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+    except Exception:  # offline, rate-limited, or not JSON
+        return None
+    if not isinstance(d, dict) or not isinstance(d.get("reply"), str) or not d["reply"].strip():
+        return None
+    typed = (v.messages or [{}])[-1].get("text", "")
+    name = d.get("name") if isinstance(d.get("name"), str) else None
+    d["name"] = name.strip()[:80] if name and _plausible_name(name.strip(), typed) else None
+    d["company"] = str(d["company"]).strip()[:120] if d.get("company") else None
+    d["role"] = d.get("role") if d.get("role") in ROLES else None
+    return d
 
 
 def _topic(text: str) -> str:
@@ -246,7 +289,7 @@ def _sparing(v: GuestVisit, text: str) -> str:
 async def _say(v: GuestVisit, history: list[dict], fallback: str) -> str:
     try:
         text = humanize(await llm.complete([{"role": "system", "content": guest_prompt(brief(), v.name, v.company, v.role)}, *history],
-                                           tier="fast", temperature=0.7, max_tokens=220), strip_name=False) or fallback
+                                           tier="guest", temperature=0.7, max_tokens=300, reasoning="low"), strip_name=False) or fallback
     except llm.LLMUnavailable:
         text = fallback
     return _sparing(v, _short(text))
@@ -262,32 +305,47 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
     text = text.strip()[:MAX_TEXT]
     v.turns += 1
     _remember(v, "visitor", text)
+    trace: list[dict] = []  # what really happened, step by step — the portfolio shows it live in the Brain
+
+    def step(team: str, did: str) -> None:
+        trace.append({"team": team, "did": did})
 
     def done(reply: str, **extra) -> dict:
         _remember(v, "trinetra", reply)
         db.commit()
-        return {"reply": reply, **extra}
+        if not trace or trace[-1]["team"] != "command":
+            step("command", "TRINETRA approved the reply")
+        return {"reply": reply, **extra, "trace": trace}
 
     # 0. Insulting Tarun gets you thrown out.
     if abusive(text):
-        return eject(db, v, text)
+        return {**eject(db, v, text), "trace": [{"team": "wellbeing", "did": "Guard: an insult about Tarun — the visitor is removed"},
+                                                 {"team": "reminders", "did": "Told Tarun on his phone"}]}
     # 0b. "Show me your emotions" → just the names; the face acts them out (whatever step of the chat we're at).
     from app.agents.command import EMOTION_LABEL, perform_request
     from app.core import show
     if wanted := show.request(text, lab=True):  # "dance", "play the guitar", "stop" → just the name; the character performs it
+        step("command", f"Language reader: understood “{show.label(wanted)}” (typos and slang fixed)")
+        step("mentor_emotion", "Performer: acts it out")
         return done(show.label(wanted), show=wanted)
     if perform := perform_request(text):
+        step("command", "Language reader: a request to show emotions")
+        step("mentor_emotion", "Emotion engine: " + ", ".join(perform))
         return done(" · ".join(EMOTION_LABEL[e] for e in perform), perform=perform)
     # 1. They gave us their email / number — always welcome, never refused.
     if (thanks := _take_contact(db, v, text)) is not None:
+        step("communications", "Contact keeper: saved the email / number")
+        step("reminders", "Sent it to Tarun's phone")
         return done(thanks, celebrate=True)
     # 2. Leaving.
     if BYE.search(text) and len(text) < 60:
+        step("communications", "Host: a goodbye")
         ask = _important(v) and not (v.email or v.phone) and not _said(v, CONTACT_FORM_Q)
         return done(f"Thanks for stopping by{', ' + v.name if v.name else ''}! "
                     + (CONTACT_ASK.replace("just drop", "drop") if ask else "Tarun will be glad you came. Take care."))
     # 3. They want to leave their details: the card, whoever they are (they asked).
     if CONTACT_INTENT.search(text) and not (v.email or v.phone):
+        step("communications", "Host: they want to leave details — show the card")
         return done(CONTACT_HOW, contact_form=True)
     # 4. "What is Tarun doing right now?" → his phone.
     if NOW_PATTERN.search(text):
@@ -297,29 +355,50 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
         push.send(db, "TRINETRA 👀", f"{_who(v)} is on your portfolio and asks what you're doing right now. Tap to answer.",
                   url=f"/#ask/{ask.id}", tag=f"ask-{ask.id}")
         v.topics = [*(v.topics or []), "asked what you're doing"][-12:]
+        step("reminders", "Asked Tarun on his phone what he's doing")
         return done(CHECKING, ask_id=ask.id)
 
-    # 5. Getting to know them: name (first couple of messages), then who they are (buttons).
+    # 5. Everything else: the model reads the whole conversation once — who they are (if they said) and what to say back.
+    u = await _understand(v)
+    if u is not None:
+        step("command", f"Understanding ({_model_name()}): read the whole chat → {u.get('intent') or 'question'}")
+    else:
+        step("command", "Understanding: models busy — plain pattern matching")
     introducing = v.name is None and v.turns <= 2  # don't keep pestering someone who'd rather not say
     if introducing:
-        name, company, role = await _extract_identity(text)
+        if u is not None:
+            name, company, role = u["name"], u["company"], (u["role"] or _role_from_words(text)) if u["name"] else None
+        else:
+            name, company = _guess_name(text)
+            role = _role_from_words(text)
         name = " ".join(w[:1].upper() + w[1:] for w in name.split()) if name else None  # "charan" → "Charan"
         if name:  # only an introduction tells us who THEY are ("his research?" doesn't make them a researcher)
             v.name, v.company, v.role = name, v.company or company, v.role or role
+            step("memory", f"Profile keeper: remembered the visitor's name ({name})")
             push.send(db, "TRINETRA 👋", f"{_who(v)} is talking to me on your portfolio.", url="/#visitors", tag="visitor")
         if v.name and not v.role:
             return done(f"Nice to meet you, {v.name}! {ROLE_Q}", role_options=ROLE_OPTIONS)
     answering_role = not introducing and v.role is None and _said(v, ROLE_Q) and v.turns <= 4
     if answering_role:  # they typed it instead of tapping a button
-        _, company, role = await _extract_identity(text)
-        v.role, v.company = role or "other", v.company or company
+        role = (u or {}).get("role") or _role_from_words(text)
+        if role or u is None or u.get("intent") == "role":
+            v.role = role or "other"
+            v.company = v.company or (u or {}).get("company") or _guess_name(text)[1]
+        else:  # a question instead of an answer — answer it; the buttons are still there
+            answering_role = False
     if (introducing and v.name) or answering_role:
+        step("communications", "Host: a short pitch made for who they are")
         return await pitch(db, v, done)
 
     # 6. A normal question about Tarun / TRINETRA.
     v.topics = [*(v.topics or []), _topic(text)][-12:]
-    history = [{"role": "assistant" if m["role"] == "trinetra" else "user", "content": m["text"]} for m in v.messages[-10:]]
-    reply = await _say(v, history, "I'm not sure about that one. The best way is to ask Tarun directly at tarundeepreddybv@gmail.com.")
+    step("memory", "Privacy guard: only Tarun's public brief is used — nothing private")
+    step("communications", "Host: wrote the reply")
+    if u is not None:
+        reply = _sparing(v, _short(humanize(u["reply"], strip_name=False))) or FALLBACK_ANSWER
+    else:
+        history = [{"role": "assistant" if m["role"] == "trinetra" else "user", "content": m["text"]} for m in v.messages[-10:]]
+        reply = await _say(v, history, FALLBACK_ANSWER)
     if _important(v) and not (v.email or v.phone) and v.turns >= 4 and not (_said(v, CONTACT_ASK) or _said(v, CONTACT_FORM_Q)):
         return done(f"{reply} {CONTACT_ASK}")  # once, for people worth connecting with
     offer = v.turns >= 2 and not _said(v, TOUR_OFFER)  # didn't introduce themselves: still offer the tour, once
