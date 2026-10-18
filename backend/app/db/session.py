@@ -1,6 +1,8 @@
+import time
 from collections.abc import Iterator
+from contextvars import ContextVar
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool, StaticPool
 
@@ -24,6 +26,20 @@ def make_engine(url: str):
 
 
 engine = make_engine(get_settings().database_url)
+
+# How many new database connections this request opened, and the time spent opening them (the Server-Timing header).
+connects: ContextVar[list | None] = ContextVar("connects", default=None)
+
+
+@event.listens_for(engine, "do_connect")
+def _connect_started(dialect, conn_rec, cargs, cparams):
+    conn_rec.info["t0"] = time.perf_counter()
+
+
+@event.listens_for(engine, "connect")
+def _connected(dbapi_conn, conn_rec):
+    if (log := connects.get()) is not None:
+        log.append(time.perf_counter() - conn_rec.info.pop("t0", time.perf_counter()))
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 

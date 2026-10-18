@@ -55,6 +55,20 @@ def create_app() -> FastAPI:
     app = FastAPI(title="TRINETRA", description="The Eye That Watches Over You", lifespan=lifespan)
     app.state.orchestrator = Orchestrator(Registry.load(settings.agents_dir), settings)
     app.add_middleware(PasscodeMiddleware)
+
+    @app.middleware("http")
+    async def server_timing(request, call_next):  # where the time goes: the whole request, and opening DB connections
+        import time
+        from app.db.session import connects
+        log, t0 = [], time.perf_counter()
+        token = connects.set(log)
+        try:
+            response = await call_next(request)
+        finally:
+            connects.reset(token)
+        response.headers["Server-Timing"] = (f"app;dur={(time.perf_counter() - t0) * 1000:.0f}, "
+                                             f"db_connect;dur={sum(log) * 1000:.0f};desc=\"{len(log)} new\"")
+        return response
     # The portfolio (another site) talks to /guest/* from the visitor's browser. No cookies cross over.
     app.add_middleware(CORSMiddleware, allow_origins=guest_api.ORIGINS, allow_methods=["GET", "POST"],
                        allow_headers=["content-type"], allow_credentials=False)
