@@ -132,3 +132,25 @@ def test_reader_hears_despair_idioms_but_not_pep_talk():
         assert feel.read(t)["low"], t
     for t in ("never give up!", "I gave up sugar this month", "dont give up"):
         assert not feel.LOW_IDIOMS.search(t), t
+
+
+def test_forget_that_puts_away_what_it_just_learned(client, llm_calls):
+    from tests.conftest import trinetra_prompt
+    with client.session_factory() as db:
+        old = Memory(kind="profile", content="Studies at USC", importance=5,
+                     created_at=datetime.now(timezone.utc) - timedelta(days=3))
+        db.add_all([old, Memory(kind="person", content="His friend Ravi owes him money", importance=2)])
+        db.commit()
+    body = client.post("/chat", json={"text": "actually forget that, it's private"}).json()
+    assert body["notes"]["forgot"] == ["His friend Ravi owes him money"]
+    assert "put these away for good" in trinetra_prompt(llm_calls)
+    with client.session_factory() as db:
+        assert {m.content for m in recall.live(db)} == {"Studies at USC"}  # older memories untouched
+
+
+def test_dont_forget_is_not_forget():
+    from app.agents.command import FORGET_THAT
+    for t in ("don't forget that I have a test", "dont forget that", "never forget that day", "forget that I said gym, make it 7"):
+        assert not FORGET_THAT.search(t), t
+    for t in ("forget that", "don't remember that", "delete that memory", "that's private"):
+        assert FORGET_THAT.search(t), t

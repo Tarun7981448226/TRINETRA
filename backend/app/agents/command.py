@@ -23,6 +23,8 @@ INTENT_PATTERNS: dict[str, str] = {
 QUIETER = re.compile(r"(?<!don't )(?<!dont )(?<!do not )\b(stop (nagging|pinging|bugging|spamming)( me)?|too many (notifications|reminders|nudges|messages)|"
                      r"(fewer|less) (notifications|reminders|nudges)|leave me alone(?! for| to| while| until)|you'?re (too )?(annoying|clingy)|"
                      r"back off(?!\s+(the|my|on|it|to|from|a|an)\b)|stop bothering me)\b", re.I)
+FORGET_THAT = re.compile(r"(?<!don't )(?<!dont )(?<!do not )(?<!never )(?<!not )(?<!won't )\b(forget (that|this|what i (just )?said)(?! i\b| my\b| the\b| to\b)|don'?t (remember|save|keep) (that|this)|delete that( memory)?|"
+                         r"that'?s private|erase that)\b", re.I)
 LOUDER = re.compile(r"(?<!never )(?<!don't )(?<!dont )(?<!do not )(?<!stop )\b(nudge me again|you can (nag|nudge|ping) me again|(more|turn on) (nudges|reminders)|push me (more|harder))\b", re.I)
 CRISIS_LINE = ("If any part of you is thinking about ending your life or hurting yourself, please call or text 988 "
                "(the Suicide & Crisis Lifeline in the US; in India, Tele-MANAS 14416; elsewhere, your local emergency "
@@ -95,6 +97,14 @@ async def router(ctx: AgentContext) -> None:
     if demo := mood_modes.detect_demo(text):
         ctx.notes["demo"] = {"mode": demo[0], "target": demo[1]}
         return  # a one-off show — the lasting mode stays as it is
+    if FORGET_THAT.search(text):  # "forget that": what it just learned is put away (archived, never recalled)
+        from datetime import datetime, timedelta, timezone
+        from app.db.models import Memory
+        since = datetime.now(timezone.utc) - timedelta(minutes=15)
+        fresh = [m for m in ctx.db.scalars(select(Memory).where(Memory.created_at >= since)) if not m.archived]
+        for m in fresh:
+            m.archived = True
+        ctx.notes["forgot"] = [m.content for m in fresh] or ["(nothing new to forget)"]
     if text.startswith(("✅", "✋", "⚡")):  # a button answer re-sent as a message isn't a request about nudges
         pass
     elif QUIETER.search(text):  # "stop nagging me": his call — optional nudges go quiet for a few days
@@ -241,6 +251,10 @@ async def core(ctx: AgentContext) -> AgentResult:
         context += (f"\nHe asked you to back off, so you just turned your OPTIONAL nudges (check-in extras, streak cheers, "
                     f"behind-schedule talks, your own ideas) off until {until}. Reminders he set himself and his wake-up "
                     "still come. Tell him that in a sentence, without arguing, and that he can say 'nudge me again' anytime.")
+    if forgot := ctx.notes.get("forgot"):
+        if FORGET_THAT.search(text):
+            context += (f"\nHe asked you to forget what he just told you. You put these away for good (they won't come up "
+                        f"again): {forgot}. Confirm in one short, warm sentence; don't repeat what it was.")
     if ctx.notes.get("nudges_back"):
         context += "\nYou just turned your optional nudges back on because he asked. Say so in a few words."
     if changes := ctx.notes.get("timetable_changes"):
