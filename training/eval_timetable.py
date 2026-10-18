@@ -1,4 +1,7 @@
 import asyncio, os, sys, time as _t
+# ⚠ Uses the REAL model keys from ../.env, which production shares. Free tiers have DAILY limits (Gemini resets at
+#   midnight PT, Groq over a rolling 24 h): keep runs small, never run before Tarun's day, and stop if the log shows
+#   "benched … 21600s". Better: put separate eval keys in the environment before running.
 sys.path.insert(0, os.getcwd())
 db_path = sys.argv[1]
 os.environ["TRINETRA_MODELS_SMART"] = "groq/openai/gpt-oss-120b,groq/openai/gpt-oss-20b"

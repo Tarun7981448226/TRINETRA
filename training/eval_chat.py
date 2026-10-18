@@ -1,4 +1,7 @@
 """Scenario eval for TRINETRA's private chat: real pipeline, LLM-as-judge (a different model grades)."""
+# ⚠ Uses the REAL model keys from ../.env, which production shares. Free tiers have DAILY limits (Gemini resets at
+#   midnight PT, Groq over a rolling 24 h): keep runs small, never run before Tarun's day, and stop if the log shows
+#   "benched … 21600s". Better: put separate eval keys in the environment before running.
 import asyncio, json, os, sys, time, httpx
 sys.path.insert(0, os.getcwd())
 from dotenv import load_dotenv; load_dotenv("../.env")
