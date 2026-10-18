@@ -399,12 +399,12 @@
   function howIThink(data) {
     const steps = [
       ["👂", "Hear", "Every message, check-in, tap and timer becomes a signal."],
-      ["🧭", "Understand", "A language model reads the whole conversation, not just the last line, and works out what you mean, typos and all."],
-      ["📓", "Remember", "The Memory team pulls up only what matters for this moment. Visitors only ever get Tarun's public facts."],
-      ["🧑‍🤝‍🧑", "Teams work", `${data.teams.length} teams of specialists (${data.total} agents) each handle their part. Every team has a ★ manager who sums it up.`],
-      ["👁️", "Decide", "The managers report to TRINETRA at the centre. It weighs their advice, says yes or no, and picks one answer."],
-      ["💬", "Act", "The reply goes out: spoken, shown on the face, or sent to Tarun's phone."],
-      ["🔁", "Learn", "What worked and what didn't is saved, so the next decision is better."],
+      ["🧭", "Understand", "A language model reads the whole conversation, not just the last line, and works out what you mean, typos and all. TRINETRA's own emotion model, trained on 58,000 real sentences, reads the feeling privately on its own server."],
+      ["📓", "Remember", "Its memory search runs on its own small AI model, so nothing leaves the server. It picks what matters right now by relevance, importance and how recent it is. Visitors only ever get Tarun's public facts."],
+      ["🧑‍🤝‍🧑", "Teams work", `${data.teams.length} teams of specialists (${data.total} agents) each do their part. Every team's ★ manager sums it up in one line.`],
+      ["👁️", "Decide", "TRINETRA reads the managers' reports and picks one answer. For anything optional, like a nudge or an idea, it decides whether it's worth interrupting at all."],
+      ["💬", "Act", "The reply goes out: spoken, shown on the face, or sent to Tarun's phone. Big changes are always asked first."],
+      ["🔁", "Learn", "Every night it reflects on what it learned and writes a few insights. It also notices which nudges Tarun actually answers, so its judgement keeps getting better."],
     ];
     return `<button class="close" type="button">✕</button><h3>How I think</h3>
       <p class="muted">Each message travels this path in a second or two. Tap ▶ under any of my chat replies to watch it happen live.</p>

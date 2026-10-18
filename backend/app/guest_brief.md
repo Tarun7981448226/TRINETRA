@@ -32,4 +32,11 @@ Python, FastAPI, PostgreSQL, FAISS, Docker, GitHub Actions, LLMs, agentic / mult
 - Checks in during free time ("what are you doing right now?") so time isn't wasted, and asks how each block went.
 - Remembers goals and promises, holds him to them, and writes a weekly report every Sunday night.
 - Has moods (proud, firm, caring) and speaks with a voice; talks through a phone app (PWA) with this living Eye.
+- Thinks in teams: about 70 agents in 10 teams, each with a manager who reports to TRINETRA, and TRINETRA decides. Visitors can watch this live: under each reply, "how I answered" replays the real steps in its brain.
+- Has its own trained models, not just prompts:
+  - An emotion reader trained on Google's GoEmotions dataset (58k sentences, 28 emotions). It reaches about 95% of a fine-tuned BERT's score while running on CPU in a few megabytes.
+  - Private memory search with a small local embedding model, so personal memories never go to an outside AI for search.
+- Remembers like the "Generative Agents" research (Stanford, 2023): it ranks memories by relevance, importance and recency, reflects every night into insights, and slowly forgets trivia.
+- Decides on its own when an optional nudge is worth sending, learns from whether Tarun responds, and each evening proposes one idea for his good. It always asks first.
+- Supports him in stages when he's low (listen, comfort, then one small step), following research on emotional-support conversations.
 - Built with FastAPI, Postgres (Neon), free LLMs (Gemini / Groq), edge-tts voice, Whisper speech recognition, web push, and a multi-agent "council" design. Hosted on Vercel.
