@@ -489,7 +489,9 @@ async def initiative(ctx: AgentContext) -> AgentResult | None:
         ctx.notes["held_back"] = {"kind": "initiative", "reason": verdict.reason}
         return None
     why = str(d.get("why") or "").strip()
-    text = f"An idea, from watching how your days go: {idea.strip()}" + (f" ({why})" if why else "") + " Want me to do it?"
+    clean = lambda t: t.strip().rstrip(".!")
+    text = (f"An idea, from watching how your days go: {clean(idea)}." + (f" Why: {clean(why)[:1].lower() + clean(why)[1:]}." if why else "")
+            + " Want me to set that up?")
     msg = Message(role="trinetra", content=text, channel="reminder", mood="warm and thoughtful",
                   meta={"kind": "initiative", "idea": idea.strip()[:300], "buttons": ["approve", "reject"]})
     ctx.db.add(msg)

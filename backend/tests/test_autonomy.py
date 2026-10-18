@@ -104,7 +104,7 @@ def test_initiative_asks_first_and_a_yes_goes_through_the_pipeline(client, monke
         asyncio.run(core.dispatch(IncomingEvent("plan.nightly", {}, "scheduler"), db))
         asyncio.run(core.dispatch(IncomingEvent("plan.nightly", {}, "scheduler"), db))  # once a day
         msgs = [m for m in db.query(Message).all() if (m.meta or {}).get("kind") == "initiative"]
-        assert len(msgs) == 1 and "Want me to do it?" in msgs[0].content
+        assert len(msgs) == 1 and "Want me to set that up?" in msgs[0].content
         assert db.query(Decision).filter(Decision.kind == "initiative", Decision.action == "sent").count() == 1
         mid = msgs[0].id
     r = client.post(f"/proposals/{mid}/respond", json={"action": "approve"})
