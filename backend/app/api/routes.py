@@ -289,11 +289,15 @@ async def answer_proposal(message_id: int, body: ProposalAnswer, db: Session = D
 
     msg = db.get(Message, message_id)
     kind = (msg.meta or {}).get("kind") if msg else None
-    if kind not in ("plan_proposal", "schedule_proposal"):
+    if kind not in ("plan_proposal", "schedule_proposal", "initiative"):
         raise HTTPException(404, "proposal not found")
     if (msg.meta or {}).get("answered"):
         raise HTTPException(409, "already answered")
     _mark_answered(db, msg, body.action)
+    if kind == "initiative":  # its own idea: a yes goes through the normal pipeline (the timetable builder acts on it)
+        text = f"✅ Yes, do it: {msg.meta.get('idea')}" if body.action in ("approve", "accept") else "✋ Not now."
+        result = await core.dispatch(IncomingEvent("user.message", {"text": text, **({} if body.action in ("approve", "accept") else {"button": True})}, "web"), db)
+        return DispatchOut(**result.__dict__)
     if kind == "schedule_proposal":
         if body.action == "reject":
             text = "✋ Leave my timetable as it is."

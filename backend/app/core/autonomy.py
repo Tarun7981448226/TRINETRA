@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Decision, Message
 
-VALUE = {"wellbeing": 0.8, "lag": 0.75, "why": 0.6, "streak": 0.5, "free_checkin": 0.45}
+VALUE = {"wellbeing": 0.8, "lag": 0.75, "initiative": 0.7, "why": 0.6, "streak": 0.5, "free_checkin": 0.45}
 OPTIONAL = set(VALUE)
 THRESHOLD = 0.15
 DAILY_BUDGET = 10

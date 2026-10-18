@@ -75,3 +75,35 @@ def test_held_nudges_send_nothing(client, llm_calls, monkeypatch):
         assert db.query(Message).count() == before and r.notes.get("held_back", {}).get("kind") == "wellbeing"
         assert db.query(Decision).filter(Decision.action == "held").count() == 1
     assert client.get("/autonomy").status_code == 200
+
+
+def test_initiative_asks_first_and_a_yes_goes_through_the_pipeline(client, monkeypatch):
+    """Its own idea for his good: one per evening, needs evidence, asked as a yes/no; a yes becomes his message."""
+    import asyncio, json
+    from app.config import get_settings
+    from app.core import llm
+    from app.core.orchestrator import IncomingEvent
+    from app.db.models import Memory
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "x")
+    seen = []
+
+    async def model(messages, **kw):
+        seen.append(messages[-1]["content"])
+        if "thinking on your own" in messages[-1]["content"]:
+            return json.dumps({"idea": "Move DSA practice to 9am on weekdays", "why": "you finish 80% of morning blocks"})
+        return "{}" if kw.get("json_mode") else "Done — DSA is at 9 now."
+    monkeypatch.setattr(llm, "complete", model)
+    with client.session_factory() as db:
+        db.add(Memory(kind="insight", content="He finishes morning blocks, skips night ones", importance=4))
+        db.commit()
+        core = client.app.state.orchestrator
+        asyncio.run(core.dispatch(IncomingEvent("plan.nightly", {}, "scheduler"), db))
+        asyncio.run(core.dispatch(IncomingEvent("plan.nightly", {}, "scheduler"), db))  # once a day
+        msgs = [m for m in db.query(Message).all() if (m.meta or {}).get("kind") == "initiative"]
+        assert len(msgs) == 1 and "Want me to do it?" in msgs[0].content
+        assert db.query(Decision).filter(Decision.kind == "initiative", Decision.action == "sent").count() == 1
+        mid = msgs[0].id
+    r = client.post(f"/proposals/{mid}/respond", json={"action": "approve"})
+    assert r.status_code == 200
+    assert any("Yes, do it: Move DSA practice to 9am" in s for s in seen)
+    assert client.post(f"/proposals/{mid}/respond", json={"action": "approve"}).status_code == 409  # once

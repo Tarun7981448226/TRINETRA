@@ -427,3 +427,73 @@ async def skill_coach(ctx: AgentContext) -> None:
     ctx.notes["coach"] = {"mode": "graded", "correct": correct, "gave_up": gave_up, "topic": pending["title"],
                           "question": pending["question"], "key_points": pending["key_points"],
                           "feedback": (graded or {}).get("feedback"), "next": rec["next"]}
+
+
+INITIATIVE_PROMPT = """You are TRINETRA, {name}'s mentor, thinking on your own at the end of his day. From what you've learned
+about him (insights and facts below) and today's timetable results, is there ONE concrete change that would clearly be
+good for him — his sleep, health, study, career goal, or mood? Something you'd raise as a mentor who's been paying
+attention (e.g. "move DSA to mornings — you finish 80% of morning blocks and 30% of night ones").
+Rules: only if the evidence supports it; tiny and specific; his choice (you ask, never impose); never about his private
+relationships; no repeats of an idea he declined recently ({declined}). If nothing is worth raising, return null.
+
+What you know:
+{facts}
+
+Today: {today}
+
+Return JSON only: {{"idea": one short sentence he can say yes to, or null, "why": one short sentence of evidence}}"""
+
+
+@agent("initiative")
+async def initiative(ctx: AgentContext) -> AgentResult | None:
+    """Every evening: TRINETRA's own idea for his good, asked as a yes/no (his answer teaches the Decider)."""
+    from app.core import autonomy, recall
+    from app.core.timeutil import now_local
+    from app.db.models import Message
+    if not ctx.settings.llm_available:
+        return None
+    day = now_local().date().isoformat()
+    if ctx.db.get(KeyValue, f"initiative:{day}") is not None:
+        return None
+    mems = recall.live(ctx.db)
+    insights = [m for m in mems if m.kind == "insight"]
+    if not insights and len(mems) < 6:  # too little known to have a real idea yet
+        return None
+    ctx.db.add(KeyValue(key=f"initiative:{day}", value="1"))
+    facts = [f"- (insight) {m.content}" for m in insights[-8:]] + \
+            [f"- ({m.kind}) {m.content}" for m in sorted(mems, key=lambda m: -(m.importance or 3)) if m.kind != "insight"][:20]
+    from app.core.timeutil import day_bounds_utc
+    start, end = day_bounds_utc()
+    tasks = ctx.db.scalars(select(Task).where(Task.planned_start >= start, Task.planned_start < end)
+                           .order_by(Task.planned_start)).all()
+    today = "; ".join(f"{t.title} [{t.status}]" for t in tasks) or "no blocks"
+    declined = [m.meta.get("idea") for m in ctx.db.scalars(select(Message).where(Message.role == "trinetra")
+                                                            .order_by(Message.id.desc()).limit(80))
+                if (m.meta or {}).get("kind") == "initiative" and (m.meta or {}).get("answered") == "reject"][:5]
+    try:
+        raw = await llm.complete([{"role": "user", "content": INITIATIVE_PROMPT.format(
+            name=ctx.settings.trinetra_user_name, facts="\n".join(facts), today=today[:800],
+            declined="; ".join(d for d in declined if d) or "none")}],
+            tier="smart", temperature=0.4, max_tokens=300, json_mode=True, sensitive=True)
+        d = json.loads(raw)
+    except (llm.LLMUnavailable, json.JSONDecodeError, AttributeError, TypeError):
+        return None
+    idea = (d or {}).get("idea") if isinstance(d, dict) else None
+    if not isinstance(idea, str) or len(idea.strip()) < 8:
+        return None
+    verdict = autonomy.decide(ctx.db, "initiative", ctx.notes.get("expression_label"))
+    if not verdict.send:
+        autonomy.record(ctx.db, "initiative", verdict)
+        ctx.notes["held_back"] = {"kind": "initiative", "reason": verdict.reason}
+        return None
+    why = str(d.get("why") or "").strip()
+    text = f"An idea, from watching how your days go: {idea.strip()}" + (f" ({why})" if why else "") + " Want me to do it?"
+    msg = Message(role="trinetra", content=text, channel="reminder", mood="warm and thoughtful",
+                  meta={"kind": "initiative", "idea": idea.strip()[:300], "buttons": ["approve", "reject"]})
+    ctx.db.add(msg)
+    ctx.db.flush()
+    msg.meta = {**msg.meta, "respond": f"/proposals/{msg.id}/respond"}
+    autonomy.record(ctx.db, "initiative", verdict, msg.id)
+    ctx.notes["initiative"] = idea.strip()
+    ctx.notes["proactive"] = {"text": text, "mood": msg.mood, "meta": msg.meta}  # the Push Agent delivers it
+    return AgentResult(reply=text, mood=msg.mood)

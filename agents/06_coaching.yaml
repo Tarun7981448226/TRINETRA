@@ -9,3 +9,4 @@ agents:
   - {id: skill_coach, name: Skill Coach, role: "\"Quiz me\" → a question on a topic you ticked, spaced repetition (1/3/7/14/30 days), graded; \"explain X\" → a lesson", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 30, phase: "6"}
   - {id: motivation_coach, name: Motivation Coach, role: "You skip an important block → your why (goal reason + vision), once a day; fuel, not guilt", kind: llm, tier: fast, triggers: [task.skipped], priority: 35, phase: "3b"}
   - {id: goal_decomposer, name: Goal Decomposer, role: "Breaks big goals into milestones and daily tasks", kind: llm, tier: smart, triggers: [user.message, voice.input], priority: 48, phase: "3b"}
+  - {id: initiative, name: Initiative, role: "Every evening: from what it has learned about you, proposes ONE change for your good — it asks first, and your answer teaches it", kind: llm, tier: smart, triggers: [plan.nightly], priority: 4, phase: "8"}
