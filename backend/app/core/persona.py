@@ -49,8 +49,8 @@ def plain(text: str) -> str:
 
 BANNED = re.compile(
     r"[^.!?\n]*\b(consider it done|understood|is there anything else|how may i assist|as an ai|happy to help|"
-    r"i'm here to help|how can i help|functioning optimally|thank you for sharing|let me know if (you need|anything else|"
-    r"there'?s anything)|feel free to (reach out|ask|let me know)|hope (this|that) helps)\b[^.!?\n]*[.!?]?\s*",
+    r"i'm here to help|how can i help|functioning optimally|thank you for sharing|let me know if (you need anything|anything else|"
+    r"there'?s anything)|feel free to (reach out|ask|let me know)|hope (this|that) helps[.!]?$)\b[^.!?\n]*[.!?]?\s*",
     re.I,
 )
 

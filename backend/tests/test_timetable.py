@@ -240,6 +240,52 @@ def test_the_confirmation_matches_what_really_changed():
     from app.agents.command import _true_to_changes
     ch = ["moved to #1 Mon 19 Oct 21:00–22:00 Gym [planned, repeats weekdays]",
           "moved to #13 Mon 19 Oct 18:00–19:00 TUF DSA [planned, repeats daily]"]
-    assert _true_to_changes("Swapped them—Gym now 18:00–19:00 tomorrow.", ch) == "Done: Gym 21:00–22:00; TUF DSA 18:00–19:00."
-    for ok in ("Swapped—gym is at 9 pm now and DSA at 6 pm.", "Swapped: gym 21:00, DSA 18:00.", "Swapped them, all set."):
-        assert _true_to_changes(ok, ch) == ok
+    assert _true_to_changes("Swapped them—Gym now 18:00–19:00 tomorrow.", ch) == \
+        "Swapped them—Gym now 18:00–19:00 tomorrow. (Exact: Gym 21:00–22:00; TUF DSA 18:00–19:00.)"
+    for ok in ("Swapped—gym is at 9 pm now and DSA at 6 pm.", "Swapped: gym 21:00, DSA 18:00.", "Swapped them, all set.",
+               "Done, DSA at 6.", "Done. Gym 9–10 pm tomorrow.", "DSA for 2 hours from 6 pm", "Gym moved to 9:00 pm",
+               "Done—Gym’s set for 9\u202fpm tomorrow."):
+        assert _true_to_changes(ok, ch) == ok, ok
+
+
+def test_guards_never_damage_a_correct_plan():
+    """Third review: the guards themselves must never turn a right change into a wrong one."""
+    from app.agents.planning import _keep_his_time, said_day
+    cases = [  # (text, model's correct op) → must stay exactly as the model had it
+        ("gym 6-7pm tomorrow", {"op": "create", "start": "18:00", "end": "19:00"}),
+        ("dsa from 9 to 11pm", {"op": "create", "start": "21:00", "end": "23:00"}),
+        ("study till 7pm", {"op": "create", "start": "17:00", "end": "19:00"}),
+        ("move gym from 6pm to 7", {"op": "move", "id": 1, "start": "19:00"}),
+        ("I'm busy at 5pm so move gym to 6", {"op": "move", "id": 1, "start": "18:00"}),
+        ("from now on I wake up at 6am", {"op": "set_sleep", "start": "23:30", "end": "06:00"}),
+        ("finish the essay by 7pm", {"op": "create", "start": "17:00", "end": "19:00"}),
+    ]
+    for text, op in cases:
+        assert _keep_his_time(text, [dict(op)]) == [op], text
+    fixed = _keep_his_time("Go to bed by 12:30 am", [{"op": "set_sleep", "start": "23:30", "end": "06:00"}])[0]
+    assert (fixed["start"], fixed["end"]) == ("00:30", "06:00")
+    moved = _keep_his_time("gym at 7pm tomorrow", [{"op": "create", "start": "18:00", "end": "19:00"}])[0]
+    assert (moved["start"], moved["end"]) == ("19:00", "20:00")  # the length is kept
+    assert said_day("add reading at 12:30 am tonight") == now_local().date() + timedelta(days=1)
+
+
+def test_the_destination_day_is_not_retargeted(client, builder_llm):
+    """'can't make gym, do it tomorrow at 7am instead': today's block is the one that moves."""
+    today = now_local().date()
+    with client.session_factory() as db:
+        timetable.create_block(db, "Gym", today, time(23), time(23, 30), recurrence="daily")
+        db.commit()
+        ids = {local(t.planned_start).date(): t.id for t in db.scalars(select(Task))}
+    builder_llm["ops"] = [{"op": "move", "id": ids[today], "date": (today + timedelta(days=1)).isoformat(), "start": "07:00"}]
+    client.post("/chat", json={"text": "can't make gym, do it tomorrow at 7am instead"})
+    with client.session_factory() as db:
+        assert local(db.get(Task, ids[today]).planned_start).date() == today + timedelta(days=1)
+        assert local(db.get(Task, ids[today + timedelta(days=1)]).planned_start).time() == time(23)
+
+
+def test_everyday_all_doesnt_wipe_routines():
+    from app.agents.planning import _no_surprise_wipes
+    ops = _no_surprise_wipes("cancel all my plans tomorrow", [{"op": "delete", "id": 1, "whole_series": True}])
+    assert ops[0]["whole_series"] is False
+    ops = _no_surprise_wipes("move all my gym sessions to 7am", [{"op": "delete", "id": 1, "whole_series": True}])
+    assert ops[0]["whole_series"] is True

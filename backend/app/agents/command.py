@@ -157,21 +157,29 @@ CHANGE = re.compile(r"(?:moved to|added) #\d+ \w{3} \d{1,2} \w{3} (\d{2}:\d{2})�
 
 
 def _true_to_changes(reply: str, changes: list[str]) -> str:
-    """Seen live: after swapping gym and DSA, the reply gave each the other's time. If the reply puts a changed block next
-    to a time that isn't its new one, the confirmation is rebuilt from the real changes."""
-    def hm(t: str) -> set[str]:  # "21:00" → the ways a reply may write it
+    """Seen live: after swapping gym and DSA, the reply gave each the other's time. Only an EXPLICIT time (with am/pm or a
+    colon) right after a changed block's name is checked; if it's neither that block's new start nor end, a short exact
+    line is added — the reply itself is kept."""
+    def forms(t: str) -> set[str]:
         h, m = int(t[:2]), t[3:]
-        twelve = f"{(h % 12) or 12}{'' if m == '00' else ':' + m}"
-        return {t, f"{h}:{m}", twelve + (" pm" if h >= 12 else " am"), twelve + ("pm" if h >= 12 else "am")}
+        twelve = f"{(h % 12) or 12}"
+        out = {t, f"{h}:{m}", f"{twelve}:{m}{'pm' if h >= 12 else 'am'}"}
+        if m == "00":
+            out |= {f"{twelve}{'pm' if h >= 12 else 'am'}"}
+        return out
     facts = [(m.group(3).strip(), m.group(1), m.group(2)) for c in changes if (m := CHANGE.search(c))]
-    for title, start, _ in facts:
+    wrong = False
+    for title, start, end in facts:
         name = re.escape(title.split()[-1])  # "TUF DSA" → "DSA"
-        for m in re.finditer(rf"\b{name}\b[^.!?\n]{{0,25}}?(\d{{1,2}}(?::\d{{2}})?\s*(?:am|pm)?)", reply, re.I):
-            said = m.group(1).strip().lower().replace(" ", "")
-            if said and not any(said == w.replace(" ", "") or said.startswith(w.split(":")[0]) and ":" not in said and w.startswith(said)
-                                for w in hm(start)):
-                return "Done: " + "; ".join(f"{t} {a}–{b}" for t, a, b in facts) + "."
-    return reply
+        ok = forms(start) | forms(end)
+        for m in re.finditer(rf"\b{name}\b[^.!?\n]{{0,15}}?\b(\d{{1,2}}:\d{{2}}\s*(?:am|pm)?|\d{{1,2}}\s*(?:am|pm))\b(?!\s*(?:h|hr|hour|min))",
+                             reply, re.I):
+            said = re.sub(r"\s+", "", m.group(1).lower())  # models write "7\u202fpm" (narrow no-break space)
+            if said not in ok and said.lstrip("0") not in ok:
+                wrong = True
+    if not wrong:
+        return reply
+    return reply.rstrip() + " (Exact: " + "; ".join(f"{t} {a}–{b}" for t, a, b in facts) + ".)"
 
 
 def support_step(ctx: AgentContext) -> str | None:

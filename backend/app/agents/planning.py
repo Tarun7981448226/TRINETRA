@@ -70,7 +70,7 @@ async def timetable_builder(ctx: AgentContext) -> None:
                 {"role": "system", "content": BUILDER_PROMPT.format(
                     now=f"{now:%Y-%m-%d %H:%M}", weekday=f"{now:%A}", blocks=blocks)
                     + f"\nTheir sleep window: {s_start:%H:%M}-{s_end:%H:%M}."},
-                {"role": "user", "content": _plain(text)},
+                {"role": "user", "content": text + (f"\n(in plain words: {_plain(text)})" if _plain(text).lower() != text.lower() else "")},
             ],
             tier="smart" if long_request else "fast", temperature=0,
             max_tokens=4000 if long_request else 1200, json_mode=True,
@@ -161,18 +161,41 @@ def said_times(text: str, sure: bool = False) -> list[str]:
     return out
 
 
+RANGE = re.compile(r"\b(from|to|till|until|til|between|and)\s+\d|\b(instead of|busy|after|before|except|not|wake)\b|"
+                   r"\d\s*[-–]\s*\d", re.I)
+SLEEP_WORDS = re.compile(r"\b(bed|sleep|lights out|bedtime)\b", re.I)
+
+
+def _hm_add(hm: str, minutes: int) -> str:
+    h, m = divmod((int(hm[:2]) * 60 + int(hm[3:5]) + minutes) % 1440, 60)
+    return f"{h:02d}:{m:02d}"
+
+
+def _mins(hm: str) -> int:
+    return int(hm[:2]) * 60 + int(hm[3:5])
+
+
 def _keep_his_time(text: str, ops: list[dict]) -> list[dict]:
-    """The model sometimes misreads a time ("12:30 am" → 23:30). When he said exactly one time, unambiguously, and
-    the single timed change uses a different one, his words win — deterministically, before review or applying."""
+    """The model once read "12:30 am" as 23:30. Only when there's no doubt — he typed exactly one time, unambiguously,
+    with no range or "from / to / busy at" around it, the single timed change uses neither that time as start nor end,
+    and (for sleep) he talked about bed or sleep — the start becomes his time and the end moves with it (same length)."""
     said, sure = said_times(text), said_times(text, sure=True)
     timed = [o for o in ops if o.get("op") in ("create", "move", "set_sleep") and o.get("start")]
-    if len(set(said)) != 1 or len(set(sure)) != 1 or len(timed) != 1:
+    if len(set(said)) != 1 or len(set(sure)) != 1 or len(timed) != 1 or RANGE.search(text):
         return ops
     (want,) = set(sure)
     o = timed[0]
-    if str(o["start"])[:5] != want:
-        log.warning("builder said %s for %r; he said %s — keeping his", o["start"], text[:80], want)
-        o["start"] = want
+    if o["op"] != "set_sleep" and re.search(r"\bby\s+\d", text, re.I):  # "finish it by 7pm" names the END
+        return ops
+    start, end = str(o["start"])[:5], (str(o.get("end"))[:5] if o.get("end") else None)
+    if not re.fullmatch(r"\d{2}:\d{2}", start) or want == start:
+        return ops
+    if o["op"] == "set_sleep" and not SLEEP_WORDS.search(text):
+        return ops
+    log.warning("builder said %s for %r; he said %s — keeping his", start, text[:80], want)
+    if end and re.fullmatch(r"\d{2}:\d{2}", end) and o["op"] != "set_sleep":
+        o["end"] = _hm_add(end, _mins(want) - _mins(start))  # same length
+    o["start"] = want
     return ops
 
 
@@ -186,18 +209,21 @@ def said_day(text: str):
     """today / tonight / tomorrow, if he named one (and only one)."""
     from datetime import timedelta
     words = set(_plain(text).lower().split())
-    days = {now_local().date() for w in ("today", "tonight") if w in words} | \
-           {now_local().date() + timedelta(days=1) for w in ("tomorrow",) if w in words}
+    small_hours = any(t < "05:00" for t in said_times(text, sure=True))
+    tonight = now_local().date() + timedelta(days=1 if small_hours else 0)  # "12:30 am tonight" is after midnight
+    days = ({now_local().date()} if "today" in words else set()) | ({tonight} if "tonight" in words else set()) | \
+           ({now_local().date() + timedelta(days=1)} if "tomorrow" in words else set())
     return next(iter(days)) if len(days) == 1 else None
 
 
-WHOLE = re.compile(r"\b(every|all|always|routine|series|for good|from now on|permanently|anymore|stop doing|quit)\b", re.I)
+WHOLE = re.compile(r"\b(every|always|series|for good|from now on|permanently|anymore|stop doing|quit|all my \w+ (sessions|blocks|classes))\b", re.I)
+WEEKDAY_OR_DATE = re.compile(r"\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}(st|nd|rd|th)\b", re.I)
 
 
 def _no_surprise_wipes(text: str, ops: list[dict]) -> list[dict]:
     """Seen live: "free up my evening tomorrow" deleted his whole Gym and DSA routines. A delete only takes the whole
     routine when he says so ("every", "all", "from now on", "quit"…); naming one day means that day's block."""
-    if WHOLE.search(_plain(text)):
+    if WHOLE.search(_plain(text)) or len(text) > 250:  # said so, or a whole new schedule replacing the old one
         return ops
     for o in ops:
         if o.get("op") == "delete" and o.get("whole_series"):
@@ -219,7 +245,10 @@ def _keep_his_day(db, text: str, ops: list[dict]) -> list[dict]:
         return ops
     o = dated[0]
     if o["op"] == "create":
-        o["date"] = day.isoformat()
+        if not WEEKDAY_OR_DATE.search(text):  # "put gym on friday" — the model's date stands
+            o["date"] = day.isoformat()
+        return ops
+    if str(o.get("date") or "") == day.isoformat():  # the named day is where it's going ("do it tomorrow instead")
         return ops
     _retarget(db, o, day, text)
     return ops
