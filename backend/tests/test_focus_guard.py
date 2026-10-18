@@ -53,7 +53,8 @@ def test_focus_block_calls_it_out_and_gets_firmer(client, monkeypatch):
     first = opened(client, monkeypatch, at(10, 15))
     assert first.startswith(b"ID3") and b"TUF DSA" in first
     assert opened(client, monkeypatch, at(10, 16)) == SILENT_MP3  # bouncing in and out: one call-out
-    before = emotion.load(client.session_factory()).frustration
+    with client.session_factory() as db:  # closed: on Postgres an open session would block the next test's DROP
+        before = emotion.load(db).frustration
     second = opened(client, monkeypatch, at(10, 30), app="YouTube")
     assert b"2 times" in second
     with client.session_factory() as db:

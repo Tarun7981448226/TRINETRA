@@ -91,7 +91,8 @@ def test_promise_is_remembered_then_checked_at_deadline(client, mentor_llm):
 
     with client.session_factory() as db:
         promise = db.get(Promise, p["id"])
-        deadline = promise.due_at.replace(tzinfo=timezone.utc)
+        from app.core.timeutil import from_db
+        deadline = from_db(promise.due_at)  # Postgres returns it timezone-aware already
         fired = asyncio.run(scheduler.tick(db, client.app.state.orchestrator, deadline + timedelta(minutes=1)))
     assert fired == [f"promise.due:{p['id']}"]
     check = client.get("/messages").json()[-1]
