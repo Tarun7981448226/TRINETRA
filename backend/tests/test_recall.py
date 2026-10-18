@@ -124,3 +124,11 @@ def test_a_fact_that_stops_being_true_is_retired(client, monkeypatch):
     with client.session_factory() as db:
         assert "Goes to the gym at 6pm" not in {m.content for m in recall.live(db)}
         assert db.get(Memory, gid).archived  # kept, not deleted
+
+
+def test_reader_hears_despair_idioms_but_not_pep_talk():
+    from app.core import feel
+    for t in ("I want to give up", "i am done with everything", "I give up.", "I feel stuck", "nothing matters anymore"):
+        assert feel.read(t)["low"], t
+    for t in ("never give up!", "I gave up sugar this month", "dont give up"):
+        assert not feel.LOW_IDIOMS.search(t), t

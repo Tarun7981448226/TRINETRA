@@ -73,9 +73,22 @@ NEGATED_GOOD = re.compile(r"(?:\bnot|\b(?:do|does|did|is|are|was|were|ca|can|cou
                           r"motivated|excited|confident|ready|myself|alright|right)\b", re.I)
 
 
+# Despair idioms the Reddit-trained reader misses ("I want to give up" reads as desire/joy): heard as low, explicitly.
+LOW_IDIOMS = re.compile(
+    r"(?<!never )(?<!not )(?<!don't )(?<!dont )\b((give|giving|gave) up(?=\s*(?:[.!?,]|$|on (?:myself|me|everything|life|it all|"
+    r"this|my dreams|trying)))|done with (everything|it all|this|life)|nothing matters|what'?s the point|"
+    r"can'?t do (this|it) anymore|tired of (everything|it all|trying|life)|i'?m (a|such a) (failure|mess|loser)|"
+    r"falling apart|breaking down|hate myself|feel (empty|numb|worthless|useless|stuck|lost|alone)|no one cares|"
+    r"nobody cares|so (alone|lonely)|burn(ed|t)? out)\b", re.I)
+
+
 def read(text: str) -> dict:
     """{"emotions": [present labels, strongest first], "group": main feeling, "low": bool, "strength": 0..1+}."""
     s = scores(text)
+    if LOW_IDIOMS.search(text.replace("’", "'")):
+        for l in GROUPS["joy"]:
+            s[l] = min(s.get(l, 0), 0.5)
+        s["sadness"] = max(s.get("sadness", 0), 1.4)
     if NEGATED_GOOD.search(text.replace("’", "'")):
         for l in GROUPS["joy"]:
             s[l] = min(s.get(l, 0), 0.5)
