@@ -218,3 +218,16 @@ def test_policy_shows_his_best_time(client):
         db.commit()
         lag = next(k for k in autonomy.policy(db)["kinds"] if k["kind"] == "lag")
         assert lag["best_time"] == "afternoon" and lag["by_part_of_day"]["afternoon"] > lag["by_part_of_day"]["night"]
+
+
+def test_reflection_has_its_own_night_beat_once(client, llm_calls, monkeypatch):
+    import asyncio
+    from datetime import datetime as _dt
+    from app.core import scheduler, timeutil
+    four = _dt.now(timeutil.user_tz()).replace(hour=4, minute=10)
+    monkeypatch.setattr(scheduler, "now_local", lambda: four)
+    with client.session_factory() as db:
+        core = client.app.state.orchestrator
+        assert asyncio.run(scheduler.reflect_watch(db, core)) is True
+        assert asyncio.run(scheduler.reflect_watch(db, core)) is False
+    assert client.app.state.orchestrator.registry.specs["reflector"].triggers == ["reflect.nightly"]

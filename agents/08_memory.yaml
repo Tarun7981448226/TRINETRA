@@ -4,7 +4,7 @@ manager: profile_keeper  # the team reports to this agent; it decides and report
 agents:
   - {id: profile_keeper, name: Profile Keeper, role: "Nightly: your patterns from the data (best time of day, what you skip, streaks, moods) → one profile memory the chat uses", kind: rule, triggers: [cron.nightly], priority: 30, phase: "3b"}
   - {id: long_term_memory, name: Long-term Memory, role: "Extracts facts worth remembering from conversations and recalls them when relevant", kind: llm, tier: fast, triggers: [user.message, voice.input], priority: 5, phase: "1"}
-  - {id: reflector, name: Reflector, role: "Nightly: reads what it has learned about you and writes a few deeper insights (patterns, what helps, what hurts) that guide its decisions", kind: llm, tier: smart, triggers: [cron.nightly], priority: 25, phase: "8"}
+  - {id: reflector, name: Reflector, role: "Every night at 4: reads what it has learned about you and writes a few deeper insights (patterns, what helps, what hurts) that guide its decisions", kind: llm, tier: smart, triggers: [reflect.nightly], priority: 25, phase: "8"}
   - {id: forgetter, name: Forgetter, role: "Nightly: merges duplicate memories and archives faded, unimportant ones (kept, never deleted)", kind: rule, triggers: [cron.nightly], priority: 24, phase: "8"}
   - {id: journal_agent, name: Journal Agent, role: "Optional private journal (📓, offered after the evening review): one warm line back + the mood logged; entries never go into memory", kind: llm, tier: fast, triggers: [journal.entry], priority: 20, phase: "6"}
   - {id: research_agent, name: Research Agent, role: "Finds learning resources and answers for your goals", kind: llm, tier: smart, triggers: [research.request], priority: 20, phase: "7"}

@@ -362,6 +362,23 @@ async def initiative_watch(db: Session, core: Orchestrator) -> bool:
     return True
 
 
+REFLECT_AT = time(4, 0)  # after the 03:00 retraining, in its own request (Vercel stops a request at 60 s)
+
+
+async def reflect_watch(db: Session, core: Orchestrator) -> bool:
+    """Once each night from 04:00: the Reflector writes insights (its own beat, away from the ML retraining)."""
+    now = now_local()
+    if not (REFLECT_AT <= now.time() <= time(6, 0)):
+        return False
+    key = f"reflected:{now.date().isoformat()}"
+    if db.get(KeyValue, key) is not None:
+        return False
+    db.add(KeyValue(key=key, value="1"))
+    db.commit()
+    await core.dispatch(IncomingEvent("reflect.nightly", {"date": now.date().isoformat()}, "scheduler"), db)
+    return True
+
+
 NIGHTLY_HOUR = 3  # local time: the brain retrains while you sleep
 
 
@@ -458,11 +475,12 @@ async def _beat(db: Session, core: Orchestrator, now: datetime | None) -> dict:
     from app.core import autonomy
     settled = autonomy.settle(db, now)  # how did its own decisions land? (teaches the policy)
     idea = await initiative_watch(db, core)
+    reflected = await reflect_watch(db, core)
     forgotten = guest.sweep(db, now)
     digest = guest.digest(db, now)
     db.commit()
     return {"fired": fired, "routines_extended": extended, "nightly": nightly_ran, "planned_tomorrow": planned, "weekly": weekly_ran,
-            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "decisions_settled": settled, "initiative": idea, "visitor_digest": bool(digest)}
+            "wake_nag": woke, "free_checkin": free, "silence_check": silence, "wellbeing": wellbeing, "visitors_forgotten": forgotten, "decisions_settled": settled, "initiative": idea, "reflected": reflected, "visitor_digest": bool(digest)}
 
 
 async def run_forever(session_factory: sessionmaker, core: Orchestrator) -> None:
