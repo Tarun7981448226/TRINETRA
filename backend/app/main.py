@@ -88,12 +88,27 @@ def create_app() -> FastAPI:
             own["emotion_reader"] = feel.read("I am so happy today")["group"]
         except Exception as e:
             own["error"] = type(e).__name__
+        resting = {}
+        try:  # models that hit a free-tier limit, and until when (UTC) — TRINETRA is on its backups meanwhile
+            import json as _json
+            import time as _time
+            from datetime import datetime as _dt, timezone as _tz
+            from app.db.models import KeyValue
+            from app.db.session import SessionLocal
+            with SessionLocal() as db:
+                row = db.get(KeyValue, "llm_bench")
+            now = _time.time()
+            resting = {m: _dt.fromtimestamp(t, _tz.utc).strftime("%Y-%m-%d %H:%M UTC")
+                       for m, t in (_json.loads(row.value) if row and row.value else {}).items() if t > now}
+        except Exception:
+            pass
         return {
             "status": "awake",
             "llm_connected": settings.llm_available,
             "agents": len(reg.specs),
             "common_words": len(show._common()),
             "own_models": own,
+            "models_resting": resting,
         }
 
     return app
