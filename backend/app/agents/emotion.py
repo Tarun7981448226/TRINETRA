@@ -51,8 +51,10 @@ async def empathy_detector(ctx: AgentContext) -> None:
     # A plainly practical message ("move gym to 7pm", "show my plan"): the trained reader is sure there's no feeling in
     # it, so the LLM read is skipped — one call fewer per message on free tiers that count every token.
     from app.agents.command import DISTRESS
-    practical = (felt["group"] == "neutral" and feel.scores(text).get("neutral", 0) >= 1.5
-                 and not DISTRESS.search(text) and not any(p.search(text) for _, p in FALLBACK))
+    short_command = len(text.split()) <= 5 or ctx.notes.get("intent") == "planning" or "show" in ctx.notes
+    practical = (short_command and felt["group"] == "neutral" and feel.scores(text).get("neutral", 0) >= 1.5
+                 and not DISTRESS.search(text) and not any(p.search(text) for _, p in FALLBACK)
+                 and not re.search(r"\b(i|i'm|im|me|myself)\b.*\b(be here|anymore|alone|life)\b", text, re.I))
     if practical:
         ctx.notes["user_mood"], ctx.notes["user_mood_intensity"] = "neutral", 0.0
         return

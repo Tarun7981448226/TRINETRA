@@ -452,6 +452,8 @@ async def initiative(ctx: AgentContext) -> AgentResult | None:
     from app.db.models import Message
     if not ctx.settings.llm_available:
         return None
+    if not 17 <= now_local().hour <= 23:  # evenings only (a midnight catch-up of the day review must not wake him)
+        return None
     day = now_local().date().isoformat()
     if ctx.db.get(KeyValue, f"initiative:{day}") is not None:
         return None
@@ -495,5 +497,6 @@ async def initiative(ctx: AgentContext) -> AgentResult | None:
     msg.meta = {**msg.meta, "respond": f"/proposals/{msg.id}/respond"}
     autonomy.record(ctx.db, "initiative", verdict, msg.id)
     ctx.notes["initiative"] = idea.strip()
-    ctx.notes["proactive"] = {"text": text, "mood": msg.mood, "meta": msg.meta}  # the Push Agent delivers it
+    from app.core import push  # it runs after the Push Agent on plan.nightly, so it delivers its own
+    push.send(ctx.db, "TRINETRA 💡", text[:300], url="/", tag="initiative")
     return AgentResult(reply=text, mood=msg.mood)

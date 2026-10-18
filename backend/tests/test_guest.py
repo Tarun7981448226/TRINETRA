@@ -438,3 +438,12 @@ def test_a_skill_not_in_the_brief_is_never_claimed(client, llm_calls):
     assert "isn't on his public list" in r["reply"] and "Kubernetes" in r["reply"]
     assert guest.unlisted_skill("Does Tarun know Docker?") is None  # listed → the model answers
     assert guest.unlisted_skill("is he good at deep learning?") is None
+
+
+def test_contact_is_kept_even_with_crisis_words_and_normal_questions_pass_the_skill_guard(client, llm_calls):
+    token = hello(client)
+    r = client.post("/guest/chat", json={"token": token, "text": "my email is sam@x.com, let's end it there"}).json()
+    assert "988" not in r["reply"] and "sam@x.com" in r["reply"]
+    for q in ("can he work with a team?", "does he know sql?", "Can he use git?", "does he know about our company"):
+        assert guest.unlisted_skill(q) is None, q
+    assert guest.unlisted_skill("does he use AWS") == "AWS"

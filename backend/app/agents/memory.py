@@ -57,6 +57,7 @@ async def long_term_memory(ctx: AgentContext) -> None:
         return
 
     by_id = {m.id: m for m in existing}
+    replaced = set()
     saved = []
     for f in facts if isinstance(facts, list) else []:
         if not isinstance(f, dict):
@@ -68,6 +69,7 @@ async def long_term_memory(ctx: AgentContext) -> None:
         importance = min(max(int(f.get("importance") or 3), 1), 5)
         old = by_id.get(f.get("replaces"))
         if old is not None:
+            replaced.add(old.id)
             old.content, old.kind, old.importance = content, kind, importance
         else:
             ctx.db.add(Memory(kind=kind, content=content, importance=importance))
@@ -78,7 +80,7 @@ async def long_term_memory(ctx: AgentContext) -> None:
             m = by_id.get(int(i))
         except (TypeError, ValueError):
             continue
-        if m is not None and m.kind != "insight":
+        if m is not None and m.kind not in ("insight", "profile") and m.id not in replaced:
             m.archived = True
             retired.append(m.content)
     if retired:

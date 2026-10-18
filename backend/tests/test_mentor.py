@@ -179,3 +179,8 @@ def test_crisis_always_gets_a_real_way_to_help(client, llm_calls):
     assert "988" in body["reply"] and body["notes"]["distress"]
     body = client.post("/chat", json={"text": "what's on my plan today?"}).json()
     assert "988" not in body["reply"]
+
+
+def test_everyday_phrases_never_get_the_crisis_line(client, llm_calls):
+    for t in ("let's end it there", "this code is worthless", "I'm hopeless at cooking", "the battery is going to die"):
+        assert "988" not in client.post("/chat", json={"text": t}).json()["reply"], t

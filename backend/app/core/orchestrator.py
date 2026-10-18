@@ -6,6 +6,7 @@ The Arbiter rule is simple: the highest-priority agent that produced a reply spe
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -17,6 +18,8 @@ from app.config import Settings
 from app.core.registry import AgentSpec, Registry
 
 log = logging.getLogger("trinetra.core")
+
+ALONGSIDE = {"core_orchestrator": ("long_term_memory",)}  # independent agents that run at the same time as the reply
 
 
 @dataclass
@@ -71,38 +74,54 @@ class Orchestrator:
         actions: list[dict[str, Any]] = []
         winner: tuple[AgentSpec, AgentResult] | None = None
 
-        for spec in self.registry.for_event(event.type):
-            if spec.handler is None:
-                continue  # planned agent, not built yet
-            ctx.spec = spec
+        async def run(spec: AgentSpec, c: AgentContext) -> AgentResult | None:
             t0 = time.perf_counter()
-            before = {k: id(v) for k, v in ctx.notes.items()}
+            before = {k: id(v) for k, v in c.notes.items()}
             if spec.id == "core_orchestrator":  # TRINETRA decides with its managers' reports in hand
                 from app.core import briefing
                 try:
-                    ctx.notes["briefing"] = briefing.reports(ctx)
+                    c.notes["briefing"] = briefing.reports(c)
                 except Exception:
                     log.exception("briefing failed")  # never worth losing the reply over
             try:
-                result = await spec.handler(ctx)
+                result = await spec.handler(c)
             except Exception:
                 # One broken agent must never take TRINETRA down.
                 log.exception("Agent %s failed on %s", spec.id, event.type)
                 if not db.is_active:  # a failed flush poisons the session: roll back so the rest (and the commit) still work
                     db.rollback()
-                continue
+                return None
             finally:
-                ctx.notes.setdefault("timings_ms", {})[spec.id] = round((time.perf_counter() - t0) * 1000)
-                found = [k for k, v in ctx.notes.items() if before.get(k) != id(v) and k not in ("timings_ms", "briefing")]
+                c.notes.setdefault("timings_ms", {})[spec.id] = round((time.perf_counter() - t0) * 1000)
+                found = [k for k, v in c.notes.items() if before.get(k) != id(v) and k not in ("timings_ms", "briefing")]
                 if found:  # credit the findings to the agent's team (its manager reports them up)
-                    team = ctx.notes.setdefault("_by_council", {}).setdefault(spec.council, [])
+                    team = c.notes.setdefault("_by_council", {}).setdefault(spec.council, [])
                     team += [k for k in found if k not in team]
             ran.append(spec.id)
-            if result is None:
+            return result
+
+        specs = [s for s in self.registry.for_event(event.type) if s.handler is not None]  # planned agents: not built yet
+        done: set[str] = set()
+        for spec in specs:
+            if spec.id in done:
                 continue
-            actions.extend(result.actions)
-            if result.reply and winner is None:
-                winner = (spec, result)
+            ctx.spec = spec
+            # Memory extraction doesn't need the reply: it runs alongside TRINETRA's answer instead of after it
+            # (one model call fewer on the wait). Its own context shares the blackboard and the session.
+            beside = [s for s in specs if s.id in ALONGSIDE.get(spec.id, ()) and s.id not in done]
+            if beside:
+                extra = [AgentContext(event=event, db=db, settings=self.settings, spec=s, notes=ctx.notes, core=self) for s in beside]
+                results = await asyncio.gather(run(spec, ctx), *(run(s, c) for s, c in zip(beside, extra)))
+                done.update(s.id for s in beside)
+                pairs = [(spec, results[0]), *zip(beside, results[1:])]
+            else:
+                pairs = [(spec, await run(spec, ctx))]
+            for sp, result in pairs:
+                if result is None:
+                    continue
+                actions.extend(result.actions)
+                if result.reply and winner is None:  # the highest-priority agent that replied speaks
+                    winner = (sp, result)
 
         if commit:
             llm.save_bench(db)

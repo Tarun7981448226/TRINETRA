@@ -15,23 +15,26 @@ INTENT_PATTERNS: dict[str, str] = {
     "feeling_low": r"\b(tired|sad|low|stressed|anxious|exhausted|depressed|lonely|overwhelmed|can'?t do)\b",
     "slacking": r"\b(skip(ped)?|lazy|procrastinat\w*|bunk(ed)?|wasted (my )?time|didn'?t (study|work|do it|go))\b",
     "progress": r"\b(done|finished|completed|nailed|achieved)\b",
-    "planning": r"\b(plan|schedule|timetable|remind|tomorrow|tonight|reschedule|move|shift|postpone|push back|cancel|"
-                r"add|block|free up|clear my)\b",
+    "planning": r"\b(plan|schedule|timetable|remind|tomorrow|tonight|reschedule|move|shift|postpone|push back|"
+                r"cancel (my|the|tomorrow|today|tonight)|free up|clear my)\b",
 }
 # Signals that need care, not pressure. Overrides everything else.
-QUIETER = re.compile(r"\b(stop (nagging|pinging|bugging|spamming)( me)?|too many (notifications|reminders|nudges|messages)|"
-                     r"(fewer|less) (notifications|reminders|nudges)|leave me alone|you'?re (too )?(annoying|clingy)|"
-                     r"back off|stop bothering me)\b", re.I)
-LOUDER = re.compile(r"\b(nudge me again|you can (nag|nudge|ping) me again|(more|turn on) (nudges|reminders)|push me (more|harder))\b", re.I)
+QUIETER = re.compile(r"(?<!don't )(?<!dont )(?<!do not )\b(stop (nagging|pinging|bugging|spamming)( me)?|too many (notifications|reminders|nudges|messages)|"
+                     r"(fewer|less) (notifications|reminders|nudges)|leave me alone(?! for| to| while| until)|you'?re (too )?(annoying|clingy)|"
+                     r"back off(?!\s+(the|my|on|it|to|from|a|an)\b)|stop bothering me)\b", re.I)
+LOUDER = re.compile(r"(?<!never )(?<!don't )(?<!dont )(?<!do not )(?<!stop )\b(nudge me again|you can (nag|nudge|ping) me again|(more|turn on) (nudges|reminders)|push me (more|harder))\b", re.I)
 CRISIS_LINE = ("If any part of you is thinking about ending your life or hurting yourself, please call or text 988 "
-               "(the Suicide & Crisis Lifeline) right now, or reach someone you trust. You don't have to carry this alone.")
+               "(the Suicide & Crisis Lifeline in the US; in India, Tele-MANAS 14416; elsewhere, your local emergency "
+               "number) right now, or reach someone you trust. You don't have to carry this alone.")
 
 # Crisis language only (an ordinary "I want to give up on this bug" is low, not crisis — the emotion agents handle that).
 DISTRESS = re.compile(
-    r"\b(hopeless|worthless|give up on life|no point (in )?(living|anything|trying anymore)|hurt(ing)? myself|end it( all)?|"
-    r"kill(ing)? myself|suicid\w*|(want|wanna|going) to die|end my life|not worth living|no reason to (live|go on)|"
+    r"\b(give up on life|no point (in )?(living|anything|going on|being here)|hurt(ing)? myself|end it all|"
+    r"end (it|things|my life) (for good|forever)|end my life|kill(ing)? myself|suicid\w*|(i want|i wanna|i'?m going|i am going) to die|"
+    r"want to be dead|not worth living|no reason (for me )?to (live|go on|be here)|(don'?t|do not) want to (be here|wake up|exist|live)|"
     r"(don'?t|do not|cant|can'?t) see (the|any) point (of|in) (anything|living|life|going on)|"
-    r"want (it all|everything) to (stop|end)|disappear forever|self[- ]?harm\w*|better off without me|i'?m done with life)\b",
+    r"want (it all|everything) to (stop|end)|disappear forever|self[- ]?harm\w*|better off without me|"
+    r"i'?m done with life(?!\s+\w)|(i'?m|i am|i feel|feeling) (so |completely |totally )?(hopeless|worthless)(?!\s+at\b))\b",
     re.I)
 
 # Placeholder until the Emotion Engine (phase 3b) takes over mood selection.
@@ -91,7 +94,9 @@ async def router(ctx: AgentContext) -> None:
     if demo := mood_modes.detect_demo(text):
         ctx.notes["demo"] = {"mode": demo[0], "target": demo[1]}
         return  # a one-off show — the lasting mode stays as it is
-    if QUIETER.search(text):  # "stop nagging me": his call — optional nudges go quiet for a few days
+    if text.startswith(("✅", "✋", "⚡")):  # a button answer re-sent as a message isn't a request about nudges
+        pass
+    elif QUIETER.search(text):  # "stop nagging me": his call — optional nudges go quiet for a few days
         from app.core import autonomy
         ctx.notes["quieter_until"] = autonomy.quieter(ctx.db)
     elif LOUDER.search(text):
@@ -158,7 +163,7 @@ def support_step(ctx: AgentContext) -> str | None:
             break
     ctx.notes["support_stage"] = min(caring, 2) + 1
     text = str(ctx.event.payload.get("text", ""))
-    if "?" in text or re.search(r"\b(should i|what do i|or)\b.{0,40}$", text, re.I):  # "gym or sleep?" — a direct ask
+    if "?" in text or re.search(r"\b(should i|what do i|what should i)\b", text, re.I):  # "gym or sleep?" — a direct ask
         return ("He asked you something directly while he's low: answer it first, clearly (if he asks you to choose, "
                 "choose for him and say why in a few words), kindly — then one gentle line about how he's doing.")
     step = SUPPORT_STEPS[min(caring, 2)]

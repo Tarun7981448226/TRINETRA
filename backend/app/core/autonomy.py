@@ -137,10 +137,18 @@ def settle(db: Session, now: datetime | None = None) -> int:
                                               Decision.created_at <= now - SETTLE_AFTER)).all()
     for d in open_:
         t0 = from_db(d.created_at)
+        if d.kind == "initiative" and d.message_id:  # an idea is settled by his answer, not by whether he typed something
+            msg = db.get(Message, d.message_id)
+            answer = (msg.meta or {}).get("answered") if msg else None
+            if answer:
+                d.outcome = "engaged" if answer in ("approve", "accept") else "ignored"
+            elif now - t0 > timedelta(hours=24):
+                d.outcome = "ignored"
+            continue
         answered = db.scalar(select(func.count()).select_from(Message).where(
             Message.role == "user", Message.created_at > t0, Message.created_at <= t0 + SETTLE_AFTER)) or 0
         d.outcome = "engaged" if answered else "ignored"
-    return len(open_)
+    return sum(d.outcome is not None for d in open_)
 
 
 def policy(db: Session) -> dict:

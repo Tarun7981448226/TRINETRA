@@ -216,13 +216,17 @@ def unlisted_skill(text: str) -> str | None:
     m = SKILL_ASK.search(text)
     if not m:
         return None
-    skill = m.group(1).strip(" ?.,").lower()
-    skill = re.sub(r"^(the|a|an|any|some)\s+", "", skill)
-    if not skill or skill in GENERIC or len(skill) < 2 or PERSONAL.search(skill):
-        return None  # personal questions go to the model, which declines them politely
-    b = brief().lower()
+    raw = m.group(1).strip(" ?.,")
+    skill = re.sub(r"^(the|a|an|any|some)\s+", "", raw.lower())
     words = [w for w in re.split(r"[\s/]+", skill) if w]
-    return None if all(re.search(rf"(?<![\w]){re.escape(w)}(?![\w])", b) for w in words) else m.group(1).strip(" ?.,")
+    if (not skill or skill in GENERIC or len(skill) < 2 or PERSONAL.search(skill) or len(words) > 3
+            or re.match(r"(what|how|why|when|where|who|which|about|us|our|we|you|your|a team|team|with|people|others|"
+                        r"english|hindi|telugu|startups?|companies|clients|customers)\b", skill)):
+        return None  # not a tool / language question — the model answers (and declines personal ones politely)
+    b = brief().lower()
+    # short tech tokens may sit inside a listed one: "sql" in "postgresql", "git" in "github actions"
+    listed = all((w in b) if len(w) <= 4 else re.search(rf"(?<![\w]){re.escape(w)}(?![\w])", b) for w in words)
+    return None if listed else re.sub(r"^(the|a|an|any|some)\s+", "", raw, flags=re.I)
 
 
 def _model_name() -> str:
@@ -361,16 +365,17 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
         step("command", "Language reader: a request to show emotions")
         step("mentor_emotion", "Emotion engine: " + ", ".join(perform))
         return done(" · ".join(EMOTION_LABEL[e] for e in perform), perform=perform)
-    # 0c. Someone in crisis: care and a real way to get help, before anything about Tarun.
-    from app.agents.command import CRISIS_LINE, DISTRESS
-    if DISTRESS.search(text):
-        step("wellbeing", "Guard: crisis words — care and the 988 line, nothing else")
-        return done("I'm really glad you said something. What you're feeling matters. " + CRISIS_LINE)
     # 1. They gave us their email / number — always welcome, never refused.
-    if (thanks := _take_contact(db, v, text)) is not None:
+    from app.agents.command import CRISIS_LINE, DISTRESS
+    if not DISTRESS.search(text) and (thanks := _take_contact(db, v, text)) is not None:
         step("communications", "Contact keeper: saved the email / number")
         step("reminders", "Sent it to Tarun's phone")
         return done(thanks, celebrate=True)
+    # 1b. Someone in crisis: care and a real way to get help, before anything about Tarun (their contact is still kept).
+    if DISTRESS.search(text):
+        _take_contact(db, v, text)
+        step("wellbeing", "Guard: crisis words — care and the 988 line, nothing else")
+        return done("I'm really glad you said something. What you're feeling matters. " + CRISIS_LINE)
     # 2. Leaving.
     if BYE.search(text) and len(text) < 60:
         step("communications", "Host: a goodbye")

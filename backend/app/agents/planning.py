@@ -120,7 +120,7 @@ async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: st
     from app.core import autonomy
     kind = (meta or {}).get("kind")
     verdict = None
-    if kind in autonomy.OPTIONAL and ctx.event.source == "scheduler":
+    if kind in autonomy.OPTIONAL and (ctx.event.source == "scheduler" or autonomy.quiet_until(ctx.db)):
         verdict = autonomy.decide(ctx.db, kind, ctx.notes.get("expression_label"))
         if not verdict.send:
             autonomy.record(ctx.db, kind, verdict)
