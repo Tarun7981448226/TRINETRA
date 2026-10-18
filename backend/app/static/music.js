@@ -383,7 +383,7 @@
     stopAll();
     const feel = (e) => host.feel?.(e);
     let ended = false, music = null, timers = [], partner = null;
-    const later = (ms, fn) => timers.push(setTimeout(fn, ms));
+    const later = (ms, fn) => { const id = setTimeout(() => { timers = timers.filter((x) => x !== id); fn(); }, ms); timers.push(id); };
     const me = {
       kind: s.show,
       end() {
@@ -397,17 +397,22 @@
     };
     current = me;
     if (!["play", "dance", "act"].includes(s.show)) { me.end(); return me; }  // "stop", or something that isn't a show
-    if (s.show === "act") {
-      const a = s.action, emo = { cry: "sad", laugh: "happy", sleep: "sleepy", jump: "excited", spin: "excited", wave: "happy" }[a];
-      feel(emo); buddy.act(a);
-      later(a === "sleep" ? 6000 : 3200, () => me.end());
+    if (s.show === "act") {  // one move, or several in a row ("jump and spin")
+      const EMO = { cry: "sad", laugh: "happy", sleep: "sleepy", jump: "excited", spin: "excited", wave: "happy" };
+      let t = 0;
+      for (const a of s.actions?.length ? s.actions : [s.action]) {
+        later(t, () => { feel(EMO[a]); buddy.act(a); });
+        t += a === "sleep" ? 6000 : 2900;
+      }
+      later(t + 300, () => me.end());
       return me;
     }
     const mood = s.mood || host.mood || "neutral";
     feel(EMO_FOR_MOOD(mood));
-    if (s.show === "dance") {
-      partner = buddy.partner(true);
-      perform({ mood, dance: true, seconds: s.seconds || 10, cancelled: () => ended,
+    if (s.show === "dance") {  // with her (default) or solo; 10 s unless told otherwise; 0 = until you say stop
+      if (s.partner !== false) partner = buddy.partner(true);
+      const secs = s.seconds === 0 ? 0 : s.seconds || 10;
+      perform({ mood, dance: true, seconds: secs || undefined, cancelled: () => ended,
         onBeat(n) {
           if (ended) return;
           const [a, b] = MOVES[Math.floor(n / 2) % MOVES.length];
@@ -416,17 +421,32 @@
           if (n % 8 === 6) buddy.sparkle("♥");
         },
       }).then((h) => { music = h; if (ended) h?.stop(); });
-      later((s.seconds || 10) * 1000 + 300, () => { buddy.celebrate(); partner?.celebrate?.(); buddy.sparkle("♥"); later(900, () => me.end()); });
+      if (secs) later(secs * 1000 + 300, () => { buddy.celebrate(); partner?.celebrate?.(); buddy.sparkle("♥"); later(900, () => me.end()); });
       return me;
     }
-    // an instrument: it plays until you say stop, press Esc, or tap it
-    const inst = INST[s.instrument] ? s.instrument : DEFAULT_FOR[mood] || "piano";
-    buddy.setProp(inst);
-    perform({ mood, instrument: inst, cancelled: () => ended,
-      onBeat(n) { if (!ended) buddy.beat(n); },
-      onStrum(down) { if (!ended) buddy.strum(down); },
-      onNote(nn) { if (ended) return; buddy.hit(nn); if (nn.midi && Math.random() < 0.18) buddy.sparkle(pick(["♪", "♫", "♩"])); },
-    }).then((h) => { music = h; if (ended) h?.stop(); });
+    // instruments: one, several in turn ("guitar then piano"), or all 15 — it plays until you say stop, press Esc, or tap it
+    const list = s.instrument === "all" ? Object.keys(INST)
+      : Array.isArray(s.instrument) ? s.instrument.filter((i) => INST[i])
+      : [INST[s.instrument] ? s.instrument : DEFAULT_FOR[mood] || "piano"];
+    if (!list.length) list.push(DEFAULT_FOR[mood] || "piano");
+    const SEGMENT = s.instrument === "all" ? 7000 : 9000;
+    let k = 0, seg = 0;
+    const next = () => {
+      if (ended) return;
+      const inst = list[k++ % list.length], mine = ++seg;
+      music?.stop(0.5); music = null;
+      buddy.setProp(inst); host.onInstrument?.(inst);
+      perform({ mood, instrument: inst, cancelled: () => ended || mine !== seg,
+        onBeat(n) { if (!ended && mine === seg) buddy.beat(n); },
+        onStrum(down) { if (!ended && mine === seg) buddy.strum(down); },
+        onNote(nn) { if (ended || mine !== seg) return; buddy.hit(nn); if (nn.midi && Math.random() < 0.18) buddy.sparkle(pick(["♪", "♫", "♩"])); },
+      }).then((h) => {
+        if (ended || mine !== seg) return h?.stop(0.2);
+        music = h;
+        if (list.length > 1) later(SEGMENT, next);  // the next one only once this one is actually playing (slow connections)
+      });
+    };
+    next();
     return me;
   }
   addEventListener("keydown", (e) => {  // Esc stops the music (and nothing else happens with that press)

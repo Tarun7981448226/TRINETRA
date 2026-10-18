@@ -50,15 +50,9 @@ PERFORM_ONE = re.compile(r"\b(show me|act|play|give me|do)\b.{0,20}?\b(" + "|".j
 
 
 def perform_request(text: str) -> list[str] | None:
-    from app.core.show import fix_typos
-    text = fix_typos(text)  # "show me exitement" → excitement
-    hits = {e: m.start() for e, w in EMOTION_WORDS.items() if (m := re.search(rf"\b({w})\b", text, re.I))}
-    named = sorted(hits, key=hits.get)  # in the order you said them
-    if PERFORM_ALL.search(text):
-        return named if named and not re.search(r"\ball\b|\bevery", text, re.I) else ALL_EMOTIONS
-    if PERFORM_ONE.search(text) and named and len(text) < 80:
-        return named
-    return None
+    """'show me angery then hapy' → ['angry', 'happy'] (typos, slang and casual phrasing understood by core/show.py)."""
+    from app.core.show import emotions
+    return emotions(text)
 
 
 @agent("router")
@@ -70,10 +64,12 @@ async def router(ctx: AgentContext) -> None:
         (name for name, pat in INTENT_PATTERNS.items() if re.search(pat, text, re.I)), "chat"
     )
     from app.core import show
-    if wanted := show.request(text):  # "dance", "play the guitar", "jump", "stop"
+    # a mood mode ("be angry with me", "hype mode") or a one-off demo ("scold Rahul") wins over a face or a show
+    mode_talk = mood_modes.detect_demo(text) or mood_modes.detect_request(text)[0]
+    if not mode_talk and (wanted := show.request(text)):  # "dance", "play the guitar", "jump", "stop"
         ctx.notes["show"] = wanted
         return
-    if perform := perform_request(text):
+    if not mode_talk and (perform := perform_request(text)):
         ctx.notes["perform"] = perform
         return
     if demo := mood_modes.detect_demo(text):

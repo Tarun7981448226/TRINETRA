@@ -16,7 +16,7 @@ def test_dance_and_instruments():
 
 
 def test_moves_and_stop():
-    assert show.request("jump") == {"show": "act", "action": "jump"}
+    assert show.request("jump") == {"show": "act", "action": "jump", "actions": ["jump"]}
     assert show.request("can you roll")["action"] == "spin"
     assert show.request("can you cry")["action"] == "cry"
     for t in ["stop", "stop the music", "Stop it please", "please stop"]:
@@ -26,7 +26,7 @@ def test_moves_and_stop():
 
 def test_ordinary_messages_are_not_shows():
     for t in ["where are my keys", "roll a dice", "i love to play football", "i need to stop procrastinating",
-              "dance class at 5", "what are you doing", "show me exitement"]:
+              "dance class at 5", "what are you doing", "show me exitement", "play football", "let us play a game", "play chess with me"]:
         assert show.request(t) is None, t
 
 

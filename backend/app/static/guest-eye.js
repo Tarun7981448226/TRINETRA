@@ -181,10 +181,11 @@
   }
   const stopShow = () => window.TrinetraMusic?.stopAll();
   async function runShow(s) {
+    if (s.show === "lab") { stopShow(); return openWorld(s.cmd); }  // "assemble" / "what do your agents do" → the Brain
+    if (s.show === "stop") return stopShow();
+    if (!["play", "dance", "act"].includes(s.show)) return;  // "what can you do": the reply is the answer
     await loadMusic();
     if (!window.TrinetraMusic || !buddy) return;
-    if (s.show === "stop") return stopShow();
-    if (s.show === "lab") { stopShow(); return openWorld(s.cmd); }  // "assemble" / "what do your agents do" → the Brain
     stopShow();  // the last one ends first, so its clean-up can't undo this one
     wrap.classList.add("showing");
     TrinetraMusic.show(buddy, s, { mood: LOOK.mood, feel: (e) => { performing = e; sync(); },
