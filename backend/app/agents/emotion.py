@@ -54,6 +54,7 @@ async def empathy_detector(ctx: AgentContext) -> None:
         raw = await llm.complete(
             [{"role": "system", "content": EMPATHY_PROMPT}, {"role": "user", "content": text}],
             tier="fast", temperature=0, max_tokens=200, json_mode=True,
+            sensitive=felt["low"] or any(p.search(text) for n, p in FALLBACK if n in ("sad", "stressed")),
         )
         data = json.loads(raw)
         mood = str(data.get("mood", "neutral")).lower()

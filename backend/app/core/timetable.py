@@ -98,8 +98,9 @@ def extend_series(db: Session, horizon_days: int = SERIES_HORIZON_DAYS) -> int:
         # The routine's usual time, not the latest occurrence's: if that one block was moved (a one-off), copying it
         # would move every future block too. Most common start and length over the last 7 occurrences.
         from collections import Counter
-        recent = db.scalars(select(Task).where(Task.series_id == series_id)
-                            .order_by(Task.planned_start.desc()).limit(7)).all()
+        # upcoming occurrences only: a deliberate change to the routine moves all of them, a one-off moves one
+        recent = db.scalars(select(Task).where(Task.series_id == series_id, Task.planned_start >= to_utc(now_local()))
+                            .order_by(Task.planned_start.desc()).limit(14)).all() or [template]
         usual = Counter((local(t.planned_start).time(), local(t.planned_end) - local(t.planned_start)) for t in recent)
         (start_time, duration), _ = usual.most_common(1)[0]  # a tie goes to the most recent (Counter keeps order)
         start_l = local(template.planned_start).replace(hour=start_time.hour, minute=start_time.minute)

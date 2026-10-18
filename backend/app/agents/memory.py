@@ -45,6 +45,7 @@ async def long_term_memory(ctx: AgentContext) -> None:
             temperature=0,
             max_tokens=600,
             json_mode=True,
+            sensitive=bool(ctx.notes.get("distress") or (ctx.notes.get("felt") or {}).get("low")),
         )
         facts = json.loads(raw).get("facts", [])
     except (llm.LLMUnavailable, json.JSONDecodeError, AttributeError) as e:
@@ -132,12 +133,23 @@ async def reflector(ctx: AgentContext) -> None:
     by_id = {m.id: m for m in mems}
     known = {m.id for m in mems}
     written = []
-    for i in insights[:3]:
+    for i in insights[:3] if isinstance(insights, list) else []:
+        if not isinstance(i, dict):
+            continue
         content = str(i.get("content", "")).strip()
-        evidence = [e for e in (i.get("evidence") or []) if e in known]
+        evidence = []
+        for e in i.get("evidence") or []:
+            try:
+                if int(e) in known:
+                    evidence.append(int(e))
+            except (TypeError, ValueError):
+                pass
         if not content or len(evidence) < 2:  # an insight needs support, not a hunch
             continue
-        old = by_id.get(i.get("replaces"))
+        try:
+            old = by_id.get(int(i.get("replaces"))) if i.get("replaces") is not None else None
+        except (TypeError, ValueError):
+            old = None
         if old is not None and old.kind == "insight":
             old.content = content
         else:
@@ -186,8 +198,13 @@ async def forgetter(ctx: AgentContext) -> None:
                 keep.uses = (keep.uses or 0) + (drop.uses or 0)
                 drop.archived = True
                 gone.add(drop.id)
+                if drop is a:
+                    break
     now = datetime.now(timezone.utc)
     for m in mems:
+        if m.last_used is None:  # saved before recall existed: its clock starts now, it isn't "60 days unused"
+            m.last_used, m.uses = now, m.uses or 0
+            continue
         if m.id in gone or (m.importance or 3) > 2 or m.kind in ("profile", "insight"):
             continue
         days = (now - from_db(m.last_used or m.created_at)).total_seconds() / 86400

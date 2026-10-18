@@ -13,7 +13,7 @@ def _sent(db, kind, outcome, n, hours_ago=48):
 
 def test_a_new_kind_gets_a_fair_try(client):
     with client.session_factory() as db:
-        v = autonomy.decide(db, "free_checkin")
+        v = autonomy.decide(db, "why")
         assert v.send and "P(engage) 0.75" in v.reason
 
 
@@ -45,7 +45,7 @@ def test_explores_after_five_holds(client):
 def test_different_nudges_dont_pile_up(client):
     with client.session_factory() as db:
         _sent(db, "wellbeing", None, 3, hours_ago=1)
-        v = autonomy.decide(db, "free_checkin")
+        v = autonomy.decide(db, "why")
         assert not v.send and "3 recent" in v.reason
 
 

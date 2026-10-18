@@ -383,6 +383,9 @@ def test_testing_you_is_not_a_name_offline(client, llm_calls, monkeypatch):
         assert guest._guess_name(bare)[0] is None, bare
     assert guest._guess_name("Sathwik")[0] == "Sathwik" and guest._guess_name("priya shah")[0] == "Priya Shah"
     assert guest._guess_name("I'm Sam from Google") == ("Sam", "Google")
+    for word in ("Great", "Awesome", "Thanks", "Cool"):  # iPhone capitalises the first word
+        assert guest._guess_name(word)[0] is None, word
+    assert guest._guess_name("Sam")[0] == "Sam"
 
 
 def test_the_model_reads_the_whole_conversation(client, monkeypatch):

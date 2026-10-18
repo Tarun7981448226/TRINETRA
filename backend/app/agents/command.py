@@ -97,7 +97,7 @@ def _today_context(ctx: AgentContext) -> str:
     text = str(ctx.event.payload.get("text", ""))
     recent = " ".join(m.content for m in ctx.db.scalars(select(Message).where(Message.role == "user")
                                                          .order_by(Message.id.desc()).limit(3)).all())
-    memories = recall.recall(ctx.db, f"{text} {recent}".strip())
+    memories = recall.recall(ctx.db, f"{text} {recent}".strip(), touch=not ctx.event.payload.get("button"))  # a tap isn't a use
     if memories:
         lines.append("What you know about them:")
         lines += [f"- ({m.kind}) {m.content}" for m in memories]

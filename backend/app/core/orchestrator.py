@@ -79,7 +79,10 @@ class Orchestrator:
             before = {k: id(v) for k, v in ctx.notes.items()}
             if spec.id == "core_orchestrator":  # TRINETRA decides with its managers' reports in hand
                 from app.core import briefing
-                ctx.notes["briefing"] = briefing.reports(ctx)
+                try:
+                    ctx.notes["briefing"] = briefing.reports(ctx)
+                except Exception:
+                    log.exception("briefing failed")  # never worth losing the reply over
             try:
                 result = await spec.handler(ctx)
             except Exception:

@@ -27,7 +27,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Decision, Message
 
-VALUE = {"wellbeing": 0.8, "lag": 0.75, "initiative": 0.7, "why": 0.6, "streak": 0.5, "free_checkin": 0.45}
+# The free-time check-in every 30 minutes is not here: Tarun asked for it explicitly, so it's his rule, not my judgement.
+VALUE = {"wellbeing": 0.8, "lag": 0.75, "initiative": 0.7, "why": 0.6, "streak": 0.5}
 OPTIONAL = set(VALUE)
 THRESHOLD = 0.15
 DAILY_BUDGET = 10

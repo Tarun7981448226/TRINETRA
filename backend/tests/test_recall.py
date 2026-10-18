@@ -45,15 +45,17 @@ def test_forgetter_merges_twins_and_archives_faded_trivia(client, llm_calls):
         long_ago = datetime.now(timezone.utc) - timedelta(days=60)
         db.add_all([Memory(kind="habit", content="Goes to the gym at 6pm", importance=3),
                     Memory(kind="habit", content="Goes to the gym at 6 pm", importance=2),
-                    Memory(kind="event", content="Ate pasta for lunch", importance=1, created_at=long_ago),
+                    Memory(kind="event", content="Ate pasta for lunch", importance=1, created_at=long_ago, last_used=long_ago),
+                    Memory(kind="event", content="Watched a movie", importance=1, created_at=long_ago),  # from before recall
                     Memory(kind="profile", content="Born in Hyderabad", importance=2, created_at=long_ago)])
         db.commit()
         ctx = AgentContext(event=IncomingEvent("cron.nightly"), db=db, settings=get_settings())
         import asyncio
         asyncio.run(forgetter(ctx))
         live = {m.content for m in recall.live(db)}
-        assert live == {"Goes to the gym at 6pm", "Born in Hyderabad"}  # twin merged, trivia archived, profile kept
-        assert db.query(Memory).count() == 4  # archived, never deleted
+        # twin merged, faded trivia archived, profile kept; a memory saved before recall existed gets a fresh clock
+        assert live == {"Goes to the gym at 6pm", "Born in Hyderabad", "Watched a movie"}
+        assert db.query(Memory).count() == 5  # archived, never deleted
 
 
 def test_reflector_writes_supported_insights(client, monkeypatch):

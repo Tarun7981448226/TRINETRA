@@ -364,6 +364,9 @@ async def nightly(db: Session, core: Orchestrator) -> bool:
     return True
 
 
+from contextvars import ContextVar
+
+_lease_until: ContextVar[str | None] = ContextVar("lease_until", default=None)
 LEASE = timedelta(seconds=110)  # longer than any beat should take (Vercel stops a function at 60 s)
 
 
@@ -376,11 +379,14 @@ def _take_lease(db: Session) -> bool:
     until = (t + LEASE).isoformat()
     took = db.execute(update(KeyValue).where(KeyValue.key == "heartbeat_lease", KeyValue.value < t.isoformat())
                       .values(value=until)).rowcount
+    if took:
+        _lease_until.set(until)
     if not took and db.get(KeyValue, "heartbeat_lease") is None:
         try:
             db.add(KeyValue(key="heartbeat_lease", value=until))
             db.flush()
             took = 1
+            _lease_until.set(until)
         except IntegrityError:  # another beat created it a moment ago
             db.rollback()
             return False
@@ -389,9 +395,12 @@ def _take_lease(db: Session) -> bool:
 
 
 def _release_lease(db: Session) -> None:
-    row = db.get(KeyValue, "heartbeat_lease")
-    if row is not None:
-        row.value = datetime.now(timezone.utc).isoformat()
+    """Free it — only if it's still ours (a beat that overran its lease mustn't free the next beat's)."""
+    from sqlalchemy import update
+    ours = _lease_until.get()
+    if ours:
+        db.execute(update(KeyValue).where(KeyValue.key == "heartbeat_lease", KeyValue.value == ours)
+                   .values(value=datetime.now(timezone.utc).isoformat()))
         db.commit()
 
 

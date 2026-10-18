@@ -502,7 +502,8 @@ async def respond(
     if task is None:
         raise HTTPException(404, "task not found")
     status, phrase = QUICK_ACTIONS[body.action]
-    if status is not None and task.status == status and body.action != "onit":  # double tap
+    same = task.status == status and ((body.action == "partly") == (task.rating == 2))  # "partly" after "done" corrects it
+    if status is not None and same and body.action != "onit":  # double tap
         raise HTTPException(409, "already answered")
     if status is None:  # snooze: push the block 10 minutes later, keep its length
         start = max(local(task.planned_start), now_local()) + timedelta(minutes=10)
@@ -515,7 +516,7 @@ async def respond(
     for m in db.scalars(select(Message).where(Message.meta.is_not(None)).order_by(Message.id.desc()).limit(30)):
         if m.meta.get("task_id") == task.id and not m.meta.get("answered"):
             m.meta = {**m.meta, "answered": body.action}  # reassign so the JSON change is saved
-    db.flush()
+    db.commit()  # the answer is saved before TRINETRA reacts, so a second tap a moment later sees it
 
     if status is not None:  # feelings update first, so the reply already carries them
         await core.dispatch(IncomingEvent(f"task.{status}", {"task_id": task.id, "title": task.title}), db)

@@ -109,6 +109,8 @@ NEVER_NAMES = {"i", "me", "my", "you", "u", "your", "ur", "he", "him", "his", "s
                "nobody", "none", "anonymous", "guess", "skip", "later", "not", "dont", "don't", "why", "liar", "fake"}
 
 
+LIKELY_NAMES = {"sam", "alex", "john", "max", "mark", "will", "grace", "joy", "hope", "faith", "victor", "rose", "jack", "ben",
+                "dan", "tom", "ray", "art", "bill", "pat", "sky", "kim", "lee", "jay", "raj", "ali", "ana", "eva", "mia", "leo"}
 TITLES = {"dr", "mr", "mrs", "ms", "miss", "prof", "professor", "sir", "madam"}
 
 
@@ -129,7 +131,8 @@ def _guess_name(text: str) -> tuple[str | None, str | None]:
                   t, re.I)
     name = m.group(1) if m else None
     if not m and re.fullmatch(r"[A-Za-z][A-Za-z'\-]{1,20}(\s+[A-Za-z][A-Za-z'\-]{1,20})?", t):
-        if all(w.lower() not in _common() or w[0].isupper() for w in t.split()):
+        words = t.split()  # iPhones capitalise the first word: "Great" is a word, not a name
+        if all(w.lower() not in _common() or (w[0].isupper() and (len(words) > 1 or w.lower() in LIKELY_NAMES)) for w in words):
             name = t
     if name:  # "Priya from" → "Priya"
         words = [w for w in name.split() if w.lower() not in NOT_NAMES]
@@ -215,7 +218,9 @@ async def _understand(v: GuestVisit) -> dict | None:
                                    + UNDERSTAND.format(known=known)}, *history],
                                  tier="guest", temperature=0.6, max_tokens=500, json_mode=True, reasoning="low")
         d = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
-    except Exception:  # offline, rate-limited, or not JSON
+    except llm.LLMUnavailable:  # every model is down or out of time: don't spend another full budget on _say
+        return {"offline": True}
+    except Exception:  # not JSON
         return None
     if not isinstance(d, dict) or not isinstance(d.get("reply"), str) or not d["reply"].strip():
         return None
@@ -360,6 +365,9 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
 
     # 5. Everything else: the model reads the whole conversation once — who they are (if they said) and what to say back.
     u = await _understand(v)
+    offline = bool(u and u.get("offline"))
+    if offline:
+        u = None
     if u is not None:
         step("command", f"Understanding ({_model_name()}): read the whole chat → {u.get('intent') or 'question'}")
     else:
@@ -396,6 +404,8 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
     step("communications", "Host: wrote the reply")
     if u is not None:
         reply = _sparing(v, _short(humanize(u["reply"], strip_name=False))) or FALLBACK_ANSWER
+    elif offline:
+        reply = FALLBACK_ANSWER
     else:
         history = [{"role": "assistant" if m["role"] == "trinetra" else "user", "content": m["text"]} for m in v.messages[-10:]]
         reply = await _say(v, history, FALLBACK_ANSWER)
