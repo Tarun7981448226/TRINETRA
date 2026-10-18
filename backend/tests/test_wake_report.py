@@ -137,11 +137,12 @@ def test_weekly_report_builds_in_steps_and_compares_weeks(client, llm_calls):
         for i, status in enumerate(["done", "done", "skipped"]):
             db.add(Task(title=f"Study {i}", category="study", planned_start=base + timedelta(hours=i),
                         planned_end=base + timedelta(hours=i, minutes=50), status=status))
-        last_monday = (now_local().date() - timedelta(days=now_local().weekday() + 7)).isoformat()
+        day = (now_local() - timedelta(days=1)).date()  # the week the tasks are in (on a Monday, that's last week)
+        last_monday = (day - timedelta(days=day.weekday() + 7)).isoformat()
         db.add(WeeklyReport(week_start=last_monday, status="ready", sections=[],
                             metrics={"blocks": {"rate": 0.5}, "hours_done": 3.0, "wake": {}}))
         db.commit()
-    built = client.post("/reports/build").json()
+    built = client.post("/reports/build", params={"week_of": day.isoformat()}).json()
     assert built["steps"] == ["measured"] + [f"chapter {i}" for i in range(1, 7)]
     latest = client.get("/reports").json()[0]
     assert latest["status"] == "ready" and len(latest["sections"]) == 6

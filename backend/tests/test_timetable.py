@@ -266,7 +266,8 @@ def test_guards_never_damage_a_correct_plan():
     assert (fixed["start"], fixed["end"]) == ("00:30", "06:00")
     moved = _keep_his_time("gym at 7pm tomorrow", [{"op": "create", "start": "18:00", "end": "19:00"}])[0]
     assert (moved["start"], moved["end"]) == ("19:00", "20:00")  # the length is kept
-    assert said_day("add reading at 12:30 am tonight") == now_local().date() + timedelta(days=1)
+    after_midnight = now_local().hour < 5  # at 00:10, "12:30 am tonight" is still today
+    assert said_day("add reading at 12:30 am tonight") == now_local().date() + timedelta(days=0 if after_midnight else 1)
 
 
 def test_the_destination_day_is_not_retargeted(client, builder_llm):
