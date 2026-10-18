@@ -18,9 +18,15 @@
   root.innerHTML = `
 <style>
   :host { all: initial; }
-  * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  .wrap { --gold: #f0a83a; --iris: #f0a83a; --glow: rgba(240,168,58,.4); --bg: #0f0e16; --panel: #17161f; --line: #2c2a3b;
-    --text: #efedf7; --muted: #9a98b0; position: fixed; right: 20px; bottom: 20px; z-index: 2147483000; }
+  * { box-sizing: border-box; font-family: Outfit, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  /* The portfolio's own palette (tokens.css): warm paper, ink, rose. Dark only when the site itself is dark. */
+  .wrap { --gold: #b83f63; --fill: #d3567a; --on-fill: #ffffff; --acc-rgb: 211, 86, 122; --iris: #d3567a; --glow: rgba(211,86,122,.3);
+    --bg: #fffdf9; --panel: #f7f3ea; --me: #f1ddd3; --line: rgba(41,35,31,.14); --text: #29231f; --muted: #6b6359;
+    --shadow: rgba(41,35,31,.16); --ok: #2f8a55; --ok-bg: #e6f3ea; --err: #b3261e;
+    position: fixed; right: 20px; bottom: 20px; z-index: 2147483000; }
+  .wrap.dark { --gold: #ff8fab; --fill: #ff8fab; --on-fill: #29171d; --acc-rgb: 255, 143, 171; --iris: #ff8fab; --glow: rgba(255,143,171,.3);
+    --bg: #1c1613; --panel: #241c19; --me: #352129; --line: rgba(245,239,230,.14); --text: #f5efe6; --muted: #b3a89d;
+    --shadow: rgba(0,0,0,.45); --ok: #6fd39a; --ok-bg: #16281d; --err: #ff8a80; }
   .orb { width: 72px; height: 72px; padding: 0; border: 0; background: none; cursor: pointer; display: block;
     -webkit-tap-highlight-color: transparent; position: relative; }
   .orb:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 50%; }
@@ -29,16 +35,16 @@
   .buddy { width: 100%; height: 100%; }
   .orb { transition: transform 2.2s cubic-bezier(.45,.05,.35,1); }
   .nudge { position: absolute; right: 84px; bottom: 18px; white-space: nowrap; background: var(--panel); color: var(--text);
-    border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; font-size: 13px; box-shadow: 0 8px 24px var(--shadow);
     opacity: 0; transform: translateX(8px); transition: opacity .4s, transform .4s; pointer-events: none; }
   .nudge.on { opacity: 1; transform: none; }
   .panel { position: absolute; right: 0; bottom: 86px; width: 360px; max-height: min(560px, calc(100vh - 130px));
     display: flex; flex-direction: column; background: var(--bg); color: var(--text); border: 1px solid var(--line);
-    border-radius: 18px; box-shadow: 0 18px 50px rgba(0,0,0,.45); overflow: hidden;
+    border-radius: 18px; box-shadow: 0 18px 50px var(--shadow); overflow: hidden;
     opacity: 0; transform: translateY(12px) scale(.98); transform-origin: bottom right; transition: opacity .25s, transform .25s; pointer-events: none; }
   .panel.on { opacity: 1; transform: none; pointer-events: auto; }
   .head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--line); }
-  .head b { font-size: 14px; letter-spacing: .16em; color: var(--gold); }
+  .head b { font-family: 'Source Serif 4', Georgia, serif; font-size: 15px; letter-spacing: .14em; color: var(--gold); }
   .head small { display: block; font-size: 11px; color: var(--muted); letter-spacing: 0; }
   .head .sp { flex: 1; }
   .icon { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--text);
@@ -49,8 +55,8 @@
   .tri { align-self: flex-start; background: var(--panel); border-left: 3px solid var(--gold); border-bottom-left-radius: 4px; }
   .why { align-self: flex-start; margin: -6px 0 0 4px; background: none; border: 0; padding: 2px 4px; color: var(--muted); font-size: 11.5px; cursor: pointer; }
   .why:hover { color: var(--gold); }
-  .me { align-self: flex-end; background: #2b2a42; border-bottom-right-radius: 4px; }
-  .tri.tarun { border-left-color: #4ade80; background: #13261b; }
+  .me { align-self: flex-end; background: var(--me); border-bottom-right-radius: 4px; }
+  .tri.tarun { border-left-color: var(--ok); background: var(--ok-bg); }
   .dots { align-self: flex-start; color: var(--muted); font-size: 13px; padding: 0 4px; }
   form { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
   form.note { flex-direction: column; }
@@ -58,32 +64,32 @@
     padding: 10px 14px; font-size: 16px; outline: none; }
   textarea { border-radius: 14px; resize: none; height: 64px; }
   input:focus, textarea:focus { border-color: var(--gold); }
-  .send { background: var(--gold); color: #1a1205; border: 0; border-radius: 20px; padding: 0 16px; font-weight: 600; font-size: 14px; cursor: pointer; min-height: 40px; }
+  .send { background: var(--fill); color: var(--on-fill); border: 0; border-radius: 20px; padding: 0 16px; font-weight: 600; font-size: 14px; cursor: pointer; min-height: 40px; }
   .send:disabled { opacity: .5; }
   .choices { display: flex; gap: 8px; flex-wrap: wrap; align-self: flex-start; }
   .choices button { border: 1px solid var(--gold); background: transparent; color: var(--gold); border-radius: 16px; padding: 7px 14px;
     font-size: 13px; font-weight: 600; cursor: pointer; }
-  .choices button.yes { background: var(--gold); color: #1a1205; }
+  .choices button.yes { background: var(--fill); border-color: var(--fill); color: var(--on-fill); }
   .tourbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
   .tourbar .sp { flex: 1; }
   .tourbar .bar { height: 3px; background: var(--line); border-radius: 2px; flex: 1; overflow: hidden; margin-right: 6px; }
-  .tourbar .bar i { display: block; height: 100%; background: var(--gold); width: 0; transition: width .4s; }
+  .tourbar .bar i { display: block; height: 100%; background: var(--fill); width: 0; transition: width .4s; }
   .tourbar button { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 14px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
   .tourbar button.go { border-color: var(--gold); color: var(--gold); }
   .stop { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); align-self: flex-start; margin: 6px 0 -4px 4px; }
-  .diagram { align-self: stretch; background: radial-gradient(ellipse at 50% 0%, #241f38, var(--panel) 70%); border: 1px solid var(--line);
+  .diagram { align-self: stretch; background: radial-gradient(ellipse at 50% 0%, rgba(var(--acc-rgb),.12), var(--panel) 70%); border: 1px solid var(--line);
     border-radius: 14px; padding: 12px 12px 14px; perspective: 700px; }
   .diagram .lbl { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
   .flow3d { transform: rotateX(16deg); transform-style: preserve-3d; transform-origin: 50% 0; }
-  .diagram .node { display: flex; align-items: center; gap: 9px; border: 1px solid rgba(240,168,58,.55); border-radius: 11px; padding: 7px 10px;
-    font-size: 13px; background: linear-gradient(180deg, rgba(240,168,58,.16), rgba(240,168,58,.05));
-    box-shadow: 0 5px 0 rgba(120,70,10,.55), 0 12px 18px rgba(0,0,0,.4); animation: rise .5s cubic-bezier(.2,.9,.3,1.2) both; animation-delay: var(--d); }
+  .diagram .node { display: flex; align-items: center; gap: 9px; border: 1px solid rgba(var(--acc-rgb),.5); border-radius: 11px; padding: 7px 10px;
+    font-size: 13px; background: linear-gradient(180deg, rgba(var(--acc-rgb),.14), rgba(var(--acc-rgb),.04));
+    box-shadow: 0 4px 0 rgba(var(--acc-rgb),.35), 0 10px 16px var(--shadow); animation: rise .5s cubic-bezier(.2,.9,.3,1.2) both; animation-delay: var(--d); }
   .diagram .ic { flex: none; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 16px;
-    background: rgba(240,168,58,.18); box-shadow: inset 0 -2px 0 rgba(0,0,0,.3); }
+    background: rgba(var(--acc-rgb),.16); box-shadow: inset 0 -2px 0 rgba(var(--acc-rgb),.25); }
   .diagram .arrow { position: relative; height: 18px; margin: 3px 0; }
-  .diagram .arrow::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(240,168,58,.35); }
+  .diagram .arrow::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(var(--acc-rgb),.35); }
   .diagram .arrow::after { content: ""; position: absolute; left: 50%; top: 0; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%;
-    background: var(--gold); box-shadow: 0 0 8px var(--gold); animation: pulse-down 1.3s linear infinite; animation-delay: var(--d); }
+    background: var(--fill); box-shadow: 0 0 8px var(--fill); animation: pulse-down 1.3s linear infinite; animation-delay: var(--d); }
   @keyframes rise { from { opacity: 0; transform: translateY(10px) rotateX(-35deg); } }
   @keyframes pulse-down { from { top: 0; opacity: 1; } to { top: 100%; opacity: .2; } }
   .diagram .loop { margin-top: 10px; font-size: 12px; color: var(--gold); text-align: center; }
@@ -108,7 +114,7 @@
   .card select:focus, .card input:focus { border-color: var(--gold); }
   .card .btns { display: flex; gap: 8px; justify-content: flex-end; }
   .card .skip { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 16px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
-  .card .err { color: #ff8a80; font-size: 12px; min-height: 1em; }
+  .card .err { color: var(--err); font-size: 12px; min-height: 1em; }
   [hidden] { display: none !important; }
   @media (max-width: 520px) {
     .wrap { right: 16px; bottom: 16px; }
@@ -140,6 +146,15 @@
 
   const $ = (s) => root.querySelector(s);
   const wrap = $(".wrap"), orb = $(".orb"), panel = $(".panel"), log = $(".log"), talkForm = $(".talk"), noteForm = $(".note");
+  // Match the page: light like the portfolio, dark only when the site is switched to dark (its ☾ button or the system setting).
+  const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+  const matchSite = () => {
+    const t = document.documentElement.dataset.theme;
+    wrap.classList.toggle("dark", t === "dark" || (t !== "light" && darkQuery.matches));
+  };
+  matchSite();
+  darkQuery.addEventListener?.("change", matchSite);
+  new MutationObserver(matchSite).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   const input = talkForm.elements.t, sendBtn = talkForm.querySelector(".send"), nudge = $(".nudge");
   const later = (ms, fn) => setTimeout(fn, ms), rand = (a, b) => a + Math.random() * (b - a);
   const has = (c) => wrap.classList.contains(c);

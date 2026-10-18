@@ -22,16 +22,16 @@
 
   // team → brain region (lateral view, front = left; x, y in 0..1 of the brain's box) · its job in the brain · team colour
   const REGION = {
-    command: ["Prefrontal cortex", "executive control — decides who acts", 0.13, 0.36, "night", "#8b9bff"],
-    coaching: ["Anterior cingulate", "spots errors and conflict, drives effort", 0.31, 0.27, "saffron", "#ffd23c"],
-    reminders: ["Motor cortex", "sends the output out", 0.47, 0.1, "coral", "#ff9a3c"],
-    monitoring: ["Parietal cortex", "attention: tracks what's happening", 0.71, 0.2, "berry", "#c77dff"],
-    time_planning: ["Basal ganglia", "picks the next action and its timing", 0.4, 0.43, "ocean", "#3cc8ff"],
-    communications: ["Language areas", "Broca–Wernicke: understands and speaks", 0.2, 0.6, "red", "#ff5b5b"],
-    mentor_emotion: ["Amygdala · limbic", "gives feelings their weight", 0.37, 0.72, "pink", "#ff5c9a"],
-    wellbeing: ["Hypothalamus", "keeps the body steady: sleep, food, stress", 0.5, 0.62, "mint", "#7ed957"],
-    memory: ["Hippocampus", "forms and recalls memories", 0.64, 0.6, "mono", "#c9ccd6"],
-    learning: ["Cerebellum", "predicts, and learns from its errors", 0.84, 0.8, "ocean", "#7ee0c3"],
+    command: ["Prefrontal cortex", "executive control — decides who acts", 0.13, 0.36, "night", "#5b6cf0"],
+    coaching: ["Anterior cingulate", "spots errors and conflict, drives effort", 0.31, 0.27, "saffron", "#d9a000"],
+    reminders: ["Motor cortex", "sends the output out", 0.47, 0.1, "coral", "#ea7a12"],
+    monitoring: ["Parietal cortex", "attention: tracks what's happening", 0.71, 0.2, "berry", "#9b4fe0"],
+    time_planning: ["Basal ganglia", "picks the next action and its timing", 0.4, 0.43, "ocean", "#1c9fd8"],
+    communications: ["Language areas", "Broca–Wernicke: understands and speaks", 0.2, 0.6, "red", "#e23e3e"],
+    mentor_emotion: ["Amygdala · limbic", "gives feelings their weight", 0.37, 0.72, "pink", "#e0407e"],
+    wellbeing: ["Hypothalamus", "keeps the body steady: sleep, food, stress", 0.5, 0.62, "mint", "#3fa62a"],
+    memory: ["Hippocampus", "forms and recalls memories", 0.64, 0.6, "mono", "#8a8fa0"],
+    learning: ["Cerebellum", "predicts, and learns from its errors", 0.84, 0.8, "ocean", "#19a88a"],
   };
   const HUB = [0.5, 0.45];  // the thalamus
   const REPORT = {
@@ -47,22 +47,22 @@
   const toStage = ([x, y]) => [BX + x * BW, BY + y * BH];
 
   const CSS = `
-  .tb2-ov { position: fixed; inset: 0; z-index: 2147483600; background: rgba(6, 7, 14, .78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-    display: flex; align-items: center; justify-content: center; padding: 18px; animation: tb2-fade .25s ease-out; font-family: -apple-system, system-ui, sans-serif; }
+  .tb2-ov { position: fixed; inset: 0; z-index: 2147483600; background: rgba(41, 35, 31, .28); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center; padding: 18px; animation: tb2-fade .25s ease-out; font-family: Outfit, -apple-system, system-ui, sans-serif; }
   @keyframes tb2-fade { from { opacity: 0; } }
-  .tb2-box { width: min(1240px, 100%); max-height: 100%; display: flex; flex-direction: column; background: #0c0b14; color: #efedf7;
-    border: 1px solid #2c2a3b; border-radius: 18px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.5); position: relative; }
-  .tb2-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid #2c2a3b; flex-wrap: wrap; }
-  .tb2-head b { letter-spacing: .12em; color: #f0a83a; font-size: 15px; }
-  .tb2-head .sub { font-size: 12px; color: #9a98b0; }
+  .tb2-box { width: min(1240px, 100%); max-height: 100%; display: flex; flex-direction: column; background: #fffdf9; color: #29231f;
+    border: 1px solid #e4dfd6; border-radius: 18px; overflow: hidden; box-shadow: 0 30px 80px rgba(41,35,31,.22); position: relative; }
+  .tb2-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid #e4dfd6; flex-wrap: wrap; }
+  .tb2-head b { letter-spacing: .12em; color: #9a5800; font-size: 15px; }
+  .tb2-head .sub { font-size: 12px; color: #6b6359; }
   .tb2-head .sp { flex: 1; }
-  .tb2-head button, .tb2-bar button { border: 1px solid #343850; background: #17161f; color: #efedf7; border-radius: 16px; padding: 7px 13px;
+  .tb2-head button, .tb2-bar button { border: 1px solid #e4dfd6; background: #f6f4f0; color: #29231f; border-radius: 16px; padding: 7px 13px;
     font-size: 13px; cursor: pointer; font-weight: 600; min-height: 36px; }
-  .tb2-head .chat { border-color: #f0a83a; color: #f0a83a; }
+  .tb2-head .chat { border-color: #ec9a2e; color: #9a5800; }
   .tb2-head .x { width: 36px; padding: 0; border-radius: 50%; }
   .tb2-scroll { overflow: auto; -webkit-overflow-scrolling: touch; position: relative; }
   .tb2-stage { position: relative; width: min(100%, calc((100vh - 200px) * 16 / 9)); aspect-ratio: 16 / 9; margin: 0 auto; overflow: hidden;
-    background: radial-gradient(ellipse at 40% 50%, #1a1630 0%, #0c0b14 70%); user-select: none; -webkit-user-select: none; }
+    background: radial-gradient(ellipse at 40% 50%, #fbf3ec 0%, #f7f3ea 70%); user-select: none; -webkit-user-select: none; }
   .tb2-stage.small { min-width: 880px; }
   .tb2-l { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
   .tb2-brain { transition: opacity .6s; }
@@ -72,58 +72,58 @@
   .tb2-wire { stroke-width: .28; fill: none; opacity: .55; }
   .tb2-wire.hot { stroke-width: .7; opacity: 1; stroke-dasharray: 1.2 .9; animation: tb2-flow .5s linear infinite; }
   @keyframes tb2-flow { to { stroke-dashoffset: -4.2; } }
-  .tb2-pulse { fill: #fff6c8; filter: drop-shadow(0 0 1.2px #ffd27a); }
+  .tb2-pulse { fill: #f0a020; filter: drop-shadow(0 0 1.2px #f0a020); }
   .tb2-ag { position: absolute; aspect-ratio: 1; transform: translateX(-50%); cursor: pointer; contain: layout;
     transition: left 1.3s ease-in-out, bottom 1.3s ease-in-out, width .5s, opacity .4s; }
   .tb2-ag.planned { opacity: .55; }
   .tb2-ag.planned::after { content: "🛠"; position: absolute; right: -16%; top: -12%; font-size: 9px; }
-  .tb2-ag.mgr::before { content: "★"; position: absolute; left: 50%; top: -26%; transform: translateX(-50%); color: #ffd27a; font-size: 11px;
-    text-shadow: 0 0 4px rgba(0,0,0,.8); z-index: 1; }
-  .tb2-ag:hover { filter: drop-shadow(0 0 5px rgba(255,210,122,.9)); }
-  .tb2-chip { position: absolute; transform: translate(-50%, 0); white-space: nowrap; font-size: 10.5px; font-weight: 700; color: #fff; pointer-events: none;
-    background: rgba(12, 11, 20, .78); border: 1px solid var(--c); padding: 1px 7px 2px; border-radius: 9px; line-height: 1.25; text-align: center; transition: opacity .4s; }
-  .tb2-chip small { display: block; font-weight: 500; font-size: 9px; color: #cfcbe6; }
-  .tb2-col { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 9.5px; font-weight: 700; color: #fff; background: #1d2433;
+  .tb2-ag.mgr::before { content: "★"; position: absolute; left: 50%; top: -26%; transform: translateX(-50%); color: #e09400; font-size: 11px;
+    text-shadow: 0 0 3px #fff; z-index: 1; }
+  .tb2-ag:hover { filter: drop-shadow(0 0 5px rgba(236,154,46,.8)); }
+  .tb2-chip { position: absolute; transform: translate(-50%, 0); white-space: nowrap; font-size: 10.5px; font-weight: 700; color: #29231f; pointer-events: none;
+    background: rgba(255, 253, 249, .92); border: 1px solid var(--c); padding: 1px 7px 2px; border-radius: 9px; line-height: 1.25; text-align: center; transition: opacity .4s; }
+  .tb2-chip small { display: block; font-weight: 500; font-size: 9px; color: #6b6359; }
+  .tb2-col { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 9.5px; font-weight: 700; color: #29231f; background: #efe9df;
     padding: 1px 6px; border-radius: 7px; opacity: 0; transition: opacity .5s; pointer-events: none; }
   .tb2-stage.lined .tb2-col { opacity: 1; }
   .tb2-eye { position: absolute; transform: translate(-50%, -50%); width: 2.4%; aspect-ratio: 1; pointer-events: none; }
-  .tb2-eye::before { content: ""; position: absolute; inset: 0; background: #ffd27a; transform: rotate(45deg) scale(.62); border-radius: 2px;
-    box-shadow: 0 0 10px 3px rgba(255, 210, 122, .75); animation: tb2-glow 2.4s ease-in-out infinite; }
-  @keyframes tb2-glow { 50% { box-shadow: 0 0 18px 6px rgba(255, 210, 122, .95); } }
-  .tb2-say { position: absolute; transform: translate(-50%, -100%); background: #fff; color: #1d1d29; font-size: 11px; font-weight: 600;
-    padding: 3px 8px; border-radius: 9px; max-width: 240px; text-align: center; line-height: 1.25; box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  .tb2-eye::before { content: ""; position: absolute; inset: 0; background: #f0a020; transform: rotate(45deg) scale(.62); border-radius: 2px;
+    box-shadow: 0 0 10px 3px rgba(240, 160, 32, .55); animation: tb2-glow 2.4s ease-in-out infinite; }
+  @keyframes tb2-glow { 50% { box-shadow: 0 0 18px 6px rgba(240, 160, 32, .8); } }
+  .tb2-say { position: absolute; transform: translate(-50%, -100%); background: #fff; color: #29231f; font-size: 11px; font-weight: 600; border: 1px solid #e4dfd6;
+    padding: 3px 8px; border-radius: 9px; max-width: 240px; text-align: center; line-height: 1.25; box-shadow: 0 2px 8px rgba(41,35,31,.18);
     animation: tb2-pop .25s ease-out; z-index: 6; pointer-events: none; }
-  .tb2-say.ceo { background: #ffd27a; }
+  .tb2-say.ceo { background: #ffe2a8; border-color: #ec9a2e; }
   @keyframes tb2-pop { from { opacity: 0; transform: translate(-50%, -80%) scale(.85); } }
-  .tb2-feed { position: absolute; right: 1.4%; top: 3%; width: 22%; background: rgba(12, 11, 20, .82); border: 1px solid #2c2a3b; border-radius: 12px;
-    padding: 8px 10px; font-size: 11px; line-height: 1.4; color: #cfe9ff; pointer-events: none; }
-  .tb2-feed b { color: #ffd27a; font-size: 11.5px; letter-spacing: .06em; } .tb2-feed .n { color: #9a98b0; font-size: 10.5px; margin: 2px 0 5px; }
-  .tb2-feed div.l { border-top: 1px solid #23212f; padding: 3px 0; } .tb2-feed .wait { color: #6b7a90; }
-  .tb2-card { position: absolute; transform: translate(-50%, -100%); width: 230px; background: #12141f; color: #eceaf6; border: 1px solid #343850;
-    border-radius: 12px; padding: 9px 11px; font-size: 12px; line-height: 1.4; box-shadow: 0 10px 30px rgba(0,0,0,.5); z-index: 8; pointer-events: none; }
-  .tb2-card b { font-size: 13px; } .tb2-card .t { color: #f0a83a; font-size: 11px; } .tb2-card .st { font-size: 10.5px; color: #9a98b0; margin-top: 4px; }
-  .tb2-now { padding: 8px 14px; border-top: 1px solid #2c2a3b; font-size: 13px; color: #efedf7; background: #14131d; min-height: 20px; }
+  .tb2-feed { position: absolute; right: 1.4%; top: 3%; width: 22%; background: rgba(255, 253, 249, .94); border: 1px solid #e4dfd6; border-radius: 12px;
+    padding: 8px 10px; font-size: 11px; line-height: 1.4; color: #29231f; pointer-events: none; }
+  .tb2-feed b { color: #9a5800; font-size: 11.5px; letter-spacing: .06em; } .tb2-feed .n { color: #6b6359; font-size: 10.5px; margin: 2px 0 5px; }
+  .tb2-feed div.l { border-top: 1px solid #ece7de; padding: 3px 0; } .tb2-feed .wait { color: #8a8278; }
+  .tb2-card { position: absolute; transform: translate(-50%, -100%); width: 230px; background: #ffffff; color: #29231f; border: 1px solid #e4dfd6;
+    border-radius: 12px; padding: 9px 11px; font-size: 12px; line-height: 1.4; box-shadow: 0 10px 30px rgba(41,35,31,.18); z-index: 8; pointer-events: none; }
+  .tb2-card b { font-size: 13px; } .tb2-card .t { color: #9a5800; font-size: 11px; } .tb2-card .st { font-size: 10.5px; color: #6b6359; margin-top: 4px; }
+  .tb2-now { padding: 8px 14px; border-top: 1px solid #e4dfd6; font-size: 13px; color: #29231f; background: #f6f4f0; min-height: 20px; }
   .tb2-now[hidden] { display: none; }
-  .tb2-now b { color: #7ee0c3; font-weight: 700; margin-right: 6px; }
-  .tb2-bar { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid #2c2a3b; flex-wrap: wrap; align-items: center; }
-  .tb2-bar input { flex: 1; min-width: 170px; background: #17161f; color: #efedf7; border: 1px solid #343850; border-radius: 16px; padding: 8px 12px; font-size: 16px; outline: none; }
-  .tb2-bar input:focus { border-color: #f0a83a; }
-  .tb2-side { position: absolute; right: 0; top: 57px; bottom: 0; width: min(400px, 94%); background: rgba(13, 12, 20, .97); border-left: 1px solid #2c2a3b;
+  .tb2-now b { color: #0f8a6a; font-weight: 700; margin-right: 6px; }
+  .tb2-bar { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid #e4dfd6; flex-wrap: wrap; align-items: center; }
+  .tb2-bar input { flex: 1; min-width: 170px; background: #ffffff; color: #29231f; border: 1px solid #e4dfd6; border-radius: 16px; padding: 8px 12px; font-size: 16px; outline: none; }
+  .tb2-bar input:focus { border-color: #ec9a2e; }
+  .tb2-side { position: absolute; right: 0; top: 57px; bottom: 0; width: min(400px, 94%); background: rgba(255, 253, 249, .98); border-left: 1px solid #e4dfd6;
     overflow-y: auto; padding: 14px 16px 20px; font-size: 12.5px; line-height: 1.5; z-index: 10; animation: tb2-slide .3s ease-out; }
   @keyframes tb2-slide { from { transform: translateX(30px); opacity: 0; } }
-  .tb2-side h3 { margin: 0 0 6px; font-size: 15px; color: #f0a83a; } .tb2-side h4 { margin: 14px 0 4px; font-size: 13px; color: #ffd27a; }
-  .tb2-side .close { position: sticky; top: 0; float: right; border: 1px solid #343850; background: #17161f; color: #efedf7; border-radius: 12px; padding: 3px 9px; cursor: pointer; }
-  .tb2-side .team { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid #2c2a3b; }
-  .tb2-side .about, .tb2-side .muted { color: #9a98b0; } .tb2-side .mgr { color: #ffd27a; margin: 4px 0 2px; }
+  .tb2-side h3 { margin: 0 0 6px; font-size: 15px; color: #9a5800; } .tb2-side h4 { margin: 14px 0 4px; font-size: 13px; color: #b0631a; }
+  .tb2-side .close { position: sticky; top: 0; float: right; border: 1px solid #e4dfd6; background: #f6f4f0; color: #29231f; border-radius: 12px; padding: 3px 9px; cursor: pointer; }
+  .tb2-side .team { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid #e4dfd6; }
+  .tb2-side .about, .tb2-side .muted { color: #6b6359; } .tb2-side .mgr { color: #b0631a; margin: 4px 0 2px; }
   .tb2-side ul { margin: 0; padding-left: 16px; } .tb2-side li { margin: 2px 0; } .tb2-side li.planned { opacity: .6; }
   .tb2-side table { border-collapse: collapse; width: 100%; font-size: 11.5px; margin: 4px 0; }
-  .tb2-side td, .tb2-side th { border-bottom: 1px solid #23212f; padding: 3px 4px; text-align: left; } .tb2-side th { color: #9a98b0; font-weight: 600; }
+  .tb2-side td, .tb2-side th { border-bottom: 1px solid #ece7de; padding: 3px 4px; text-align: left; } .tb2-side th { color: #6b6359; font-weight: 600; }
   .tb2-steps { list-style: none; margin: 8px 0 4px; padding: 0; counter-reset: s; }
-  .tb2-steps li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #23212f; }
+  .tb2-steps li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #ece7de; }
   .tb2-steps li span { font-size: 18px; width: 26px; text-align: center; flex: none; }
-  .tb2-side a { color: #f0a83a; }
-  .tb2-side code { background: #1d1b2a; padding: 0 4px; border-radius: 4px; font-size: 11.5px; }
-  .tb2-swipe { position: sticky; left: 50%; bottom: 8px; width: max-content; transform: translateX(-50%); margin-top: -34px; background: rgba(15,14,22,.88);
+  .tb2-side a { color: #9a5800; }
+  .tb2-side code { background: #f1ece3; padding: 0 4px; border-radius: 4px; font-size: 11.5px; }
+  .tb2-swipe { position: sticky; left: 50%; bottom: 8px; width: max-content; transform: translateX(-50%); margin-top: -34px; background: rgba(41,35,31,.82);
     color: #fff; font-size: 12px; padding: 5px 12px; border-radius: 14px; pointer-events: none; }
   [hidden] { display: none !important; }
   @media (max-width: 700px) { .tb2-ov { padding: 0; } .tb2-box { border-radius: 0; height: 100%; } .tb2-head .sub { display: none; } }
@@ -165,22 +165,22 @@
   function brainSVG(hub) {
     // a side view: frontal lobe on the left, cerebellum at the back-bottom, brainstem below
     const cx = (x) => BX + x * BW, cy = (y) => BY + y * BH;
-    let g = `<defs><radialGradient id="tb2b" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#4a3554"/><stop offset="1" stop-color="#2a2036"/></radialGradient>
-      <radialGradient id="tb2c" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#3d2f4a"/><stop offset="1" stop-color="#241b30"/></radialGradient></defs>`;
-    g += `<path d="M${cx(0.62)} ${cy(0.76)} C ${cx(0.62)} ${cy(0.9)}, ${cx(0.66)} ${cy(1.02)}, ${cx(0.69)} ${cy(1.06)} L ${cx(0.75)} ${cy(1.06)} C ${cx(0.72)} ${cy(0.96)}, ${cx(0.72)} ${cy(0.86)}, ${cx(0.74)} ${cy(0.76)} Z" fill="#2c2238" stroke="#5a4668" stroke-width=".4"/>`;
-    g += `<ellipse cx="${cx(0.84)}" cy="${cy(0.8)}" rx="${BW * 0.14}" ry="${BH * 0.13}" fill="url(#tb2c)" stroke="#5a4668" stroke-width=".4"/>`;
-    for (let i = 1; i < 5; i++) g += `<path d="M${cx(0.72)} ${cy(0.72 + i * 0.035)} Q ${cx(0.84)} ${cy(0.68 + i * 0.05)} ${cx(0.97)} ${cy(0.74 + i * 0.03)}" stroke="#4b3a58" stroke-width=".35" fill="none"/>`;
+    let g = `<defs><radialGradient id="tb2b" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#fbe6ec"/><stop offset="1" stop-color="#f0cfda"/></radialGradient>
+      <radialGradient id="tb2c" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#f7dde5"/><stop offset="1" stop-color="#e9c3d0"/></radialGradient></defs>`;
+    g += `<path d="M${cx(0.62)} ${cy(0.76)} C ${cx(0.62)} ${cy(0.9)}, ${cx(0.66)} ${cy(1.02)}, ${cx(0.69)} ${cy(1.06)} L ${cx(0.75)} ${cy(1.06)} C ${cx(0.72)} ${cy(0.96)}, ${cx(0.72)} ${cy(0.86)}, ${cx(0.74)} ${cy(0.76)} Z" fill="#ecc6d3" stroke="#d4a3b4" stroke-width=".4"/>`;
+    g += `<ellipse cx="${cx(0.84)}" cy="${cy(0.8)}" rx="${BW * 0.14}" ry="${BH * 0.13}" fill="url(#tb2c)" stroke="#d4a3b4" stroke-width=".4"/>`;
+    for (let i = 1; i < 5; i++) g += `<path d="M${cx(0.72)} ${cy(0.72 + i * 0.035)} Q ${cx(0.84)} ${cy(0.68 + i * 0.05)} ${cx(0.97)} ${cy(0.74 + i * 0.03)}" stroke="#dcb0bf" stroke-width=".35" fill="none"/>`;
     g += `<path d="M${cx(0.03)} ${cy(0.52)} C ${cx(-0.02)} ${cy(0.22)}, ${cx(0.2)} ${cy(0.0)}, ${cx(0.48)} ${cy(0.0)} C ${cx(0.78)} ${cy(0.0)}, ${cx(1.0)} ${cy(0.18)}, ${cx(0.99)} ${cy(0.48)}
       C ${cx(0.99)} ${cy(0.62)}, ${cx(0.9)} ${cy(0.66)}, ${cx(0.78)} ${cy(0.67)} C ${cx(0.66)} ${cy(0.69)}, ${cx(0.58)} ${cy(0.74)}, ${cx(0.46)} ${cy(0.82)}
       C ${cx(0.34)} ${cy(0.9)}, ${cx(0.16)} ${cy(0.84)}, ${cx(0.1)} ${cy(0.74)} C ${cx(0.05)} ${cy(0.67)}, ${cx(0.04)} ${cy(0.6)}, ${cx(0.03)} ${cy(0.52)} Z"
-      fill="url(#tb2b)" stroke="#6b5580" stroke-width=".5"/>`;
+      fill="url(#tb2b)" stroke="#cf9aac" stroke-width=".5"/>`;
     // gyri / sulci (decoration) and the big folds: central sulcus, lateral fissure
     const folds = [[0.1, 0.3, 0.22, 0.18, 0.3, 0.28], [0.08, 0.5, 0.2, 0.42, 0.26, 0.52], [0.36, 0.05, 0.44, 0.2, 0.4, 0.34], [0.55, 0.06, 0.6, 0.22, 0.56, 0.36],
       [0.7, 0.12, 0.8, 0.24, 0.9, 0.2], [0.78, 0.36, 0.88, 0.44, 0.96, 0.4], [0.22, 0.66, 0.34, 0.62, 0.46, 0.68], [0.3, 0.12, 0.26, 0.24, 0.32, 0.36]];
-    for (const [a, b, c, d, e, f] of folds) g += `<path d="M${cx(a)} ${cy(b)} Q ${cx(c)} ${cy(d)} ${cx(e)} ${cy(f)}" stroke="#5c4870" stroke-width=".5" fill="none" stroke-linecap="round"/>`;
-    g += `<path d="M${cx(0.5)} ${cy(0.0)} C ${cx(0.47)} ${cy(0.15)}, ${cx(0.52)} ${cy(0.24)}, ${cx(0.48)} ${cy(0.38)}" stroke="#7a6290" stroke-width=".7" fill="none"/>`;
-    g += `<path d="M${cx(0.2)} ${cy(0.54)} C ${cx(0.34)} ${cy(0.5)}, ${cx(0.5)} ${cy(0.5)}, ${cx(0.66)} ${cy(0.44)}" stroke="#7a6290" stroke-width=".7" fill="none"/>`;
-    g += `<ellipse cx="${hub[0]}" cy="${hub[1]}" rx="9" ry="6.5" fill="#ffd27a" opacity=".07"/>`;
+    for (const [a, b, c, d, e, f] of folds) g += `<path d="M${cx(a)} ${cy(b)} Q ${cx(c)} ${cy(d)} ${cx(e)} ${cy(f)}" stroke="#dba9ba" stroke-width=".5" fill="none" stroke-linecap="round"/>`;
+    g += `<path d="M${cx(0.5)} ${cy(0.0)} C ${cx(0.47)} ${cy(0.15)}, ${cx(0.52)} ${cy(0.24)}, ${cx(0.48)} ${cy(0.38)}" stroke="#c993a8" stroke-width=".7" fill="none"/>`;
+    g += `<path d="M${cx(0.2)} ${cy(0.54)} C ${cx(0.34)} ${cy(0.5)}, ${cx(0.5)} ${cy(0.5)}, ${cx(0.66)} ${cy(0.44)}" stroke="#c993a8" stroke-width=".7" fill="none"/>`;
+    g += `<ellipse cx="${hub[0]}" cy="${hub[1]}" rx="9" ry="6.5" fill="#f0a020" opacity=".1"/>`;
     return g;
   }
 
@@ -306,7 +306,7 @@
     }
     const short = (t, n = 46) => (t.length > n ? t.slice(0, n - 1).replace(/[\s,;:—-]+\S*$/, "") + "…" : t);
     // a pulse of light travelling a path (member → manager → thalamus)
-    function pulse(from, to, ms, color = "#fff6c8") {
+    function pulse(from, to, ms, color = "#f0a020") {
       const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       c.setAttribute("r", ".9"); c.setAttribute("class", "tb2-pulse"); c.setAttribute("fill", color); wireSvg.appendChild(c);
       const t0 = performance.now();
@@ -328,7 +328,7 @@
       later(1100, () => {
         from?.api.setActivity("watching"); it.mgr.api.celebrate();
         say(it.mgr.el, `${it.t.emoji} ${REPORT[it.t.id] || "Update ready"}`, 2000);
-        wire?.classList.add("hot"); pulse(it.p, hub, 1100, "#ffd27a");
+        wire?.classList.add("hot"); pulse(it.p, hub, 1100, "#f0a020");
       });
       later(2400, () => {
         wire?.classList.remove("hot");
@@ -336,7 +336,7 @@
         say(ceoEl, d, 1800, "ceo"); ceo.setEmotion(it.t.id === "communications" ? "firm" : "proud");
         later(1500, () => ceo.setEmotion("neutral"));
         const out = items.find((x) => x.t.id === "reminders");
-        if (out && it !== out && /send|Ship|Do it/.test(d)) pulse(hub, out.p, 900, "#7ee0c3");
+        if (out && it !== out && /send|Ship|Do it/.test(d)) pulse(hub, out.p, 900, "#0f9a74");
         log(`${it.t.emoji} ${it.t.title} → ${REPORT[it.t.id] || "update"} · ${d}`);
       });
     }
@@ -384,7 +384,7 @@
         log(`${i + 1}. ${it ? it.t.emoji + " " + it.t.title + " · " : ""}${st.did}`);
         if (!it || it.t.id === "command") { say(ceoEl, short(st.did, 70), 2200, "ceo"); ceo.setEmotion("proud"); return; }
         it.mgr.api.celebrate(); say(it.mgr.el, short(st.did, 64), 2200);
-        wire?.classList.add("hot"); pulse(it.p, hub, 1100, "#7ee0c3");
+        wire?.classList.add("hot"); pulse(it.p, hub, 1100, "#0f9a74");
         later(1500, () => wire?.classList.remove("hot"));
       }));
       later(1600 + trace.length * 2300 + 600, () => { if (run === replayRun) { ceo.setEmotion("neutral"); mode = "work"; hooks.caption?.("Done", "That's every step your message took. ▶ Replay to watch again."); } });
@@ -469,7 +469,7 @@
     const ready = Promise.resolve(opts.agents).catch(() => null).then((d) => {
       if (closed) return;
       data = d;
-      if (!data?.teams?.length) { stage.innerHTML = `<div style="padding:30px;color:#9a98b0">The brain is resting for a moment — try again soon.</div>`; return; }
+      if (!data?.teams?.length) { stage.innerHTML = `<div style="padding:30px;color:#6b6359">The brain is resting for a moment — try again soon.</div>`; return; }
       const now = $(".tb2-now");
       const caption = (head, text) => { now.hidden = false; now.textContent = ""; const b = document.createElement("b"); b.textContent = head; now.append(b, text); };
       brain = build(stage, data, opts.look || {}, { roster: showRoster, trace: opts.trace, caption });
