@@ -146,8 +146,6 @@ def public_look(db: Session = Depends(get_db)):
 
 @public.post("/hello")
 def hello(request: Request, db: Session = Depends(get_db)):
-    if guest.banned(db, _ip(request)):
-        raise HTTPException(403, "removed")
     v = guest.new_visit(db, _ip(request))
     if v is None:
         raise HTTPException(429, "Lots of hellos from here. Try again in a little while.")

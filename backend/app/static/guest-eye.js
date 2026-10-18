@@ -320,7 +320,7 @@
   }
   async function hello() {
     let d;
-    try { d = await api("hello"); } catch (e) { if (e.status === 403) return throwOut(0); throw e; }
+    d = await api("hello");
     token = d.token; store(sessionStorage, KEY, token);
     log.innerHTML = ""; add(d.reply, "tri"); speak();
   }
@@ -646,7 +646,7 @@
     later(400 + list.length * each, () => { performing = null; sync(); });
   }
   function afterReply(d) {  // whatever TRINETRA said, plus what comes with it
-    if (d.eject) { add(d.reply, "tri"); return throwOut(d.ban_hours || 24); }
+    if (d.eject) { add(d.reply, "tri"); return throwOut(); }
     add(d.reply, "tri");
     if (d.show) return runShow(d.show);  // just the name; the character performs it (no voice)
     if (d.perform?.length) return perform(d.perform);  // just the names, and the face acts them out (no voice)
@@ -698,19 +698,17 @@
     finally { btn.disabled = false; }
   };
 
-  // ---- insulting Tarun: an angry face, one line, and the page is gone (24 h before they can come back) ----
-  const BAN = "trinetra-guest-removed";
-  function throwOut(hours) {
-    if (hours) store(localStorage, BAN, String(Date.now() + hours * 3600e3));
+  // ---- insulting Tarun: an angry face, one line, and the page is gone. No ban: they can open the site again. ----
+  store(localStorage, "trinetra-guest-removed", null);  // clears the old 24 h ban from earlier versions
+  function throwOut() {
     input.disabled = sendBtn.disabled = true; stopShow();
     tourOn = false; tourRun++; saveTour(null); player?.pause();
     performing = "angry"; sync(); buddy?.shake();
-    later(hours ? 1800 : 0, () => {
+    later(1800, () => {
       try { window.close(); } catch {}
       location.replace("about:blank");
     });
   }
-  if (+(store(localStorage, BAN) || 0) > Date.now()) throwOut(0);  // still removed: don't let them back in
 
   // ---- open / close ----
   function open() {

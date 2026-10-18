@@ -345,7 +345,7 @@ def test_show_me_your_emotions_acts_them_out_here_and_in_the_app(client, llm_cal
     assert client.get("/guest/look").json()["mood"] == "neutral"
 
 
-def test_insulting_tarun_gets_you_thrown_out_for_a_day(client, llm_calls, monkeypatch):
+def test_insulting_tarun_gets_you_thrown_out_but_not_banned(client, llm_calls, monkeypatch):
     from app.core import push
     pushed = []
     monkeypatch.setattr(push, "send", lambda db, title, body, url="/", tag=None: pushed.append(body) or 1)
@@ -353,12 +353,11 @@ def test_insulting_tarun_gets_you_thrown_out_for_a_day(client, llm_calls, monkey
     client.post("/guest/chat", json={"token": token, "text": "I'm Max"})
     assert not client.post("/guest/chat", json={"token": token, "text": "are his numbers fake?"}).json().get("eject")
     r = client.post("/guest/chat", json={"token": token, "text": "tarun is an idiot"}).json()
-    assert r["eject"] and r["ban_hours"] == 24 and "goodbye" in r["reply"]
+    assert r["eject"] and "ban_hours" not in r and "goodbye" in r["reply"]
     assert any("insulted you" in b and "tarun is an idiot" in b for b in pushed)
-    assert client.post("/guest/hello").status_code == 403  # same IP: not back in today
+    assert client.post("/guest/hello").status_code == 200  # thrown out, not banned: they can come back
     assert "removed: insulted you" in client.get("/visitors").json()[0]["topics"]
-    assert client.post("/visitors/unban").json()["unbanned"] == 1
-    assert client.post("/guest/hello").status_code == 200
+    assert client.post("/visitors/unban").json()["unbanned"] == 0  # nothing to lift any more
 
 
 def test_emotions_on_request_are_just_names(client, llm_calls):
