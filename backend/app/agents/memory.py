@@ -34,6 +34,9 @@ async def long_term_memory(ctx: AgentContext) -> None:
     text = str(ctx.event.payload.get("text", "")).strip()
     if len(text) < 8 or not ctx.settings.llm_available:
         return
+    from app.agents.command import FORGET_THAT
+    if FORGET_THAT.search(text):  # "forget that, it's private" — nothing from this message is kept either
+        return
     from app.core import recall
     existing = recall.similar(ctx.db, text, k=15)  # only the closest facts — the whole table would blow the token budget
     listing = "\n".join(f"{m.id}: ({m.kind}) {m.content}" for m in existing) or "(empty)"
