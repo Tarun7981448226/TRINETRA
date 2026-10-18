@@ -89,3 +89,11 @@ Built in this order; each stage ships and gets tested on the iPhone before the n
   - LoRA fine-tune on consented conversations.
   - Per-user data isolation; a consent and export / delete flow.
   - Eval runs in CI.
+
+### Known issues (from the overnight reviews, left on purpose)
+- `mentor_voice` listens for `mentor.session`, which nothing sends. Either wire it into the Sunday flow or remove it.
+- If an agent's flush fails, `db.rollback()` also drops earlier agents' unsaved work in that request. Savepoints per agent (`begin_nested`) would fix this, but they need care because agents commit.
+- The managers' briefing runs before memory extraction finishes (they run side by side), so "remembered" never reaches TRINETRA's prompt for that turn.
+- `_critique` uses the fast pool, which can be the same model that wrote the line. A separate judge model would be truer to the research.
+- No delete-everything action yet (archive ≠ delete); see PRIVACY.md.
+- Model-based evals share production's free-tier keys. Use separate keys before big runs (training/README.md).
