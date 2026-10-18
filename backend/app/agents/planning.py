@@ -113,6 +113,30 @@ async def timetable_builder(ctx: AgentContext) -> None:
 
 # ---------- proactive messages (fired by the scheduler) ----------
 
+CRITIQUE = {"lag", "why"}  # "you're behind" / "remember your why": the ones that can land badly
+CRITIC_PROMPT = """You check a message an AI mentor is about to send, unprompted, to the person it mentors. Good: firm but
+kind, about the action not the person, specific, short (1–3 sentences), no guilt-tripping, no sarcasm, no shaming, no
+invented facts. Message:
+\"\"\"{text}\"\"\"
+Return JSON only: {{"ok": true}} if it's good, else {{"ok": false, "fixed": the same message rewritten to be good}}"""
+
+
+async def _critique(text: str, kind: str) -> str:
+    """Self-critique (LLM-as-judge): a different model reviews the tone; a bad line is replaced by its fixed version."""
+    import json
+    try:
+        raw = await llm.complete([{"role": "user", "content": CRITIC_PROMPT.format(text=text[:800])}], tier="fast",
+                                 temperature=0, max_tokens=300, json_mode=True)
+        d = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+    except Exception:
+        return text  # no verdict: the original stands
+    fixed = d.get("fixed") if isinstance(d, dict) and d.get("ok") is False else None
+    if isinstance(fixed, str) and 10 < len(fixed.strip()) < 600:
+        log.info("critic rewrote a %s nudge", kind)
+        return humanize(fixed.strip()) or text
+    return text
+
+
 async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: str, meta: dict,
                     keep_mood: bool = False, channel: str = "reminder") -> AgentResult:
     """Compose a short proactive line in TRINETRA's voice; fall back to a template if the LLM is down.
@@ -138,6 +162,8 @@ async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: st
                 sensitive=kind in ("journal_ack", "wellbeing") or ctx.notes.get("expression_label") in ("comforting", "gentle"),
             )
             text = humanize(text) or fallback
+            if kind in CRITIQUE:  # a judgmental nudge gets a second opinion before it reaches his phone
+                text = await _critique(text, kind)
         except llm.LLMUnavailable:
             pass
     msg = Message(role="trinetra", content=text, channel=channel, mood=mood, meta=meta)

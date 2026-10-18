@@ -172,3 +172,20 @@ def test_it_learns_when_he_answers_not_just_whether():
         p_day = A.p_engage(db, "lag", today.replace(hour=15))
         p_night = A.p_engage(db, "lag", today.replace(hour=23))
         assert p_day > 0.75 and p_night < 0.3
+
+
+def test_a_harsh_nudge_is_rewritten_by_the_critic(monkeypatch):
+    import asyncio, json
+    from app.agents import planning
+    from app.core import llm
+
+    async def model(messages, **kw):
+        return json.dumps({"ok": False, "fixed": "You're two blocks behind on DSA this week. Want to grab one tonight?"})
+    monkeypatch.setattr(llm, "complete", model)
+    out = asyncio.run(planning._critique("You're pathetic, you never finish anything.", "lag"))
+    assert out.startswith("You're two blocks behind")
+
+    async def fine(messages, **kw):
+        return json.dumps({"ok": True})
+    monkeypatch.setattr(llm, "complete", fine)
+    assert asyncio.run(planning._critique("Two blocks behind — one tonight?", "lag")) == "Two blocks behind — one tonight?"
