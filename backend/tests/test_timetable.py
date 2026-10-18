@@ -181,3 +181,14 @@ def test_answered_buttons_are_remembered(client, llm_calls):
     client.post(f"/tasks/{task['id']}/respond", json={"action": "start"})
     reminder = next(m for m in client.get("/messages").json() if m["meta"])
     assert reminder["meta"]["answered"] == "start"
+
+
+def test_his_exact_time_beats_a_misread():
+    """The model once read '12:30 am' as 23:30: when he said one exact time, the single timed change uses it."""
+    from app.agents.planning import _keep_his_time, said_times
+    assert said_times("bed by 12:30 am, gym 7pm, class at 18:45, lunch 12pm") == ["00:30", "19:00", "18:45", "12:00"]
+    assert _keep_his_time("Go to bed by 12:30 am", [{"op": "set_sleep", "start": "23:30", "end": "06:00"}])[0]["start"] == "00:30"
+    two = [{"op": "move", "id": 1, "start": "19:00"}]
+    assert _keep_his_time("move gym from 6pm to 7pm", two)[0]["start"] == "19:00"  # two times said: trust the model
+    night = [{"op": "move", "id": 1, "start": "21:30"}]
+    assert _keep_his_time("move DSA to 9:30 tonight", night)[0]["start"] == "21:30"  # a bare 9:30 is ambiguous

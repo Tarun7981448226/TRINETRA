@@ -82,6 +82,7 @@ async def timetable_builder(ctx: AgentContext) -> None:
     ops = [o for o in (ops if isinstance(ops, list) else []) if isinstance(o, dict)]
     if not ops:
         return
+    ops = _keep_his_time(text, ops)
 
     # Marking something done/skipped needs no deliberation.
     quick = [o for o in ops if o.get("op") == "status"]
@@ -135,6 +136,42 @@ async def _critique(text: str, kind: str) -> str:
         log.info("critic rewrote a %s nudge", kind)
         return humanize(fixed.strip()) or text
     return text
+
+
+CLOCK = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)|\b(\d{1,2}):(\d{2})\b", re.I)
+
+
+def said_times(text: str, sure: bool = False) -> list[str]:
+    """Exact clock times he typed, as HH:MM (24 h): "12:30 am" → "00:30", "7pm" → "19:00", "18:45" → "18:45".
+    `sure`: only unambiguous ones — a bare "9:30" could be morning or night, so it's left out."""
+    out = []
+    for m in CLOCK.finditer(text):
+        if m.group(3):
+            h, mi, ap = int(m.group(1)), int(m.group(2) or 0), m.group(3).lower()[0]
+            if not (1 <= h <= 12) or mi > 59:
+                continue
+            h = (0 if h == 12 else h) + (12 if ap == "p" else 0)
+        else:
+            h, mi = int(m.group(4)), int(m.group(5))
+            if h > 23 or mi > 59 or (sure and 1 <= h <= 12 and not m.group(4).startswith("0")):
+                continue
+        out.append(f"{h:02d}:{mi:02d}")
+    return out
+
+
+def _keep_his_time(text: str, ops: list[dict]) -> list[dict]:
+    """The model sometimes misreads a time ("12:30 am" → 23:30). When he said exactly one time, unambiguously, and
+    the single timed change uses a different one, his words win — deterministically, before review or applying."""
+    said, sure = said_times(text), said_times(text, sure=True)
+    timed = [o for o in ops if o.get("op") in ("create", "move", "set_sleep") and o.get("start")]
+    if len(set(said)) != 1 or len(set(sure)) != 1 or len(timed) != 1:
+        return ops
+    (want,) = set(sure)
+    o = timed[0]
+    if str(o["start"])[:5] != want:
+        log.warning("builder said %s for %r; he said %s — keeping his", o["start"], text[:80], want)
+        o["start"] = want
+    return ops
 
 
 async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: str, meta: dict,
