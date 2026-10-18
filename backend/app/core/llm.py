@@ -88,9 +88,25 @@ def save_bench(db) -> None:
         log.debug("could not save bench", exc_info=True)
 
 
+def retry_after(msg: str) -> float | None:
+    """The provider's own "come back in…": Groq says "Please try again in 2h13m5.2s" (or "764.99ms"), Gemini sends
+    "retryDelay": "41s". None if it didn't say."""
+    import re
+    if m := re.search(r'"retryDelay"\s*:\s*"([\d.]+)s"', msg):
+        return float(m.group(1))
+    if m := re.search(r"try again in\s+(?:(\d+)h)?(?:(\d+)m(?!s))?(?:([\d.]+)s)?(?:([\d.]+)ms)?", msg):
+        h, mi, sec, ms = (float(x) if x else 0.0 for x in m.groups())
+        total = h * 3600 + mi * 60 + sec + ms / 1000
+        return total if total > 0 else None
+    return None
+
+
 def _bench(model: str, error: Exception) -> None:
     msg = str(error)
-    if "PerDay" in msg or "per day" in msg.lower():
+    told = retry_after(msg)
+    if told is not None and ("429" in msg or "RateLimit" in type(error).__name__):
+        seconds = min(max(told + 2, 5), 24 * 3600)  # exactly as long as the provider asked (plus a breath)
+    elif "PerDay" in msg or "per day" in msg.lower():
         seconds = 6 * 3600  # daily allowance gone
     elif "429" in msg or "RateLimit" in type(error).__name__ or "RESOURCE_EXHAUSTED" in msg:
         seconds = 65  # per-minute limit
