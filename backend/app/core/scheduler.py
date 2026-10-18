@@ -357,6 +357,7 @@ async def initiative_watch(db: Session, core: Orchestrator) -> bool:
     if db.get(KeyValue, tried) is not None or db.get(KeyValue, f"initiative:{now.date().isoformat()}") is not None:
         return False
     db.add(KeyValue(key=tried, value="1"))  # one try per evening, even when there's too little to go on yet
+    db.commit()  # saved first: a failure inside the agent (and its rollback) can't make it retry every minute
     await core.dispatch(IncomingEvent("initiative.evening", {"date": now.date().isoformat()}, "scheduler"), db)
     return True
 
