@@ -113,6 +113,7 @@ async def tick(db: Session, core: Orchestrator, now: datetime | None = None) -> 
 
 
 REPORT_DAY, REPORT_BUILD_HOUR, REPORT_PLAY = 6, 23, time(23, 30)  # Sunday: write from 23:00, play 23:30
+GRACE_UNTIL = time(0, 30)  # a report / day review the cron couldn't finish by midnight still happens (not later: he's asleep)
 
 
 async def weekly(db: Session, core: Orchestrator) -> str | None:
@@ -120,16 +121,17 @@ async def weekly(db: Session, core: Orchestrator) -> str | None:
     from app.core import push, report
 
     now = now_local()
-    if now.weekday() != REPORT_DAY or now.hour < REPORT_BUILD_HOUR:
+    late = now.weekday() == (REPORT_DAY + 1) % 7 and now.time() < GRACE_UNTIL  # just past midnight: finish last week's
+    if not late and (now.weekday() != REPORT_DAY or now.hour < REPORT_BUILD_HOUR):
         return None
-    monday, *_ = report.week_bounds(now.date())
+    monday, *_ = report.week_bounds(now.date() - timedelta(days=1) if late else now.date())
     done_key = f"weekly_cron:{monday.isoformat()}"
     if db.get(KeyValue, done_key) is None:  # once a week: overload verdicts + goal progress
         db.add(KeyValue(key=done_key, value="1"))
         await core.dispatch(IncomingEvent("cron.weekly", {"week_of": monday.isoformat()}, "scheduler"), db)
     step = await report.advance(db, core.settings, monday)
     announced = f"report_announced:{monday.isoformat()}"
-    if step == "ready" and now.time() >= REPORT_PLAY and db.get(KeyValue, announced) is None:
+    if step == "ready" and (late or now.time() >= REPORT_PLAY) and db.get(KeyValue, announced) is None:
         db.add(KeyValue(key=announced, value="1"))
         text = "Your weekly report is ready. 30 minutes, six chapters. Let's go through your week."
         db.add(Message(role="trinetra", content=text, channel="reminder", mood="calm and caring",
@@ -329,7 +331,9 @@ def wrap_time(db: Session, day) -> time:
 async def plan_tomorrow(db: Session, core: Orchestrator) -> bool:
     """Once a day after the last block: the Daily Reviewer looks back, then the Daily Planner looks at tomorrow."""
     today = now_local()
-    if today.time() < wrap_time(db, today.date()):
+    if today.time() < GRACE_UNTIL and db.get(KeyValue, f"planned:{(today.date() - timedelta(days=1)).isoformat()}") is None:
+        today = datetime.combine(today.date() - timedelta(days=1), time(23, 59), today.tzinfo)  # missed last night's
+    elif today.time() < wrap_time(db, today.date()):
         return False
     key = f"planned:{today.date().isoformat()}"
     if db.get(KeyValue, key) is not None:

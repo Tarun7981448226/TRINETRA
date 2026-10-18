@@ -78,3 +78,19 @@ def test_bedtime_reminder_is_spoken_but_never_nags(client, llm_calls):
         later = asyncio.run(scheduler.tick(db, core, s + timedelta(minutes=20)))
     assert len(fired) == 1 and fired[0].startswith("task.due") and later == []
     assert any("bedtime" in c["messages"][-1]["content"] for c in llm_calls)
+
+
+def test_a_day_review_missed_by_midnight_still_happens(client, llm_calls, monkeypatch):
+    """Cron hiccup 23:50–00:10: yesterday's review runs just after midnight instead of being lost."""
+    import asyncio
+    from datetime import datetime, time as dtime, timedelta
+    from app.core import scheduler
+    from app.core.timeutil import user_tz
+    from app.db.models import KeyValue
+    just_after = datetime.combine(datetime.now(user_tz()).date(), dtime(0, 10), user_tz())
+    monkeypatch.setattr(scheduler, "now_local", lambda: just_after)
+    with client.session_factory() as db:
+        assert asyncio.run(scheduler.plan_tomorrow(db, client.app.state.orchestrator)) is True
+        yesterday = (just_after.date() - timedelta(days=1)).isoformat()
+        assert db.get(KeyValue, f"planned:{yesterday}") is not None
+        assert asyncio.run(scheduler.plan_tomorrow(db, client.app.state.orchestrator)) is False  # once
