@@ -80,10 +80,20 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health():
         reg = app.state.orchestrator.registry
+        from app.core import show
+        own = {}
+        try:  # TRINETRA's own models are files in the deploy: prove they're there and working
+            from app.core import embed, feel
+            own["embeddings"] = bool(embed.embed(["hello"]).any())
+            own["emotion_reader"] = feel.read("I am so happy today")["group"]
+        except Exception as e:
+            own["error"] = type(e).__name__
         return {
             "status": "awake",
             "llm_connected": settings.llm_available,
             "agents": len(reg.specs),
+            "common_words": len(show._common()),
+            "own_models": own,
         }
 
     return app
