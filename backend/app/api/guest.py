@@ -7,8 +7,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -322,6 +322,29 @@ async def speak(body: TokenIn, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(503, "voice unavailable") from e
     return Response(audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
+
+
+@public.get("/speak")
+async def speak_stream(token: str = Query(max_length=64), db: Session = Depends(get_db)):
+    """The same line, streamed: the widget's audio player starts on the first words instead of the whole clip."""
+    v = _visit(db, token)
+    if not v.last_said:
+        raise HTTPException(404, "nothing to say")
+    parts = voice.stream(v.last_said, "warm and upbeat")
+    try:
+        first = await anext(parts)
+    except Exception as e:
+        raise HTTPException(503, "voice unavailable") from e
+
+    async def body():
+        yield first
+        try:
+            async for part in parts:
+                yield part
+        except Exception:
+            return
+
+    return StreamingResponse(body(), media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
 
 
 @public.post("/bye")

@@ -289,13 +289,12 @@
       wrap.classList.add("speaking");
       const done = () => { if (mine === speakSeq) wrap.classList.remove("speaking"); resolve(true); };
       try {
-        const r = await fetch(`${API}/guest/speak`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token }) });
-        if (!r.ok || mine !== speakSeq || muted || !has("open")) return done();  // closed while the voice was on its way
         const p = player || (player = new Audio());
-        p.onended = p.onpause = null; p.pause();
-        p.src = URL.createObjectURL(await r.blob());
-        p.onended = p.onpause = () => { done(); hush(); };
+        p.onended = p.onpause = p.onerror = null; p.pause();
+        p.src = `${API}/guest/speak?` + new URLSearchParams({ token, n: mine });  // streamed: it starts on the first words
+        p.onended = p.onpause = p.onerror = () => { done(); hush(); };
         await p.play();
+        if (mine !== speakSeq || muted || !has("open")) { p.pause(); return done(); }  // closed while the voice was on its way
         const line = lastLine();
         express(line, isFinite(p.duration) && p.duration > 0 ? p.duration * 1000 : line.length * 65);
       } catch { done(); }

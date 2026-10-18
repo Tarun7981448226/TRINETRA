@@ -557,3 +557,17 @@ def test_signed_in_tarun_gets_dances_keeps_it_across_pages_and_can_lock(client, 
     assert client.post("/guest/chat", json={"token": token, "text": "lock"}).json()["locked"]
     assert not client.post("/guest/chat", json={"token": token, "text": "what's my plan today?"}).json().get("owner")
     assert not client.post("/guest/resume", json={"token": token}).json().get("owner")
+
+
+def test_the_portfolio_voice_streams_only_what_trinetra_just_said(client, llm_calls, monkeypatch):
+    said = []
+
+    async def fake_stream(text, mood=None):
+        said.append(text)
+        yield b"ID3"
+
+    monkeypatch.setattr(voice, "stream", fake_stream)
+    token = hello(client)
+    r = client.get("/guest/speak", params={"token": token})
+    assert r.status_code == 200 and r.content == b"ID3" and said == [guest.GREETING]
+    assert client.get("/guest/speak", params={"token": "not-a-visit"}).status_code == 404
