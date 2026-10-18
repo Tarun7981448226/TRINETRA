@@ -172,3 +172,10 @@ def test_overlapping_beats_dont_double_fire(client):
         scheduler._release_lease(db)
         assert scheduler._take_lease(db) is True  # free again once the first beat finished
         scheduler._release_lease(db)
+
+
+def test_health_proves_the_data_files_load(client):
+    h = client.get("/health").json()
+    assert h["status"] == "awake" and h["common_words"] > 9000
+    assert h["own_models"] == {"embeddings": True, "emotion_reader": "joy"}
+    assert isinstance(h["models_resting"], dict)
