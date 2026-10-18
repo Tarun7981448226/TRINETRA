@@ -2,6 +2,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -125,9 +126,27 @@ def create_app() -> FastAPI:
             "common_words": len(show._common()),
             "own_models": own,
             "models_resting": resting,
+            "regions": {"server": os.environ.get("VERCEL_REGION", "local"), "database": _db_region()},  # far apart = slow replies
         }
 
     return app
+
+
+def _db_region() -> str:
+    """Just the cloud region in the database's host name (e.g. "us-west-2"), never the address or password."""
+    import re
+    from sqlalchemy.engine import make_url
+    try:
+        host = make_url(settings_db_url()).host or ""
+    except Exception:
+        return "unknown"
+    m = re.search(r"\.([a-z]{2}-[a-z]+-\d)\.", host)
+    return m.group(1) if m else ("local" if not host or host in ("localhost", "127.0.0.1") else "unknown")
+
+
+def settings_db_url() -> str:
+    from app.config import get_settings
+    return get_settings().database_url
 
 
 app = create_app()
