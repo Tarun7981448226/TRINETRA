@@ -203,8 +203,10 @@ good-humoured confidence; don't treat it as a name. Known so far: {known}"""
 
 SKILL_ASK = re.compile(
     r"\b(?:does|do|can|has|is)\s+(?:he|tarun)\b.{0,25}?\b(?:know|use|used|code in|program in|work(?:ed)? with|"
-    r"experience (?:with|in)|familiar with|good at|skilled in|proficient in|any)\s+([A-Za-z][\w.+#/\- ]{0,30}?)\s*(?:\?|$|,|\band\b)",
+    r"experience (?:with|in)|familiar with|skilled in|proficient in)\s+([A-Za-z][\w.+#/\- ]{0,30}?)\s*(?:\?|$|,|\band\b)",
     re.I)
+PERSONAL = re.compile(r"\b(girl ?friend|boy ?friend|wife|husband|partner|family|parents?|salary|money|religion|politics|"
+                      r"address|phone|night|weekend|secret)s?\b", re.I)
 GENERIC = {"ml", "ai", "machine learning", "deep learning", "python", "coding", "programming", "llms", "llm", "research",
            "papers", "paper", "projects", "experience", "software", "it", "this", "that", "them", "agents"}
 
@@ -216,8 +218,8 @@ def unlisted_skill(text: str) -> str | None:
         return None
     skill = m.group(1).strip(" ?.,").lower()
     skill = re.sub(r"^(the|a|an|any|some)\s+", "", skill)
-    if not skill or skill in GENERIC or len(skill) < 2:
-        return None
+    if not skill or skill in GENERIC or len(skill) < 2 or PERSONAL.search(skill):
+        return None  # personal questions go to the model, which declines them politely
     b = brief().lower()
     words = [w for w in re.split(r"[\s/]+", skill) if w]
     return None if all(re.search(rf"(?<![\w]){re.escape(w)}(?![\w])", b) for w in words) else m.group(1).strip(" ?.,")
