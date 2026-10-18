@@ -70,7 +70,7 @@ def without_name(text: str, name: str) -> str:
 
 def humanize(text: str, strip_name: bool = True) -> str:
     """Last line of defence against butler-speak: drop sentences with banned phrases, and stop calling him by name."""
-    cleaned = plain(BANNED.sub("", text))
+    cleaned = plain(re.sub(r"[ \t]{2,}", " ", BANNED.sub(" ", text)))  # a removed sentence leaves one space, not none
     cleaned = cleaned or plain(text)
     return without_name(cleaned, get_settings().trinetra_user_name) if strip_name else cleaned
 

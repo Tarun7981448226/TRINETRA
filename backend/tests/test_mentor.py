@@ -185,3 +185,9 @@ def test_crisis_always_gets_a_real_way_to_help(client, llm_calls):
 def test_everyday_phrases_never_get_the_crisis_line(client, llm_calls):
     for t in ("let's end it there", "this code is worthless", "I'm hopeless at cooking", "the battery is going to die"):
         assert "988" not in client.post("/chat", json={"text": t}).json()["reply"], t
+
+
+def test_removing_a_butler_sentence_keeps_the_spacing():
+    from app.core.persona import humanize
+    assert humanize("Sounds like fun! Feel free to ask me anything. What brings you here?", strip_name=False) == \
+        "Sounds like fun! What brings you here?"
