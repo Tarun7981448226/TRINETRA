@@ -1,7 +1,8 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -372,6 +373,29 @@ async def speak(body: SpeakIn):
     effect = voice.effect_for(body.mood)
     return Response(audio, media_type="audio/mpeg", headers={"X-Trinetra-Effect": effect or "none",
                                                             "Access-Control-Expose-Headers": "X-Trinetra-Effect"})
+
+
+@router.get("/speak")
+async def speak_stream(text: str = Query(min_length=1, max_length=1500), mood: str | None = Query(None, max_length=200)):
+    """The same voice, streamed: the app points its audio player here and hears the first words while the rest is made.
+    (Angry moods still use POST /speak — their sound effect needs the whole clip.)"""
+    parts = voice.stream(text, mood)
+    try:
+        first = await anext(parts)  # fail here (a clean 503), not halfway through the audio
+    except StopAsyncIteration:
+        raise HTTPException(503, "voice unavailable: no audio")
+    except Exception as e:
+        raise HTTPException(503, f"voice unavailable: {e}") from e
+
+    async def body():
+        yield first
+        try:
+            async for part in parts:
+                yield part
+        except Exception:  # the connection to the voice dropped mid-line: end the clip where it is
+            return
+
+    return StreamingResponse(body(), media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
 
 
 @router.post("/listen")

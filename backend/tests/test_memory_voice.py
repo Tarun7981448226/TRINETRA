@@ -68,3 +68,20 @@ def test_angry_moods_ask_the_app_for_the_furious_effect(client, monkeypatch):
     r = client.post("/speak", json={"text": "Hey.", "mood": "calm and caring"})
     assert r.headers["x-trinetra-effect"] == "none"
     assert voice.effect_for("firm and angry — raised voice") == "firm_angry"
+
+
+def test_the_voice_streams_so_it_starts_with_its_first_words(client, monkeypatch):
+    async def fake_stream(text, mood=None):
+        yield b"ID3first"
+        yield b"-rest"
+
+    monkeypatch.setattr(voice, "stream", fake_stream)
+    r = client.get("/speak", params={"text": "Gym moved to 7.", "mood": "warm"})
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg" and r.content == b"ID3first-rest"
+
+    async def broken(text, mood=None):
+        raise OSError("no internet")
+        yield b""
+
+    monkeypatch.setattr(voice, "stream", broken)
+    assert client.get("/speak", params={"text": "Hi"}).status_code == 503  # a clean error, never half a clip

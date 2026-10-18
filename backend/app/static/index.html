@@ -607,6 +607,12 @@
     eye.classList.add("speaking");  // from the moment the voice is requested (it takes ~2 s to arrive)
     let c = null;
     try {
+      const effect = /angry/i.test(mood || "") && !/soft(ly)? (angry|annoyed)/i.test(mood || "");
+      if (!effect && text.length <= 1500) {  // streamed: the voice starts with its first words, not after the whole clip
+        c = { url: "/speak?" + new URLSearchParams({ text, ...(mood ? { mood } : {}) }), text, mood };
+        await playClip(c);
+        return;
+      }
       const r = await fetch("/speak", { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ text, mood }) });
       if (!r.ok) return eye.classList.remove("speaking");
@@ -701,7 +707,7 @@
     $("plText").placeholder = on ? "Listening… tap 🎙 to send" : "Tell me a change — “move gym to 7pm on Friday”";
   };
 
-  // Hands-free: in a conversation the mic notices when you stop talking (1.2 s of quiet) and sends by itself,
+  // Hands-free: in a conversation the mic notices when you stop talking (0.9 s of quiet) and sends by itself,
   // then listens again once TRINETRA has finished speaking. 8 s of silence ends the conversation.
   const talk = { active: false, misses: 0, timer: null };
   const TEST_VAD = new URLSearchParams(location.search).get("vad") === "test";  // tests drive the level by hand
@@ -723,7 +729,7 @@
       if (now - t0 < 300) { floor = (floor * n + lvl) / ++n; return; }  // the room's own noise
       const thr = Math.max(Math.min(floor, 0.015) * 3, 0.018);
       if (lvl > thr) { loud += dt; quiet = 0; if (loud >= 150) vadSpoke = true; } else { loud = 0; quiet += dt; }
-      if (vadSpoke && quiet >= 1200) end("spoke");
+      if (vadSpoke && quiet >= 900) end("spoke");  // Siri waits about this long; 1.2 s felt slow
       else if (!vadSpoke && now - t0 > 8000) end("silent");
       else if (now - t0 > 30000) end(vadSpoke ? "spoke" : "silent");
     }, 50);

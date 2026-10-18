@@ -74,18 +74,21 @@ def effect_for(mood: str | None) -> str | None:
     return family if family in EFFECTS else None
 
 
-async def speak(text: str, mood: str | None = None) -> bytes:
+async def stream(text: str, mood: str | None = None):
+    """The voice as it's made: the first words arrive in ~0.5 s, so playback can start before the rest exists."""
     import edge_tts
 
     rate, pitch, volume = prosody(mood)
     communicate = edge_tts.Communicate(
         clean_for_speech(text), get_settings().trinetra_voice, rate=rate, pitch=pitch, volume=volume
     )
-    audio = bytearray()
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
-            audio.extend(chunk["data"])
-    return bytes(audio)
+            yield chunk["data"]
+
+
+async def speak(text: str, mood: str | None = None) -> bytes:
+    return b"".join([part async for part in stream(text, mood)])
 
 
 class STTUnavailable(RuntimeError):
