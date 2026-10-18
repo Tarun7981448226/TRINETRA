@@ -191,3 +191,22 @@ def test_removing_a_butler_sentence_keeps_the_spacing():
     from app.core.persona import humanize
     assert humanize("Sounds like fun! Feel free to ask me anything. What brings you here?", strip_name=False) == \
         "Sounds like fun! What brings you here?"
+
+
+def test_schedule_questions_are_answered_even_when_every_model_is_busy(client, monkeypatch):
+    from datetime import time, timedelta
+    from app.config import get_settings
+    from app.core import llm, timetable
+    from app.core.timeutil import now_local
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "x")
+
+    async def down(*a, **k):
+        raise llm.LLMUnavailable("all busy")
+    monkeypatch.setattr(llm, "complete", down)
+    with client.session_factory() as db:
+        timetable.create_block(db, "Gym", now_local().date() + timedelta(days=1), time(18), time(19))
+        db.commit()
+    r = client.post("/chat", json={"text": "what's on tomorrow?"}).json()
+    assert r["reply"].startswith("Tomorrow: Gym at 18:00")
+    r = client.post("/chat", json={"text": "tell me a joke"}).json()
+    assert "busy" in r["reply"]  # anything else still says so honestly

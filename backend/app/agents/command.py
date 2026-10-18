@@ -193,6 +193,27 @@ def _true_to_changes(reply: str, changes: list[str]) -> str:
     return reply.rstrip() + " (Exact: " + "; ".join(f"{t} {a}–{b}" for t, a, b in facts) + ".)"
 
 
+SCHEDULE_Q = re.compile(r"\b(what'?s|what is|whats|show)\b.{0,20}\b(next|on|plan|schedule|today|tomorrow|timetable)\b|"
+                        r"\bmy (plan|schedule|timetable|day)\b", re.I)
+
+
+def _plan_without_a_model(ctx: AgentContext, text: str) -> str | None:
+    """Every model busy, but he asked about his day: read it straight from the timetable."""
+    if not SCHEDULE_Q.search(text):
+        return None
+    tomorrow = "tomorrow" in text.lower() or "tmrw" in text.lower()
+    start, end = day_bounds_utc(now_local() + timedelta(days=1 if tomorrow else 0))
+    tasks = [t for t in ctx.db.scalars(select(Task).where(Task.planned_start >= start, Task.planned_start < end)
+                                        .order_by(Task.planned_start)) if t.category != "sleep"]
+    if not tomorrow:
+        tasks = [t for t in tasks if local(t.planned_end) > now_local()]
+    when = "Tomorrow" if tomorrow else "Still to come today"
+    if not tasks:
+        return f"{when}: nothing on the timetable." + ("" if tomorrow else " A free stretch — use it well.")
+    lines = ", ".join(f"{t.title} at {local(t.planned_start):%H:%M}" for t in tasks[:6])
+    return f"{when}: {lines}. (My thinking models are busy, so that's straight from your timetable.)"
+
+
 def support_step(ctx: AgentContext) -> str | None:
     """Where we are in a low moment: count my caring replies in the last 2 hours."""
     if ctx.notes.get("distress") or ctx.notes.get("expression_label") not in ("comforting", "gentle"):
@@ -344,6 +365,8 @@ async def core(ctx: AgentContext) -> AgentResult:
         )
         if ctx.notes.get("distress"):  # never "try again later" to someone in crisis
             reply = "I'm here, and I'm not going anywhere. What you're feeling matters."
+        elif ctx.settings.llm_available and (plan := _plan_without_a_model(ctx, text)):
+            reply = plan  # the timetable answers itself
     if changes := ctx.notes.get("timetable_changes"):
         reply = _true_to_changes(reply, changes)
     if (until := ctx.notes.get("quieter_until")) and until.lower() not in reply.lower():  # say the real end of the pause
