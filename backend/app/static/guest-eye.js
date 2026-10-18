@@ -653,6 +653,7 @@
     add(d.reply, "tri");
     if (d.trace?.length && BRAIN_ON) {  // what really happened to their message — watch it live in the Brain
       lastTrace = d.trace;
+      log.querySelectorAll(".why").forEach((w) => w.remove());  // only under the latest reply (🧠 up top replays it too)
       const why = document.createElement("button"); why.type = "button"; why.className = "why"; why.textContent = "🧠 how I answered ▶";
       why.onclick = () => openWorld(null, d.trace);
       log.appendChild(why); log.scrollTop = log.scrollHeight;
