@@ -204,3 +204,16 @@ def test_initiative_has_its_own_evening_beat_once(client, llm_calls, monkeypatch
     monkeypatch.setattr(scheduler, "now_local", lambda: evening.replace(hour=15))
     with client.session_factory() as db:
         assert asyncio.run(scheduler.initiative_watch(db, client.app.state.orchestrator)) is False
+
+
+def test_policy_shows_his_best_time(client):
+    from app.core.timeutil import user_tz
+    with client.session_factory() as db:
+        today = datetime.now(user_tz()).replace(minute=0, second=0, microsecond=0)
+        for d in range(1, 6):
+            day = today - timedelta(days=d)
+            db.add(Decision(kind="lag", action="sent", outcome="engaged", created_at=day.replace(hour=14).astimezone(timezone.utc)))
+            db.add(Decision(kind="lag", action="sent", outcome="ignored", created_at=day.replace(hour=23).astimezone(timezone.utc)))
+        db.commit()
+        lag = next(k for k in autonomy.policy(db)["kinds"] if k["kind"] == "lag")
+        assert lag["best_time"] == "afternoon" and lag["by_part_of_day"]["afternoon"] > lag["by_part_of_day"]["night"]

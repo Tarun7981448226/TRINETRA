@@ -175,7 +175,12 @@ def policy(db: Session) -> dict:
     kinds = []
     for k in sorted(VALUE, key=lambda k: -VALUE[k]):
         engaged, n = engagement(db, k)
-        kinds.append({"kind": k, "value": VALUE[k], "p_engage": round(p_engage(db, k), 2), "engaged": engaged, "settled": n})
+        from app.core.timeutil import now_local
+        parts = {part: round(p_engage(db, k, now_local().replace(hour=h)), 2)
+                 for part, h in (("morning", 9), ("afternoon", 14), ("evening", 19), ("night", 23))}
+        best = max(parts, key=parts.get) if n >= 4 and max(parts.values()) - min(parts.values()) >= 0.1 else None
+        kinds.append({"kind": k, "value": VALUE[k], "p_engage": round(p_engage(db, k), 2), "engaged": engaged, "settled": n,
+                      "by_part_of_day": parts, "best_time": best})
     recent = db.scalars(select(Decision).order_by(Decision.id.desc()).limit(15)).all()
     return {"threshold": THRESHOLD, "daily_budget": DAILY_BUDGET, "kinds": kinds,
             "recent": [{"kind": d.kind, "action": d.action, "outcome": d.outcome, "reason": d.reason,

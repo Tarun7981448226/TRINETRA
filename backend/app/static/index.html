@@ -789,7 +789,8 @@
       for (const k of d.kinds) {
         const row = document.createElement("div"); row.className = "mem";
         const span = document.createElement("span");
-        span.textContent = `${NAMES[k.kind] || k.kind}: ${Math.round(k.p_engage * 100)}% chance you'll answer` + (k.settled ? ` (${k.engaged}/${k.settled})` : " (still learning)");
+        span.textContent = `${NAMES[k.kind] || k.kind}: ${Math.round(k.p_engage * 100)}% chance you'll answer` + (k.settled ? ` (${k.engaged}/${k.settled})` : " (still learning)")
+          + (k.best_time ? ` · you answer most in the ${k.best_time}` : "");
         row.append(span); box.appendChild(row);
       }
       for (const r of d.recent.slice(0, 6)) {
