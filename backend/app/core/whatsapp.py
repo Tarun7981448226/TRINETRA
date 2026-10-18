@@ -433,3 +433,39 @@ def cancelled(db: Session, jid: str, text: str) -> None:
                 item["did"], item["why"] = "for_you", "you came online before I sent it"
                 s.log = list(s.log)  # reassign so the JSON change is saved
                 break
+
+
+def merge_aliases(db: Session, pairs: list[dict]) -> int:
+    """WhatsApp gives each person a phone-number id and a private "lid". The bridge files everything under the number;
+    anything that arrived under a lid (most of the linked history) is moved over, so old friends aren't "strangers".
+    Returns how many people were merged."""
+    def norm(v: str, server: str) -> str:
+        user = (v or "").split("@")[0].split(":")[0]
+        return f"{user}@{server}" if user else ""
+
+    mapping = {norm(p.get("lid", ""), "lid"): norm(p.get("pn", ""), "s.whatsapp.net") for p in pairs}
+    mapping.pop("", None)
+    if not mapping:
+        return 0
+    seen = set(db.scalars(select(WaMessage.jid).where(WaMessage.jid.like("%@lid")).distinct()))
+    seen |= set(db.scalars(select(WaContact.jid).where(WaContact.jid.like("%@lid"))))
+    merged = 0
+    for lid in seen & mapping.keys():
+        pn = mapping[lid]
+        if not pn.split("@")[0]:
+            continue
+        db.query(WaMessage).filter(WaMessage.jid == lid).update({WaMessage.jid: pn}, synchronize_session=False)
+        old = db.get(WaContact, lid)
+        if old is not None:
+            new = db.get(WaContact, pn)
+            if new is None:
+                db.add(WaContact(jid=pn, name=old.name, is_group=False, known=old.known, auto_ok=old.auto_ok,
+                                 updated_at=old.updated_at))
+            else:
+                new.known = new.known or old.known
+                new.name = new.name or old.name
+                new.auto_ok = new.auto_ok and old.auto_ok  # "never reply to them" on either id still holds
+            db.delete(old)
+        merged += 1
+    db.flush()
+    return merged

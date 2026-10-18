@@ -43,7 +43,7 @@ def _when(v: Any) -> datetime | None:
 
 
 class BridgeEvent(BaseModel):
-    type: str = Field(pattern="^(message|activity|history|status|sent|cancelled)$")
+    type: str = Field(pattern="^(message|activity|history|status|sent|cancelled|aliases)$")
     data: dict[str, Any] = {}
 
 
@@ -60,6 +60,12 @@ async def bridge_event(body: BridgeEvent, request: Request, db: Session = Depend
     if body.type == "activity":  # he read something on his phone
         await core.dispatch(IncomingEvent("whatsapp.activity", {"at": (_when(d.get("at")) or datetime.now(timezone.utc)).isoformat()}, "whatsapp"), db)
         return {"ok": True}
+    if body.type == "aliases":  # phone number ↔ lid: the same person, filed once
+        merged = whatsapp.merge_aliases(db, d.get("pairs", [])[:5000])
+        if merged:
+            style.learn(db)  # his per-person style now sees the whole history with each person
+        db.commit()
+        return {"merged": merged}
     if body.type == "cancelled":
         whatsapp.cancelled(db, d.get("jid", ""), d.get("text", ""))
         db.commit()

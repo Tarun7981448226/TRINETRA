@@ -255,3 +255,21 @@ def test_the_app_screen_shows_what_happened(wa):
     assert {c["name"] for c in s["contacts"]} >= {"Ravi", "Mom"}
     wa.post("/whatsapp/contacts", json={"jid": RAVI, "auto_ok": False})
     assert text_in(wa, RAVI, "hey again")["did"] == "for_you"  # he said never answer Ravi
+
+
+def test_the_same_person_under_two_ids_is_one_friend(wa):
+    """WhatsApp's history arrives under a private "lid"; live messages under the phone number. Same friend."""
+    LID = "157758561226931@lid"
+    event(wa, "history", {"messages": [
+        {"id": "l1", "jid": LID, "text": "bro wassup", "from_me": False, "ts": "2026-10-09T10:00:00+00:00", "name": "K"},
+        {"id": "l2", "jid": LID, "text": "chill ra", "from_me": True, "ts": "2026-10-09T10:01:00+00:00"}]})
+    K = "919811122233@s.whatsapp.net"
+    assert event(wa, "aliases", {"pairs": [{"lid": "157758561226931@lid", "pn": "919811122233@s.whatsapp.net"},
+                                           {"lid": "999@lid", "pn": "91999@s.whatsapp.net"}]}).json()["merged"] == 1
+    with wa.session_factory() as db:
+        assert db.get(WaContact, LID) is None
+        c = db.get(WaContact, K)
+        assert c.known and c.name == "K"
+        assert {m.jid for m in db.scalars(select(WaMessage).where(WaMessage.wa_id.in_(("l1", "l2"))))} == {K}
+    busy(wa, "busy60")
+    assert text_in(wa, K, "hi")["did"] == "replied"  # an old friend, not a stranger

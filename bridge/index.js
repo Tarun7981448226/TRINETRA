@@ -7,7 +7,7 @@
 import http from "node:http";
 
 import makeWASocket, {
-  Browsers, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore,
+  Browsers, DisconnectReason, fetchLatestBaileysVersion, jidNormalizedUser, makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
 import pg from "pg";
 import pino from "pino";
@@ -36,11 +36,27 @@ async function notify(type, data) {
   return false;
 }
 
-// ---------- the same person, one id: v7 may give either their phone number id or their "lid" ----------
-function chatOf(key) {
+// ---------- the same person, one id ----------
+// WhatsApp v7 gives each person two ids: their phone number (…@s.whatsapp.net) and a private "lid" (…@lid). History
+// mostly arrives under the lid, live messages often under the number — so everything is turned into the number form,
+// or TRINETRA would think an old friend is a stranger.
+async function chatOf(key) {
   const a = key.remoteJid || "", b = key.remoteJidAlt || "";
-  if (a.endsWith("@lid") && b.endsWith("@s.whatsapp.net")) return b;
-  return a;
+  if (!a.endsWith("@lid")) return a.endsWith("@s.whatsapp.net") ? jidNormalizedUser(a) : a;
+  if (b.endsWith("@s.whatsapp.net")) return jidNormalizedUser(b);
+  const pn = await sock?.signalRepository?.lidMapping?.getPNForLID(a).catch(() => null);
+  return pn ? jidNormalizedUser(pn) : a;
+}
+
+async function sendAliases(pairs) { // {lid, pn} → TRINETRA merges anything it filed under the lid
+  for (let i = 0; i < pairs.length; i += 1000) await notify("aliases", { pairs: pairs.slice(i, i + 1000) });
+}
+
+async function sendKnownAliases() { // every pair Baileys has stored (rows "lid-mapping-<lid>_reverse" = <phone>)
+  const r = await pool.query("SELECT id, data FROM wa_auth WHERE id LIKE 'lid-mapping-%\\_reverse'");
+  const pairs = r.rows.map((row) => ({ lid: `${row.id.slice("lid-mapping-".length, -"_reverse".length)}@lid`,
+                                       pn: `${JSON.parse(row.data)}@s.whatsapp.net` }));
+  if (pairs.length) await sendAliases(pairs);
 }
 const isGroup = (jid) => jid.endsWith("@g.us");
 const skip = (jid) => !jid || jid === "status@broadcast" || jid.endsWith("@broadcast") || jid.endsWith("@newsletter");
@@ -89,6 +105,7 @@ async function connect() {
     if (connection === "open") {
       lastQr = null; state = "open";
       notify("status", { state: "open", me: sock.user?.name || sock.user?.id?.split(":")[0] });
+      sendKnownAliases().catch((e) => logger.warn({ err: String(e) }, "aliases"));
     }
     if (connection === "close") {
       const code = lastDisconnect?.error?.output?.statusCode;
@@ -105,7 +122,7 @@ async function connect() {
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify" && type !== "append") return;
     for (const m of messages) {
-      const jid = chatOf(m.key), text = textOf(m);
+      const jid = await chatOf(m.key), text = textOf(m);
       if (skip(jid) || !text) continue;
       const mine = !!m.key.fromMe, ours = mine && queue.isOurs(m.key.id, jid, text);
       if (ours) continue; // TRINETRA's own reply: already reported as "sent"
@@ -119,10 +136,13 @@ async function connect() {
     if (updates.some((u) => !u.key.fromMe && (u.update?.status ?? 0) >= 4)) heIsHere();
   });
 
-  sock.ev.on("messaging-history.set", async ({ messages }) => { // the history WhatsApp shares when he links
+  sock.ev.on("lid-mapping.update", (pair) => { if (pair?.lid && pair?.pn) sendAliases([pair]); });
+
+  sock.ev.on("messaging-history.set", async ({ messages, lidPnMappings }) => { // the history WhatsApp shares when he links
+    if (lidPnMappings?.length) await sendAliases(lidPnMappings);
     const rows = [];
     for (const m of messages || []) {
-      const jid = chatOf(m.key), text = textOf(m);
+      const jid = await chatOf(m.key), text = textOf(m);
       if (skip(jid) || isGroup(jid) || !text) continue;
       rows.push({ id: m.key.id, jid, text, ts: tsOf(m), from_me: !!m.key.fromMe, name: m.pushName || null });
     }
