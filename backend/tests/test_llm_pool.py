@@ -113,3 +113,13 @@ def test_rests_exactly_as_long_as_the_provider_says():
     import time
     assert 590 < llm._benched_until["groq/x"] - time.time() < 610  # not the blanket 6 hours
     llm._benched_until.clear()
+
+
+def test_a_daily_quota_isnt_retried_every_minute():
+    import time
+    llm._benched_until.clear()
+    llm._bench("gemini/x", llm.RateLimitError('429 {"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier", "retryDelay": "41s"}'))
+    assert llm._benched_until["gemini/x"] - time.time() > 3 * 3600
+    llm._bench("groq/y", llm.RateLimitError("429 tokens per day (TPD): Please try again in 2h13m5s"))
+    assert 7900 < llm._benched_until["groq/y"] - time.time() < 8100  # Groq's daily wait is exact: trusted
+    llm._benched_until.clear()
