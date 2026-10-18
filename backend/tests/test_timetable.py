@@ -289,3 +289,16 @@ def test_everyday_all_doesnt_wipe_routines():
     assert ops[0]["whole_series"] is False
     ops = _no_surprise_wipes("move all my gym sessions to 7am", [{"op": "delete", "id": 1, "whole_series": True}])
     assert ops[0]["whole_series"] is True
+
+
+def test_moving_the_whole_routine_moves_every_block(client, builder_llm):
+    today = now_local().date()
+    with client.session_factory() as db:
+        timetable.create_block(db, "Gym", today + timedelta(days=1), time(18), time(19), recurrence="weekdays")
+        db.commit()
+        tasks = sorted(db.scalars(select(Task)), key=lambda t: t.planned_start)
+    builder_llm["ops"] = [{"op": "move", "id": t.id, "date": local(t.planned_start).date().isoformat(), "start": "07:00"}
+                          for t in tasks[:3]]  # the model only moved the first few (12+ changes would ask first)
+    client.post("/chat", json={"text": "move all my gym sessions to 7am from now on"})
+    with client.session_factory() as db:
+        assert {local(t.planned_start).time() for t in db.scalars(select(Task))} == {time(7)}

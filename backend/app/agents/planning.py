@@ -85,6 +85,7 @@ async def timetable_builder(ctx: AgentContext) -> None:
     ops = _keep_his_time(text, ops)
     ops = _keep_his_day(ctx.db, text, ops)
     ops = _no_surprise_wipes(text, ops)
+    ops = _whole_routine_moves(ctx.db, text, ops)
 
     # Marking something done/skipped needs no deliberation.
     quick = [o for o in ops if o.get("op") == "status"]
@@ -229,6 +230,34 @@ def _no_surprise_wipes(text: str, ops: list[dict]) -> list[dict]:
         if o.get("op") == "delete" and o.get("whole_series"):
             log.warning("builder wanted to wipe a whole routine for %r — only this one", text[:80])
             o["whole_series"] = False
+    return ops
+
+
+def _whole_routine_moves(db, text: str, ops: list[dict]) -> list[dict]:
+    """"Move all my gym sessions to 7am from now on": the model sometimes moves only the blocks it was shown. When he
+    asked for the whole routine and two or more of its blocks go to the same new time, every later block goes too."""
+    if not WHOLE.search(_plain(text)):
+        return ops
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for o in ops:
+        if o.get("op") != "move" or not o.get("start"):
+            continue
+        try:
+            t = db.get(Task, int(o["id"]))
+        except (TypeError, ValueError):
+            continue
+        if t is not None and t.series_id:
+            groups[(t.series_id, str(o["start"])[:5])].append(t)
+    for (series, start), tasks in groups.items():
+        if len(tasks) < 2:
+            continue
+        have = {t.id for t in tasks}
+        last = max(t.planned_start for t in tasks)
+        for t in db.scalars(select(Task).where(Task.series_id == series, Task.planned_start > last,
+                                                Task.status == TaskStatus.PLANNED)):
+            if t.id not in have:
+                ops.append({"op": "move", "id": t.id, "date": local(t.planned_start).date().isoformat(), "start": start})
     return ops
 
 
