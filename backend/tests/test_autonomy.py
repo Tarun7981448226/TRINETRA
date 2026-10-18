@@ -117,6 +117,7 @@ def test_stop_nagging_me_is_respected(client, llm_calls):
     from tests.conftest import trinetra_prompt
     body = client.post("/chat", json={"text": "stop nagging me so much"}).json()
     assert body["notes"]["quieter_until"] and "turned your OPTIONAL nudges" in trinetra_prompt(llm_calls)
+    assert body["notes"]["quieter_until"] in body["reply"]  # the reply names the real end of the pause
     with client.session_factory() as db:
         v = autonomy.decide(db, "lag")
         assert not v.send and "back off" in v.reason

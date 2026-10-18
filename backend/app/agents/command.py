@@ -346,6 +346,8 @@ async def core(ctx: AgentContext) -> AgentResult:
             reply = "I'm here, and I'm not going anywhere. What you're feeling matters."
     if changes := ctx.notes.get("timetable_changes"):
         reply = _true_to_changes(reply, changes)
+    if (until := ctx.notes.get("quieter_until")) and until.lower() not in reply.lower():  # say the real end of the pause
+        reply = reply.rstrip() + f" (Optional nudges are off until {until}; your own reminders still come.)"
     if ctx.notes.get("distress") and "988" not in reply:  # a real way to get help, every time — not left to the model
         reply += "\n\n" + CRISIS_LINE
 
