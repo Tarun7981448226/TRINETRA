@@ -32,6 +32,12 @@ GREETING = ("Hey there! I'm TRINETRA, Tarun's AI mentor. He built me to run his 
 CHECKING = "Good question. Let me check with him right now, one moment."
 TOUR_OFFER = "Would you like a quick tour of Tarun's portfolio? I can show you around."
 FALLBACK_ANSWER = "I'm not sure about that one. The best way is to ask Tarun directly at tarundeepreddybv@gmail.com."
+OFFLINE_SMALL_TALK = [  # when every model is busy: the commonest small talk still gets a real answer
+    (r"\b(test|testing)\b", "Test away, I'm here. Ask me anything about Tarun's work: SKYNET, his research, or what I do for him."),
+    (r"^\s*(hi|hey|hello|yo|sup)\b", "Hey! Ask me anything about Tarun's work, or say 'tour' and I'll show you around."),
+    (r"\b(who|what) are you\b|\bare you (real|a bot|ai)\b", "I'm TRINETRA, the AI mentor Tarun built to run his days. Under each of my replies you can watch how I answered."),
+    (r"\b(thanks|thank you|cool|nice|great|awesome)\b", "Glad to help. Anything else about Tarun you'd like to know?"),
+]
 FALLBACK = ("I think he's at work right now. Please leave him a message and he'll get back to you. "
             "May I have your email?")
 
@@ -444,7 +450,7 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
     if u is not None:
         reply = _sparing(v, _short(humanize(u["reply"], strip_name=False))) or FALLBACK_ANSWER
     elif offline:
-        reply = FALLBACK_ANSWER
+        reply = next((line for pat, line in OFFLINE_SMALL_TALK if re.search(pat, text, re.I)), FALLBACK_ANSWER)
     else:
         history = [{"role": "assistant" if m["role"] == "trinetra" else "user", "content": m["text"]} for m in v.messages[-10:]]
         reply = await _say(v, history, FALLBACK_ANSWER)

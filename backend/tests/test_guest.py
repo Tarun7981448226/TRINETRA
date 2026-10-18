@@ -462,3 +462,16 @@ def test_every_reply_carries_the_real_steps(client, llm_calls):
     assert any("Fact check" in s["did"] for s in r["trace"])
     r = client.post("/guest/chat", json={"token": token, "text": "i want to die"}).json()
     assert r["trace"][0]["team"] == "wellbeing" and "988" in r["reply"]
+
+
+def test_offline_small_talk_still_gets_a_real_answer(client, monkeypatch):
+    from app.core import llm
+
+    async def down(*a, **k):
+        raise llm.LLMUnavailable("all busy")
+    monkeypatch.setattr(llm, "complete", down)
+    token = hello(client)
+    client.post("/guest/chat", json={"token": token, "text": "no thanks"})
+    client.post("/guest/chat", json={"token": token, "text": "skip"})
+    r = client.post("/guest/chat", json={"token": token, "text": "testing you"}).json()
+    assert r["reply"].startswith("Test away") and "models busy" in r["trace"][0]["did"]
