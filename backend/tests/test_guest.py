@@ -447,3 +447,18 @@ def test_contact_is_kept_even_with_crisis_words_and_normal_questions_pass_the_sk
     for q in ("can he work with a team?", "does he know sql?", "Can he use git?", "does he know about our company"):
         assert guest.unlisted_skill(q) is None, q
     assert guest.unlisted_skill("does he use AWS") == "AWS"
+
+
+def test_every_reply_carries_the_real_steps(client, llm_calls):
+    """The portfolio replays these live in the Brain, so they must say what really happened."""
+    token = hello(client)
+    r = client.post("/guest/chat", json={"token": token, "text": "what does he work on?"}).json()
+    steps = [(s["team"], s["did"]) for s in r["trace"]]
+    assert steps[0][0] == "command" and "Understanding" in steps[0][1]
+    assert any(t == "memory" and "public brief" in d for t, d in steps) and steps[-1][0] in ("command", "communications")
+    r = client.post("/guest/chat", json={"token": token, "text": "dance"}).json()
+    assert any(t == "mentor_emotion" for t, _ in [(s["team"], s["did"]) for s in r["trace"]])
+    r = client.post("/guest/chat", json={"token": token, "text": "does he know kubernetes?"}).json()
+    assert any("Fact check" in s["did"] for s in r["trace"])
+    r = client.post("/guest/chat", json={"token": token, "text": "i want to die"}).json()
+    assert r["trace"][0]["team"] == "wellbeing" and "988" in r["reply"]
