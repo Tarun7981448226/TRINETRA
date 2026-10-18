@@ -218,3 +218,25 @@ def test_hinglish_crisis_words_are_heard_too():
         assert DISTRESS.search(t), t
     for t in ("has has ke mar gaya", "ye kaam khatam kar", "zindagi badi mast hai", "meeting khatam karo"):
         assert not DISTRESS.search(t), t
+
+
+def test_whats_next_today_without_a_model_skips_what_is_over(client, monkeypatch):
+    from datetime import timedelta
+    from app.config import get_settings
+    from app.core import llm, timetable
+    from app.core.timeutil import now_local
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "x")
+
+    async def down(*a, **k):
+        raise llm.LLMUnavailable("all busy")
+    monkeypatch.setattr(llm, "complete", down)
+    now = now_local()
+    with client.session_factory() as db:
+        past_start = (now - timedelta(hours=3)).replace(second=0, microsecond=0)
+        later = (now + timedelta(hours=1)).replace(second=0, microsecond=0)
+        if past_start.date() == now.date() and later.date() == now.date():
+            timetable.create_block(db, "Breakfast", now.date(), past_start.time(), (past_start + timedelta(minutes=30)).time())
+            timetable.create_block(db, "DSA", now.date(), later.time(), (later + timedelta(minutes=50)).time())
+            db.commit()
+            r = client.post("/chat", json={"text": "what's next?"}).json()
+            assert r["reply"].startswith("Still to come today: DSA at") and "Breakfast" not in r["reply"]
