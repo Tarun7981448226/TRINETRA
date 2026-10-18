@@ -129,8 +129,10 @@ async def _critique(text: str, kind: str) -> str:
     """Self-critique (LLM-as-judge): a different model reviews the tone; a bad line is replaced by its fixed version."""
     import json
     try:
-        raw = await llm.complete([{"role": "user", "content": CRITIC_PROMPT.format(text=text[:800])}], tier="fast",
-                                 temperature=0, max_tokens=300, json_mode=True)
+        # the writer used the fast pool (Groq first); the judge comes from the smart pool (Gemini first): a different model,
+        # so it doesn't just approve its own style (LLM-as-a-judge self-preference bias)
+        raw = await llm.complete([{"role": "user", "content": CRITIC_PROMPT.format(text=text[:800])}], tier="smart",
+                                 temperature=0, max_tokens=300, json_mode=True, reasoning="low")
         d = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
     except Exception:
         return text  # no verdict: the original stands
