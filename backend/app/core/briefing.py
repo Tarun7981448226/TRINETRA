@@ -16,8 +16,8 @@ def _say(key: str, v: Any) -> str | None:
     """One finding in plain words. None = not worth TRINETRA's attention."""
     if v in (None, False, [], {}, ""):
         return None
-    if key == "felt":
-        return f"own reader hears {', '.join(v['emotions']) or v['group']}" + (" (he's low)" if v.get("low") else "")
+    if key == "felt":  # the trained reader misses idioms ("I want to give up" → joy): only its low reading is worth passing up
+        return f"own reader hears {', '.join(v['emotions']) or v['group']} (he's low)" if v.get("low") else None
     if key == "user_mood":
         return f"he sounds {v}"
     if key == "user_mood_intensity":

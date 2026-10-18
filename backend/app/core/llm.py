@@ -146,7 +146,10 @@ async def _call(model: str, messages: list[dict], temperature: float, max_tokens
         raise RateLimitError(f"429 {r.text[:3000]}")  # long enough to include the quota id (PerDay vs per-minute)
     if r.status_code >= 400:
         raise ProviderError(f"{r.status_code} {r.text[:200]}")
-    return r.json()["choices"][0]["message"].get("content") or ""
+    data = r.json()
+    if usage := data.get("usage"):  # cost awareness: free tiers count tokens per minute
+        log.info("tokens %s in=%s out=%s", model, usage.get("prompt_tokens"), usage.get("completion_tokens"))
+    return data["choices"][0]["message"].get("content") or ""
 
 
 async def complete(

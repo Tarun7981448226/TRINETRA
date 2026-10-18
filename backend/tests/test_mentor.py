@@ -155,3 +155,20 @@ def test_support_moves_explore_comfort_act(client, llm_calls):
         stages.append(body["notes"].get("support_stage"))
     assert stages == [1, 2, 3]
     assert "Support stage 3, act" in trinetra_prompt(llm_calls)
+
+
+def test_crisis_language_is_distress_but_everyday_frustration_isnt():
+    from app.agents.command import DISTRESS
+    for t in ("i dont see the point of anything anymore", "I want to die", "thinking about suicide", "i want it all to stop",
+              "everyone would be better off without me", "I feel hopeless"):
+        assert DISTRESS.search(t), t
+    for t in ("I want to give up on this bug", "this point is wrong", "end the meeting", "I'm dying to see the new movie",
+              "kill this process", "no pointers in python"):
+        assert not DISTRESS.search(t), t
+
+
+def test_practical_messages_skip_the_llm_mood_read(client, llm_calls):
+    client.post("/chat", json={"text": "show my plan"})
+    assert not any("emotional state" in c["messages"][0]["content"] for c in llm_calls)
+    client.post("/chat", json={"text": "I feel so lost lately"})
+    assert any("emotional state" in c["messages"][0]["content"] for c in llm_calls)

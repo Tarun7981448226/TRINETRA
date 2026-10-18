@@ -63,7 +63,7 @@ def scores(text: str) -> dict[str, float]:
     att = a / a.sum()
     x = np.concatenate([(e * att[:, None]).sum(0), e.mean(0)]) * 10
     h = _gelu(x @ m["W1"] + m["b1"])
-    prob = 1 / (1 + np.exp(-(h @ m["W2"] + m["b2"])))
+    prob = 1 / (1 + np.exp(-np.clip(h @ m["W2"] + m["b2"], -30, 30)))
     return {l: float(p / t) for l, p, t in zip(labels, prob, m["th"])}
 
 

@@ -48,6 +48,14 @@ async def empathy_detector(ctx: AgentContext) -> None:
     from app.core import feel
     felt = feel.read(text)  # local, private, instant (trained on GoEmotions)
     ctx.notes["felt"] = felt
+    # A plainly practical message ("move gym to 7pm", "show my plan"): the trained reader is sure there's no feeling in
+    # it, so the LLM read is skipped — one call fewer per message on free tiers that count every token.
+    from app.agents.command import DISTRESS
+    practical = (felt["group"] == "neutral" and feel.scores(text).get("neutral", 0) >= 1.5
+                 and not DISTRESS.search(text) and not any(p.search(text) for _, p in FALLBACK))
+    if practical:
+        ctx.notes["user_mood"], ctx.notes["user_mood_intensity"] = "neutral", 0.0
+        return
     try:
         if not ctx.settings.llm_available:
             raise llm.LLMUnavailable("offline")

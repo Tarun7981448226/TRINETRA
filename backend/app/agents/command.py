@@ -18,7 +18,13 @@ INTENT_PATTERNS: dict[str, str] = {
     "planning": r"\b(plan|schedule|timetable|remind|tomorrow|reschedule|move)\b",
 }
 # Signals that need care, not pressure. Overrides everything else.
-DISTRESS = re.compile(r"\b(hopeless|worthless|give up on life|no point|hurt myself|end it)\b", re.I)
+# Crisis language only (an ordinary "I want to give up on this bug" is low, not crisis — the emotion agents handle that).
+DISTRESS = re.compile(
+    r"\b(hopeless|worthless|give up on life|no point (in )?(living|anything|trying anymore)|hurt(ing)? myself|end it( all)?|"
+    r"kill(ing)? myself|suicid\w*|(want|wanna|going) to die|end my life|not worth living|no reason to (live|go on)|"
+    r"(don'?t|do not|cant|can'?t) see (the|any) point (of|in) (anything|living|life|going on)|"
+    r"want (it all|everything) to (stop|end)|disappear forever|self[- ]?harm\w*|better off without me|i'?m done with life)\b",
+    re.I)
 
 # Placeholder until the Emotion Engine (phase 3b) takes over mood selection.
 MOOD_FOR_INTENT = {
@@ -158,6 +164,10 @@ async def core(ctx: AgentContext) -> AgentResult:
     from app.core import briefing
     if reports := briefing.as_text(ctx.notes.get("briefing") or []):
         context += "\n" + reports
+    if intent == "planning" and not ctx.notes.get("timetable_changes") and not ctx.notes.get("deliberation"):
+        context += ("\nNothing in the timetable changed for this message. You CAN edit his timetable, so never say you "
+                    "can't. If he asked for a change you didn't make, say what's missing (e.g. there's no gym block "
+                    "tomorrow) and offer to add or move it.")
     if changes := ctx.notes.get("timetable_changes"):
         context += "\nYou JUST made these timetable changes for them in response to this message. Confirm in a few natural words, like a friend would, e.g. Done, gym's on for 6 every weekday.:\n"
         context += "\n".join(f"- {c}" for c in changes)
