@@ -70,7 +70,7 @@ async def timetable_builder(ctx: AgentContext) -> None:
                 {"role": "system", "content": BUILDER_PROMPT.format(
                     now=f"{now:%Y-%m-%d %H:%M}", weekday=f"{now:%A}", blocks=blocks)
                     + f"\nTheir sleep window: {s_start:%H:%M}-{s_end:%H:%M}."},
-                {"role": "user", "content": text},
+                {"role": "user", "content": _plain(text)},
             ],
             tier="smart" if long_request else "fast", temperature=0,
             max_tokens=4000 if long_request else 1200, json_mode=True,
@@ -83,6 +83,7 @@ async def timetable_builder(ctx: AgentContext) -> None:
     if not ops:
         return
     ops = _keep_his_time(text, ops)
+    ops = _keep_his_day(ctx.db, text, ops)
 
     # Marking something done/skipped needs no deliberation.
     quick = [o for o in ops if o.get("op") == "status"]
@@ -171,6 +172,46 @@ def _keep_his_time(text: str, ops: list[dict]) -> list[dict]:
     if str(o["start"])[:5] != want:
         log.warning("builder said %s for %r; he said %s — keeping his", o["start"], text[:80], want)
         o["start"] = want
+    return ops
+
+
+def _plain(text: str) -> str:
+    """Texting style → plain words for the planner ("cn u push my dsa to 10pm tmrw" → "... tomorrow")."""
+    from app.core import show
+    return " ".join(show.normalise(text)) or text
+
+
+def said_day(text: str):
+    """today / tonight / tomorrow, if he named one (and only one)."""
+    from datetime import timedelta
+    words = set(_plain(text).lower().split())
+    days = {now_local().date() for w in ("today", "tonight") if w in words} | \
+           {now_local().date() + timedelta(days=1) for w in ("tomorrow",) if w in words}
+    return next(iter(days)) if len(days) == 1 else None
+
+
+def _keep_his_day(db, text: str, ops: list[dict]) -> list[dict]:
+    """He said "tomorrow" but the model picked another day's copy of the routine (seen live: Tuesday's DSA moved for
+    "tmrw" on a Sunday). Point a single move at the block on the day he named, and a single create at that day."""
+    day = said_day(text)
+    dated = [o for o in ops if o.get("op") in ("move", "create")]
+    if day is None or len(dated) != 1:
+        return ops
+    o = dated[0]
+    if o["op"] == "create":
+        o["date"] = day.isoformat()
+        return ops
+    try:
+        task = db.get(Task, int(o.get("id")))
+    except (TypeError, ValueError):
+        return ops
+    if task is None or local(task.planned_start).date() == day:
+        return ops
+    same = select(Task).where(Task.series_id == task.series_id) if task.series_id else select(Task).where(Task.title == task.title)
+    twin = next((t for t in db.scalars(same) if local(t.planned_start).date() == day), None)
+    if twin is not None:
+        log.warning("builder picked %s for %r; he meant %s", local(task.planned_start).date(), text[:80], day)
+        o["id"], o["date"] = twin.id, day.isoformat()
     return ops
 
 

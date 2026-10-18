@@ -192,3 +192,21 @@ def test_his_exact_time_beats_a_misread():
     assert _keep_his_time("move gym from 6pm to 7pm", two)[0]["start"] == "19:00"  # two times said: trust the model
     night = [{"op": "move", "id": 1, "start": "21:30"}]
     assert _keep_his_time("move DSA to 9:30 tonight", night)[0]["start"] == "21:30"  # a bare 9:30 is ambiguous
+
+
+def test_the_day_he_named_wins(client, builder_llm):
+    """Seen live: 'push my dsa to 10pm tmrw' on a Sunday moved Tuesday's copy. The block on the day he said is moved."""
+    today = now_local().date()
+    timetable_ids = {}
+    with client.session_factory() as db:
+        timetable.create_block(db, "TUF DSA", today, time(21), time(22), recurrence="daily")
+        db.commit()
+        for t in db.scalars(select(Task)):
+            timetable_ids[local(t.planned_start).date()] = t.id
+    wrong = timetable_ids[today + timedelta(days=2)]
+    builder_llm["ops"] = [{"op": "move", "id": wrong, "date": (today + timedelta(days=2)).isoformat(), "start": "22:00"}]
+    client.post("/chat", json={"text": "cn u push my dsa to 10pm tmrw"})
+    with client.session_factory() as db:
+        moved = db.get(Task, timetable_ids[today + timedelta(days=1)])
+        assert local(moved.planned_start).time() == time(22)
+        assert local(db.get(Task, wrong).planned_start).time() == time(21)  # the other day's copy is untouched
