@@ -45,6 +45,9 @@
   #modeChip.on { display: inline-block; }
   #modeChip.angry { border-color: var(--firm); color: #ff8a80; }
   .note { align-self: flex-start; color: var(--muted); font-size: 12px; margin-top: -6px; padding-left: 6px; }
+  details.why { align-self: flex-start; font-size: 12px; color: var(--muted, #9a98b0); margin: -4px 0 4px 6px; max-width: 86%; }
+  details.why summary { cursor: pointer; list-style: none; } details.why summary::-webkit-details-marker { display: none; }
+  details.why div { margin-top: 4px; padding: 6px 9px; border-left: 2px solid #f0a83a55; line-height: 1.45; }
   .hint { color: var(--muted); font-size: 14px; text-align: center; margin: auto 0; }
   form { display: flex; gap: 8px; padding: 12px 0 16px; }
   input { flex: 1; min-width: 0; background: var(--panel); color: var(--text); border: 1px solid var(--line);
@@ -623,6 +626,16 @@
         body: JSON.stringify({ text, channel: "web" }) });
       const d = await r.json();
       add(d.reply || "…", "tri", d.mood);
+      if (d.notes?.briefing?.length) {  // what each team's manager reported before TRINETRA decided — tap to see
+        const w = document.createElement("details"); w.className = "why";
+        w.innerHTML = "<summary>🧠 how I decided ▸</summary><div></div>";
+        w.querySelector("div").textContent = "";
+        for (const r of d.notes.briefing) {
+          const line = document.createElement("div"); line.style.cssText = "border:0;padding:1px 0;margin:0";
+          line.textContent = `★ ${r.manager}: ${r.line}`; w.querySelector("div").appendChild(line);
+        }
+        log.appendChild(w);
+      }
       if (d.notes?.perform?.length) window.trinetraPerform?.(d.notes.perform);
       if (d.notes?.show) window.trinetraShow?.(d.notes.show);  // dance · play an instrument · a little move
       if (d.notes?.timetable_changes?.length) note("📅 " + d.notes.timetable_changes.join(" · "));
