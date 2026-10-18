@@ -210,3 +210,36 @@ def test_the_day_he_named_wins(client, builder_llm):
         moved = db.get(Task, timetable_ids[today + timedelta(days=1)])
         assert local(moved.planned_start).time() == time(22)
         assert local(db.get(Task, wrong).planned_start).time() == time(21)  # the other day's copy is untouched
+
+
+def test_naming_a_day_never_wipes_the_whole_routine(client, builder_llm):
+    """Seen live: 'free up my evening tomorrow' deleted the whole Gym routine. Only tomorrow's block goes."""
+    today = now_local().date()
+    with client.session_factory() as db:
+        timetable.create_block(db, "Gym", today, time(18), time(19), recurrence="daily")
+        db.commit()
+        ids = {local(t.planned_start).date(): t.id for t in db.scalars(select(Task))}
+    builder_llm["ops"] = [{"op": "delete", "id": ids[today + timedelta(days=3)], "whole_series": True}]
+    client.post("/chat", json={"text": "free up my evening tomorrow"})
+    with client.session_factory() as db:
+        left = {local(t.planned_start).date() for t in db.scalars(select(Task))}
+    assert today + timedelta(days=1) not in left  # tomorrow's block is gone
+    assert today + timedelta(days=3) in left and len(left) >= 10  # the routine stays
+
+
+def test_tomorrow_is_in_view(client, llm_calls):
+    from tests.conftest import trinetra_prompt
+    with client.session_factory() as db:
+        timetable.create_block(db, "Gym", now_local().date() + timedelta(days=1), time(18), time(19))
+        db.commit()
+    client.post("/chat", json={"text": "what's on tomorrow?"})
+    assert "Tomorrow's timetable:\n- 18:00–19:00 Gym" in trinetra_prompt(llm_calls)
+
+
+def test_the_confirmation_matches_what_really_changed():
+    from app.agents.command import _true_to_changes
+    ch = ["moved to #1 Mon 19 Oct 21:00–22:00 Gym [planned, repeats weekdays]",
+          "moved to #13 Mon 19 Oct 18:00–19:00 TUF DSA [planned, repeats daily]"]
+    assert _true_to_changes("Swapped them—Gym now 18:00–19:00 tomorrow.", ch) == "Done: Gym 21:00–22:00; TUF DSA 18:00–19:00."
+    for ok in ("Swapped—gym is at 9 pm now and DSA at 6 pm.", "Swapped: gym 21:00, DSA 18:00.", "Swapped them, all set."):
+        assert _true_to_changes(ok, ch) == ok

@@ -84,6 +84,7 @@ async def timetable_builder(ctx: AgentContext) -> None:
         return
     ops = _keep_his_time(text, ops)
     ops = _keep_his_day(ctx.db, text, ops)
+    ops = _no_surprise_wipes(text, ops)
 
     # Marking something done/skipped needs no deliberation.
     quick = [o for o in ops if o.get("op") == "status"]
@@ -190,29 +191,55 @@ def said_day(text: str):
     return next(iter(days)) if len(days) == 1 else None
 
 
+WHOLE = re.compile(r"\b(every|all|always|routine|series|for good|from now on|permanently|anymore|stop doing|quit)\b", re.I)
+
+
+def _no_surprise_wipes(text: str, ops: list[dict]) -> list[dict]:
+    """Seen live: "free up my evening tomorrow" deleted his whole Gym and DSA routines. A delete only takes the whole
+    routine when he says so ("every", "all", "from now on", "quit"…); naming one day means that day's block."""
+    if WHOLE.search(_plain(text)):
+        return ops
+    for o in ops:
+        if o.get("op") == "delete" and o.get("whole_series"):
+            log.warning("builder wanted to wipe a whole routine for %r — only this one", text[:80])
+            o["whole_series"] = False
+    return ops
+
+
 def _keep_his_day(db, text: str, ops: list[dict]) -> list[dict]:
     """He said "tomorrow" but the model picked another day's copy of the routine (seen live: Tuesday's DSA moved for
     "tmrw" on a Sunday). Point a single move at the block on the day he named, and a single create at that day."""
     day = said_day(text)
+    if day is None:
+        return ops
+    for o in [o for o in ops if o.get("op") == "delete"]:  # "cancel gym tomorrow": tomorrow's block, whichever id it named
+        _retarget(db, o, day, text)
     dated = [o for o in ops if o.get("op") in ("move", "create")]
-    if day is None or len(dated) != 1:
+    if len(dated) != 1:
         return ops
     o = dated[0]
     if o["op"] == "create":
         o["date"] = day.isoformat()
         return ops
+    _retarget(db, o, day, text)
+    return ops
+
+
+def _retarget(db, o: dict, day, text: str) -> None:
+    """Point an op at the copy of the same routine on `day` (if the model picked another day's copy)."""
     try:
         task = db.get(Task, int(o.get("id")))
     except (TypeError, ValueError):
-        return ops
+        return
     if task is None or local(task.planned_start).date() == day:
-        return ops
+        return
     same = select(Task).where(Task.series_id == task.series_id) if task.series_id else select(Task).where(Task.title == task.title)
     twin = next((t for t in db.scalars(same) if local(t.planned_start).date() == day), None)
     if twin is not None:
         log.warning("builder picked %s for %r; he meant %s", local(task.planned_start).date(), text[:80], day)
-        o["id"], o["date"] = twin.id, day.isoformat()
-    return ops
+        o["id"] = twin.id
+        if o.get("op") == "move":
+            o["date"] = day.isoformat()
 
 
 async def _speak_up(ctx: AgentContext, instruction: str, fallback: str, mood: str, meta: dict,

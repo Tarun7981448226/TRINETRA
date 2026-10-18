@@ -1,5 +1,6 @@
 """Command council: the agents that hear you first and answer you."""
 import re
+from datetime import timedelta
 
 from sqlalchemy import select
 
@@ -121,6 +122,11 @@ def _today_context(ctx: AgentContext) -> str:
             lines.append(f"- {local(t.planned_start):%H:%M}–{local(t.planned_end):%H:%M} {t.title} [{t.status}]")
     else:
         lines.append("Today's timetable: empty")
+    t_start, t_end = day_bounds_utc(now_local() + timedelta(days=1))
+    tomorrow = ctx.db.scalars(select(Task).where(Task.planned_start >= t_start, Task.planned_start < t_end)
+                              .order_by(Task.planned_start)).all()
+    lines.append("Tomorrow's timetable:" if tomorrow else "Tomorrow's timetable: empty")
+    lines += [f"- {local(t.planned_start):%H:%M}–{local(t.planned_end):%H:%M} {t.title} [{t.status}]" for t in tomorrow]
     from app.core import recall  # the memories that matter for what he just said (not just the 40 "most important")
     text = str(ctx.event.payload.get("text", ""))
     recent = " ".join(m.content for m in ctx.db.scalars(select(Message).where(Message.role == "user")
@@ -145,6 +151,27 @@ SUPPORT_STEPS = [
     "Support stage 3, act: now offer ONE small, concrete next step (tiny and doable tonight), or ask if he wants one. "
     "Keep the warmth.",
 ]
+
+
+CHANGE = re.compile(r"(?:moved to|added) #\d+ \w{3} \d{1,2} \w{3} (\d{2}:\d{2})–(\d{2}:\d{2}) (.+?) \[")
+
+
+def _true_to_changes(reply: str, changes: list[str]) -> str:
+    """Seen live: after swapping gym and DSA, the reply gave each the other's time. If the reply puts a changed block next
+    to a time that isn't its new one, the confirmation is rebuilt from the real changes."""
+    def hm(t: str) -> set[str]:  # "21:00" → the ways a reply may write it
+        h, m = int(t[:2]), t[3:]
+        twelve = f"{(h % 12) or 12}{'' if m == '00' else ':' + m}"
+        return {t, f"{h}:{m}", twelve + (" pm" if h >= 12 else " am"), twelve + ("pm" if h >= 12 else "am")}
+    facts = [(m.group(3).strip(), m.group(1), m.group(2)) for c in changes if (m := CHANGE.search(c))]
+    for title, start, _ in facts:
+        name = re.escape(title.split()[-1])  # "TUF DSA" → "DSA"
+        for m in re.finditer(rf"\b{name}\b[^.!?\n]{{0,25}}?(\d{{1,2}}(?::\d{{2}})?\s*(?:am|pm)?)", reply, re.I):
+            said = m.group(1).strip().lower().replace(" ", "")
+            if said and not any(said == w.replace(" ", "") or said.startswith(w.split(":")[0]) and ":" not in said and w.startswith(said)
+                                for w in hm(start)):
+                return "Done: " + "; ".join(f"{t} {a}–{b}" for t, a, b in facts) + "."
+    return reply
 
 
 def support_step(ctx: AgentContext) -> str | None:
@@ -208,7 +235,7 @@ async def core(ctx: AgentContext) -> AgentResult:
     if ctx.notes.get("nudges_back"):
         context += "\nYou just turned your optional nudges back on because he asked. Say so in a few words."
     if changes := ctx.notes.get("timetable_changes"):
-        context += "\nYou JUST made these timetable changes for them in response to this message. Confirm in a few natural words, like a friend would, e.g. Done, gym's on for 6 every weekday.:\n"
+        context += "\nYou JUST made these timetable changes for them in response to this message. Confirm in a few natural words, like a friend would, e.g. Done, gym's on for 6 every weekday. Use the times EXACTLY as listed here (read each line; don't swap them), and say you did it — never that it was already that way:\n"
         context += "\n".join(f"- {c}" for c in changes)
     if d := ctx.notes.get("deliberation"):
         concerns = "; ".join(d.get("findings") or []) or "none"
@@ -294,6 +321,8 @@ async def core(ctx: AgentContext) -> AgentResult:
         )
         if ctx.notes.get("distress"):  # never "try again later" to someone in crisis
             reply = "I'm here, and I'm not going anywhere. What you're feeling matters."
+    if changes := ctx.notes.get("timetable_changes"):
+        reply = _true_to_changes(reply, changes)
     if ctx.notes.get("distress") and "988" not in reply:  # a real way to get help, every time — not left to the model
         reply += "\n\n" + CRISIS_LINE
 
