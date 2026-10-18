@@ -201,6 +201,28 @@ If they're testing you or being sceptical ("testing you", "is this real?", "taru
 good-humoured confidence; don't treat it as a name. Known so far: {known}"""
 
 
+SKILL_ASK = re.compile(
+    r"\b(?:does|do|can|has|is)\s+(?:he|tarun)\b.{0,25}?\b(?:know|use|used|code in|program in|work(?:ed)? with|"
+    r"experience (?:with|in)|familiar with|good at|skilled in|proficient in|any)\s+([A-Za-z][\w.+#/\- ]{0,30}?)\s*(?:\?|$|,|\band\b)",
+    re.I)
+GENERIC = {"ml", "ai", "machine learning", "deep learning", "python", "coding", "programming", "llms", "llm", "research",
+           "papers", "paper", "projects", "experience", "software", "it", "this", "that", "them", "agents"}
+
+
+def unlisted_skill(text: str) -> str | None:
+    """'does he know kubernetes?' and Kubernetes isn't in the public brief → 'kubernetes'. Never let the model say yes."""
+    m = SKILL_ASK.search(text)
+    if not m:
+        return None
+    skill = m.group(1).strip(" ?.,").lower()
+    skill = re.sub(r"^(the|a|an|any|some)\s+", "", skill)
+    if not skill or skill in GENERIC or len(skill) < 2:
+        return None
+    b = brief().lower()
+    words = [w for w in re.split(r"[\s/]+", skill) if w]
+    return None if all(re.search(rf"(?<![\w]){re.escape(w)}(?![\w])", b) for w in words) else m.group(1).strip(" ?.,")
+
+
 def _model_name() -> str:
     m = llm.last_model.get() or "a model"
     return m.split("/")[-1]
@@ -368,6 +390,11 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
         step("reminders", "Asked Tarun on his phone what he's doing")
         return done(CHECKING, ask_id=ask.id)
 
+    # 4b. "Does he know Kubernetes?" — not in the brief: an honest answer, never a model's guess.
+    if (skill := unlisted_skill(text)) is not None:
+        step("memory", f"Fact check: “{skill}” isn't in Tarun's public brief — no guessing")
+        return done(f"{skill[:1].upper() + skill[1:]} isn't on his public list, so I won't guess. He's worked with Python, "
+                    "FastAPI, Docker, LangGraph and LLM agents — and you can ask him directly at tarundeepreddybv@gmail.com.")
     # 5. Everything else: the model reads the whole conversation once — who they are (if they said) and what to say back.
     u = await _understand(v)
     offline = bool(u and u.get("offline"))
