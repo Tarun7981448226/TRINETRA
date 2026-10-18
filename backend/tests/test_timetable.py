@@ -302,3 +302,42 @@ def test_moving_the_whole_routine_moves_every_block(client, builder_llm):
     client.post("/chat", json={"text": "move all my gym sessions to 7am from now on"})
     with client.session_factory() as db:
         assert {local(t.planned_start).time() for t in db.scalars(select(Task))} == {time(7)}
+
+
+def test_final_review_guard_cases(client, builder_llm):
+    from app.agents.planning import _keep_his_time, _no_surprise_wipes, said_day
+    from app.agents.command import _true_to_changes
+    from app.core.persona import humanize
+    # his end time is kept as the end
+    for text, op in (("dsa for 2 hours, ending at 9pm", {"op": "create", "start": "19:00", "end": "21:00"}),
+                     ("done at 11pm", {"op": "create", "start": "22:00", "end": "23:00"})):
+        assert _keep_his_time(text, [dict(op)]) == [op], text
+    # casual words don't unlock a whole-routine wipe
+    for text in ("cancel gym tomorrow, I'm always tired", "cancel gym tomorrow, I have exams every day",
+                 "I quit caffeine, cancel gym tomorrow", "cancel all my dsa sessions tomorrow"):
+        assert _no_surprise_wipes(text, [{"op": "delete", "id": 1, "whole_series": True}])[0]["whole_series"] is False, text
+    assert _no_surprise_wipes("stop gym from now on", [{"op": "delete", "id": 1, "whole_series": True}])[0]["whole_series"]
+    # "tonight" moves to tomorrow only when every time is in the small hours
+    if now_local().hour >= 5:
+        assert said_day("study from 11pm tonight till 1am") == now_local().date()
+        assert said_day("gym at 7pm tonight, then bed by 1am") == now_local().date()
+    # confirmations
+    ch = ["moved to #1 Mon 19 Oct 19:30–20:30 TUF DSA [planned]"]
+    for ok in ("Done, DSA's at 7:30 tonight.", "Moved DSA from 6pm to 7:30pm."):
+        assert _true_to_changes(ok, ch) == ok, ok
+    assert humanize("Done! Hope this helps.", strip_name=False) == "Done!"
+
+
+def test_whole_routine_moves_only_what_he_meant(client, builder_llm):
+    """'move gym on monday and wednesday to 7pm, I always go late' must not drag the other days along."""
+    today = now_local().date()
+    with client.session_factory() as db:
+        timetable.create_block(db, "Gym", today + timedelta(days=1), time(6), time(7), recurrence="weekdays")
+        db.commit()
+        tasks = sorted(db.scalars(select(Task)), key=lambda t: t.planned_start)
+    two = [t for t in tasks if local(t.planned_start).weekday() in (0, 2)][:2]
+    builder_llm["ops"] = [{"op": "move", "id": t.id, "date": local(t.planned_start).date().isoformat(), "start": "19:00"} for t in two]
+    client.post("/chat", json={"text": "move gym on monday and wednesday to 7pm, I always go late on those days"})
+    with client.session_factory() as db:
+        times = {local(t.planned_start).time() for t in db.scalars(select(Task)) if t.id not in {x.id for x in two}}
+        assert times == {time(6)}

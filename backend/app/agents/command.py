@@ -158,22 +158,23 @@ CHANGE = re.compile(r"(?:moved to|added) #\d+ \w{3} \d{1,2} \w{3} (\d{2}:\d{2})�
 
 def _true_to_changes(reply: str, changes: list[str]) -> str:
     """Seen live: after swapping gym and DSA, the reply gave each the other's time. Only an EXPLICIT time (with am/pm or a
-    colon) right after a changed block's name is checked; if it's neither that block's new start nor end, a short exact
-    line is added — the reply itself is kept."""
+    colon) right after a changed block's name is checked — not one after "from" (that's the old time); if it's none of
+    that block's new starts or ends, a short exact line is added and the reply itself is kept."""
     def forms(t: str) -> set[str]:
         h, m = int(t[:2]), t[3:]
         twelve = f"{(h % 12) or 12}"
-        out = {t, f"{h}:{m}", f"{twelve}:{m}{'pm' if h >= 12 else 'am'}"}
+        out = {t, f"{h}:{m}", f"{twelve}:{m}", f"{twelve}:{m}{'pm' if h >= 12 else 'am'}"}
         if m == "00":
             out |= {f"{twelve}{'pm' if h >= 12 else 'am'}"}
         return out
     facts = [(m.group(3).strip(), m.group(1), m.group(2)) for c in changes if (m := CHANGE.search(c))]
+    allowed: dict[str, set[str]] = {}
+    for title, start, end in facts:  # the same block name at several times (Mon 7am, Tue 8am): any of them is right
+        allowed.setdefault(title.split()[-1].lower(), set()).update(forms(start) | forms(end))
     wrong = False
-    for title, start, end in facts:
-        name = re.escape(title.split()[-1])  # "TUF DSA" → "DSA"
-        ok = forms(start) | forms(end)
-        for m in re.finditer(rf"\b{name}\b[^.!?\n]{{0,15}}?\b(\d{{1,2}}:\d{{2}}\s*(?:am|pm)?|\d{{1,2}}\s*(?:am|pm))\b(?!\s*(?:h|hr|hour|min))",
-                             reply, re.I):
+    for name, ok in allowed.items():
+        pattern = rf"\b{re.escape(name)}\b[^.!?\n]{{0,15}}?(?<!from )(?<!from)\b(\d{{1,2}}:\d{{2}}\s*(?:am|pm)?|\d{{1,2}}\s*(?:am|pm))\b(?!\s*(?:h|hr|hour|min))"
+        for m in re.finditer(pattern, reply, re.I):
             said = re.sub(r"\s+", "", m.group(1).lower())  # models write "7\u202fpm" (narrow no-break space)
             if said not in ok and said.lstrip("0") not in ok:
                 wrong = True

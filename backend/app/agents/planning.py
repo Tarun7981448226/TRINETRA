@@ -164,6 +164,7 @@ def said_times(text: str, sure: bool = False) -> list[str]:
 
 RANGE = re.compile(r"\b(from|to|till|until|til|between|and)\s+\d|\b(instead of|busy|after|before|except|not|wake)\b|"
                    r"\d\s*[-–]\s*\d", re.I)
+END_WORDS = re.compile(r"\b(end(s|ing)?|done|finish(ed|es|ing)?|wrap(s|ping)? up|over|for \d+ (hours?|hrs?|min))\b", re.I)
 SLEEP_WORDS = re.compile(r"\b(bed|sleep|lights out|bedtime)\b", re.I)
 
 
@@ -191,6 +192,8 @@ def _keep_his_time(text: str, ops: list[dict]) -> list[dict]:
     start, end = str(o["start"])[:5], (str(o.get("end"))[:5] if o.get("end") else None)
     if not re.fullmatch(r"\d{2}:\d{2}", start) or want == start:
         return ops
+    if want == end and (END_WORDS.search(text) or not re.search(r"\bat\s+\d", text, re.I)):
+        return ops  # "ending at 9pm" / "done at 11pm": his time is the end, and the model has it right
     if o["op"] == "set_sleep" and not SLEEP_WORDS.search(text):
         return ops
     log.warning("builder said %s for %r; he said %s — keeping his", start, text[:80], want)
@@ -210,22 +213,29 @@ def said_day(text: str):
     """today / tonight / tomorrow, if he named one (and only one)."""
     from datetime import timedelta
     words = set(_plain(text).lower().split())
-    small_hours = any(t < "05:00" for t in said_times(text, sure=True))
+    sure = said_times(text, sure=True)
+    small_hours = bool(sure) and all(t < "05:00" for t in sure) and now_local().hour >= 5  # "reading at 2am tonight"
     tonight = now_local().date() + timedelta(days=1 if small_hours else 0)  # "12:30 am tonight" is after midnight
     days = ({now_local().date()} if "today" in words else set()) | ({tonight} if "tonight" in words else set()) | \
            ({now_local().date() + timedelta(days=1)} if "tomorrow" in words else set())
     return next(iter(days)) if len(days) == 1 else None
 
 
-WHOLE = re.compile(r"\b(every|always|series|for good|from now on|permanently|anymore|stop doing|quit|all my \w+ (sessions|blocks|classes))\b", re.I)
+# "the whole routine" has to be said about the routine, not in passing ("I'm always tired", "exams every day")
+WHOLE = re.compile(r"\b(from now on|for good|permanently|every (single )?(day|week|time|session)|all (of )?my (\w+ ){0,2}"
+                   r"(sessions|blocks|classes|workouts|runs|lessons|practices|routines?)|the whole (routine|series)|"
+                   r"stop doing \w+ (altogether|completely)|no more \w+ (at all|ever))\b", re.I)
+FOR_GOOD = re.compile(r"\b(from now on|for good|permanently|altogether|no more \w+ (at all|ever))\b", re.I)
 WEEKDAY_OR_DATE = re.compile(r"\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}(st|nd|rd|th)\b", re.I)
 
 
 def _no_surprise_wipes(text: str, ops: list[dict]) -> list[dict]:
     """Seen live: "free up my evening tomorrow" deleted his whole Gym and DSA routines. A delete only takes the whole
     routine when he says so ("every", "all", "from now on", "quit"…); naming one day means that day's block."""
-    if WHOLE.search(_plain(text)) or len(text) > 250:  # said so, or a whole new schedule replacing the old one
-        return ops
+    plain = _plain(text)
+    named_day = said_day(text) is not None
+    if len(text) > 250 or (WHOLE.search(plain) and (not named_day or FOR_GOOD.search(plain))):
+        return ops  # he said so (and not just "… tomorrow"), or a whole new schedule replacing the old one
     for o in ops:
         if o.get("op") == "delete" and o.get("whole_series"):
             log.warning("builder wanted to wipe a whole routine for %r — only this one", text[:80])
@@ -235,8 +245,10 @@ def _no_surprise_wipes(text: str, ops: list[dict]) -> list[dict]:
 
 def _whole_routine_moves(db, text: str, ops: list[dict]) -> list[dict]:
     """"Move all my gym sessions to 7am from now on": the model sometimes moves only the blocks it was shown. When he
-    asked for the whole routine and two or more of its blocks go to the same new time, every later block goes too."""
-    if not WHOLE.search(_plain(text)):
+    clearly asked for the whole routine (and named it), and two or more of its blocks at the same old time go to the same
+    new time, the later blocks at that old time follow — with the same new length."""
+    plain = _plain(text)
+    if not WHOLE.search(plain) or said_day(text) is not None:
         return ops
     from collections import defaultdict
     groups = defaultdict(list)
@@ -247,17 +259,20 @@ def _whole_routine_moves(db, text: str, ops: list[dict]) -> list[dict]:
             t = db.get(Task, int(o["id"]))
         except (TypeError, ValueError):
             continue
-        if t is not None and t.series_id:
-            groups[(t.series_id, str(o["start"])[:5])].append(t)
-    for (series, start), tasks in groups.items():
+        if t is not None and t.series_id and re.search(rf"\b{re.escape(t.title.split()[-1])}", plain, re.I):
+            groups[(t.series_id, str(o["start"])[:5], local(t.planned_start).time(), o.get("end"))].append(t)
+    for (series, start, old_time, end), tasks in groups.items():
         if len(tasks) < 2:
             continue
         have = {t.id for t in tasks}
         last = max(t.planned_start for t in tasks)
         for t in db.scalars(select(Task).where(Task.series_id == series, Task.planned_start > last,
                                                 Task.status == TaskStatus.PLANNED)):
-            if t.id not in have:
-                ops.append({"op": "move", "id": t.id, "date": local(t.planned_start).date().isoformat(), "start": start})
+            if t.id not in have and local(t.planned_start).time() == old_time:
+                extra = {"op": "move", "id": t.id, "date": local(t.planned_start).date().isoformat(), "start": start}
+                if end:
+                    extra["end"] = end
+                ops.append(extra)
     return ops
 
 
