@@ -337,6 +337,11 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
         step("command", "Language reader: a request to show emotions")
         step("mentor_emotion", "Emotion engine: " + ", ".join(perform))
         return done(" · ".join(EMOTION_LABEL[e] for e in perform), perform=perform)
+    # 0c. Someone in crisis: care and a real way to get help, before anything about Tarun.
+    from app.agents.command import CRISIS_LINE, DISTRESS
+    if DISTRESS.search(text):
+        step("wellbeing", "Guard: crisis words — care and the 988 line, nothing else")
+        return done("I'm really glad you said something. What you're feeling matters. " + CRISIS_LINE)
     # 1. They gave us their email / number — always welcome, never refused.
     if (thanks := _take_contact(db, v, text)) is not None:
         step("communications", "Contact keeper: saved the email / number")

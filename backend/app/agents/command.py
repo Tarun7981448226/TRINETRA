@@ -18,6 +18,9 @@ INTENT_PATTERNS: dict[str, str] = {
     "planning": r"\b(plan|schedule|timetable|remind|tomorrow|reschedule|move)\b",
 }
 # Signals that need care, not pressure. Overrides everything else.
+CRISIS_LINE = ("If any part of you is thinking about ending your life or hurting yourself, please call or text 988 "
+               "(the Suicide & Crisis Lifeline) right now, or reach someone you trust. You don't have to carry this alone.")
+
 # Crisis language only (an ordinary "I want to give up on this bug" is low, not crisis — the emotion agents handle that).
 DISTRESS = re.compile(
     r"\b(hopeless|worthless|give up on life|no point (in )?(living|anything|trying anymore)|hurt(ing)? myself|end it( all)?|"
@@ -253,6 +256,10 @@ async def core(ctx: AgentContext) -> AgentResult:
         reply = str(e) if not ctx.settings.llm_available else (
             "I'm having trouble thinking right now — my model providers are busy. Try me again in a minute."
         )
+        if ctx.notes.get("distress"):  # never "try again later" to someone in crisis
+            reply = "I'm here, and I'm not going anywhere. What you're feeling matters."
+    if ctx.notes.get("distress") and "988" not in reply:  # a real way to get help, every time — not left to the model
+        reply += "\n\n" + CRISIS_LINE
 
     ctx.db.add(Message(role="user", content=text, channel=channel))
     ctx.db.add(Message(role="trinetra", content=reply, channel=channel, mood=mood))

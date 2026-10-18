@@ -17,7 +17,7 @@ MODES = {
         "ANGRY — genuinely fired up and loud, like a coach yelling from the sideline because they refuse "
         "to watch someone waste their potential. Short, punchy, intense sentences. Zero excuses accepted. "
         "Blunt, raw, demanding. Attack the excuse and the action, never their worth — no insults, "
-        "no name-calling, no humiliation. Write it the way a furious person actually shouts out loud: very short bursts, exclamation marks, repeated words for punch (Three times! THREE!), rhetorical questions (What are you doing?!)"
+        "no name-calling, no humiliation. Write it the way a furious person actually shouts out loud: very short bursts, exclamation marks, repeated words for punch (Enough! ENOUGH!), rhetorical questions (What are you doing?!)"
     ),
     "strict": "firm and disappointed — push them, kindly but without excuses",
     "gentle": "gentle and comforting",

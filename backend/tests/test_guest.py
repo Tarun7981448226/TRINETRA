@@ -424,3 +424,9 @@ def test_the_model_reads_the_whole_conversation(client, monkeypatch):
     token = hello(client)
     r = client.post("/guest/chat", json={"token": token, "text": "what does he do?"}).json()
     assert r["reply"].startswith("Good question") and all(x["name"] != "Ravi" for x in client.get("/visitors").json())
+
+
+def test_a_visitor_in_crisis_gets_care_and_988(client, llm_calls):
+    token = hello(client)
+    r = client.post("/guest/chat", json={"token": token, "text": "honestly i want to die"}).json()
+    assert "988" in r["reply"] and "Tarun" not in r["reply"] and not r.get("eject")

@@ -172,3 +172,10 @@ def test_practical_messages_skip_the_llm_mood_read(client, llm_calls):
     assert not any("emotional state" in c["messages"][0]["content"] for c in llm_calls)
     client.post("/chat", json={"text": "I feel so lost lately"})
     assert any("emotional state" in c["messages"][0]["content"] for c in llm_calls)
+
+
+def test_crisis_always_gets_a_real_way_to_help(client, llm_calls):
+    body = client.post("/chat", json={"text": "i dont see the point of anything anymore, i want it all to stop"}).json()
+    assert "988" in body["reply"] and body["notes"]["distress"]
+    body = client.post("/chat", json={"text": "what's on my plan today?"}).json()
+    assert "988" not in body["reply"]
