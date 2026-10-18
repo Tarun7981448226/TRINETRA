@@ -135,7 +135,8 @@ def build(db: Session, ops: list[dict]) -> Proposal:
                 old = local(task.planned_start)
                 day = parse_date(op.get("date")) or old.date()
                 start = parse_time(op.get("start")) or old.time()
-                minutes = (local(task.planned_end) - old).total_seconds() / 60
+                # the same length apply() will use, so the review checks the block that will really exist
+                minutes = float(op.get("duration_min") or (local(task.planned_end) - old).total_seconds() / 60)
                 end = end_time(day, start, parse_time(op.get("end")), minutes)
                 s = datetime.combine(day, start, tz)
                 e = datetime.combine(day, end, tz)

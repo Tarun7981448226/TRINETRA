@@ -44,6 +44,27 @@ def test_routines_are_topped_up(client):
         assert timetable.extend_series(db) == 0  # idempotent
 
 
+def test_moving_one_block_doesnt_move_the_routine(client):
+    """Review bug: the newest occurrence was the template, so moving that one block moved every future one."""
+    with client.session_factory() as db:
+        timetable.create_block(db, "Read", now_local().date() - timedelta(days=3), time(21), time(21, 30), recurrence="daily")
+        timetable.extend_series(db)
+        last = max(db.scalars(select(Task)), key=lambda t: t.planned_start)
+        s = local(last.planned_start).replace(hour=7)
+        timetable.move(last, s, s + timedelta(minutes=30))  # a one-off
+        db.commit()
+        db.expire_all()
+        # pretend a day passed: the horizon grows by one day
+        from unittest.mock import patch
+        tomorrow = now_local() + timedelta(days=1)
+        with patch("app.core.timetable.now_local", lambda: tomorrow):
+            assert timetable.extend_series(db) == 1
+        db.commit()
+        db.expire_all()
+        newest = max(db.scalars(select(Task)), key=lambda t: local(t.planned_start))
+        assert local(newest.planned_start).time() == time(21)  # the routine's usual time, not the one-off 07:00
+
+
 @pytest.fixture
 def builder_llm(monkeypatch):
     """LLM stub: the timetable builder gets `ops`, everyone else gets a plain reply."""

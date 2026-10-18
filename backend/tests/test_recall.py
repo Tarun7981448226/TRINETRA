@@ -94,3 +94,9 @@ def test_reader_is_the_fallback_and_second_opinion(client, llm_calls):
     """Offline (the stub LLM returns non-JSON), a sad message without keywords is still heard."""
     body = client.post("/chat", json={"text": "I failed the exam again. I am such a disappointment"}).json()
     assert body["notes"]["felt"]["low"] and body["notes"]["user_mood"] in ("low", "sad")
+
+
+def test_reader_hears_negation():
+    from app.core import feel
+    for t in ("not feeling good today", "I am not happy with my progress", "I don't feel ready for this"):
+        assert feel.read(t)["low"], t

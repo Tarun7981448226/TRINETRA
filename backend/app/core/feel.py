@@ -9,6 +9,7 @@ Training script: training/goemotions.py.
 """
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -66,9 +67,19 @@ def scores(text: str) -> dict[str, float]:
     return {l: float(p / t) for l, p, t in zip(labels, prob, m["th"])}
 
 
+# Static word vectors (and Reddit data) are weak at negation: "not feeling good" reads as joy. One explicit rule fixes the
+# commonest case — a negation shortly before a positive word turns it into a low feeling.
+NEGATED_GOOD = re.compile(r"(?:\bnot|\b(?:do|does|did|is|are|was|were|ca|can|could|would|should|wo|have|has|had|ai)n'?t|\bnever|\bno longer|\bhardly|\bbarely)\s+(?:\w+\s+){0,2}?(good|great|happy|well|okay|ok|fine|"
+                          r"motivated|excited|confident|ready|myself|alright|right)\b", re.I)
+
+
 def read(text: str) -> dict:
     """{"emotions": [present labels, strongest first], "group": main feeling, "low": bool, "strength": 0..1+}."""
     s = scores(text)
+    if NEGATED_GOOD.search(text.replace("’", "'")):
+        for l in GROUPS["joy"]:
+            s[l] = min(s.get(l, 0), 0.5)
+        s["sadness"] = max(s.get("sadness", 0), 1.3)
     present = sorted((l for l, v in s.items() if v >= 1 and l != "neutral"), key=lambda l: -s[l])
     groups = {g: max(s.get(l, 0) for l in ls) for g, ls in GROUPS.items()}
     main = max((g for g in groups if g != "neutral"), key=lambda g: groups[g])
