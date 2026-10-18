@@ -37,7 +37,11 @@ DISTRESS = re.compile(
     r"want to be dead|not worth living|no reason (for me )?to (live|go on|be here)|(don'?t|do not) want to (be here|wake up|exist|live)|"
     r"(don'?t|do not|cant|can'?t) see (the|any) point (of|in) (anything|living|life|going on)|"
     r"want (it all|everything) to (stop|end)|disappear forever|self[- ]?harm\w*|better off without me|"
-    r"i'?m done with life(?!\s+\w)|(i'?m|i am|i feel|feeling) (so |completely |totally )?(hopeless|worthless)(?!\s+at\b))\b",
+    r"i'?m done with life(?!\s+\w)|(i'?m|i am|i feel|feeling) (so |completely |totally )?(hopeless|worthless)(?!\s+at\b)|"
+    # Hindi / Hinglish: "I want to die", "I don't want to live", "end myself", "do suicide"
+    r"(mai+n? |mujhe )?mar(na| jana| jaana| jaun| jaunga| jaungi) (chahta|chahti|hai|hoon|hu)\b|"
+    r"jeena nahi (chahta|chahti|hai)|zindagi (khatam|se thak gaya|se thak gayi)|khud ko (khatam|maar)|"
+    r"suicide kar(na|unga|ungi|lunga|lungi)|sab khatam kar (dunga|dungi|du))\b",
     re.I)
 
 # Placeholder until the Emotion Engine (phase 3b) takes over mood selection.

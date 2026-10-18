@@ -210,3 +210,11 @@ def test_schedule_questions_are_answered_even_when_every_model_is_busy(client, m
     assert r["reply"].startswith("Tomorrow: Gym at 18:00")
     r = client.post("/chat", json={"text": "tell me a joke"}).json()
     assert "busy" in r["reply"]  # anything else still says so honestly
+
+
+def test_hinglish_crisis_words_are_heard_too():
+    from app.agents.command import DISTRESS
+    for t in ("main marna chahta hoon", "jeena nahi chahta", "khud ko khatam kar dunga", "suicide karunga"):
+        assert DISTRESS.search(t), t
+    for t in ("has has ke mar gaya", "ye kaam khatam kar", "zindagi badi mast hai", "meeting khatam karo"):
+        assert not DISTRESS.search(t), t
