@@ -356,6 +356,12 @@
   <div id="visDrawer" class="drawer"><section>
     <div class="scr-head"><button class="back" data-back>‹ Back</button><h2>Portfolio visitors</h2></div>
     <p>People who talked to me on tarundeepreddy.com. I forget their conversation when they leave; this log stays for you.</p>
+    <form id="ownerPass" class="vis" autocomplete="off">
+      <b>🔐 Portfolio password</b>
+      <div class="tags" id="ownerPassState">On your portfolio, say “I'm Tarun” and I'll ask for this. Right → I talk to you as your own mentor. 3 wrong tries → not you.</div>
+      <div style="display:flex;gap:8px;margin-top:8px"><input name="p" type="password" minlength="6" maxlength="128" placeholder="New password (6+ characters)" aria-label="New portfolio password" style="flex:1;min-width:0">
+      <button type="submit">Save</button></div>
+    </form>
     <div id="visitors"></div>
   </section></div>
   <div id="askDrawer" class="drawer"><section>
@@ -1372,7 +1378,18 @@
 
   // ---- portfolio visitors: the log, and answering "what is Tarun doing now?" ----
   const ago = (t) => { const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(t).toLocaleDateString(); };
+  $("ownerPass").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target, pw = f.elements.p.value;
+    if (pw.length < 6) { $("ownerPassState").textContent = "At least 6 characters, please."; return; }
+    const r = await fetch("/visitors/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pw }) });
+    f.reset();
+    $("ownerPassState").textContent = r.ok ? "Saved ✓ Only a hash is kept, so I can't show it to anyone, not even you." : "Couldn't save it. Try again.";
+  };
   async function loadVisitors() {
+    fetch("/visitors/password").then((r) => r.json()).then((d) => {
+      if (!d.set) $("ownerPassState").textContent = "Not set yet. Until you set one, I can't tell it's you on the portfolio.";
+    }).catch(() => {});
     const box = $("visitors"); box.innerHTML = "";
     let rows = [];
     try { rows = await (await fetch("/visitors")).json(); } catch {}

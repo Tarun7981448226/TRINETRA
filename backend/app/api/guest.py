@@ -159,8 +159,10 @@ class GuestText(BaseModel):
 
 
 @public.post("/chat")
-async def chat(body: GuestText, db: Session = Depends(get_db)):
+async def chat(body: GuestText, request: Request, db: Session = Depends(get_db)):
     v = _visit(db, body.token)
+    if guest.owner_ready(v):  # Tarun, proven by the password: his own TRINETRA, exactly as in the app
+        return await _as_owner(db, v, body.text, request.app.state.orchestrator)
     if v.turns >= guest.MAX_TURNS:
         raise HTTPException(429, "That's a lot of questions! Email Tarun at tarundeepreddybv@gmail.com to keep talking.")
     from app.core import llm
@@ -169,6 +171,21 @@ async def chat(body: GuestText, db: Session = Depends(get_db)):
     llm.save_bench(db)
     db.commit()
     return out
+
+
+async def _as_owner(db: Session, v: GuestVisit, text: str, core) -> dict:
+    from app.core import llm
+    from app.core.orchestrator import IncomingEvent
+
+    llm.load_bench(db)
+    result = await core.dispatch(IncomingEvent(type="user.message", payload={"text": text}, source="portfolio"), db)
+    llm.save_bench(db)
+    reply = result.reply or "I'm here."
+    v.last_said, v.last_seen = reply, datetime.now(timezone.utc)  # what /guest/speak voices; nothing else is kept on the visit
+    db.commit()
+    specs = core.registry.specs
+    trace = [{"team": specs[a].council, "did": specs[a].name} for a in result.ran if a in specs]
+    return {"reply": reply, "owner": True, "mood": result.mood, "trace": trace}
 
 
 class RoleIn(BaseModel):
@@ -308,6 +325,30 @@ async def bye(request: Request, db: Session = Depends(get_db)):
 
 
 # ---------- Tarun's side ----------
+
+class PasswordIn(BaseModel):
+    password: str = Field(min_length=6, max_length=128)
+
+
+@private.get("/password")
+def owner_password(db: Session = Depends(get_db)):
+    """Is the portfolio password set? (The password itself is never shown, only its hash is kept.)"""
+    from app.core import owner
+    return {"set": owner.has_password(db)}
+
+
+@private.post("/password")
+def set_owner_password(body: PasswordIn, db: Session = Depends(get_db)):
+    """The password that proves it's Tarun on the portfolio. Setting a new one also ends any unlocked visit."""
+    from app.core import owner
+    owner.set_password(db, body.password)
+    for v in db.scalars(select(GuestVisit).where(GuestVisit.owner.in_(("yes", "asking")))).all():
+        v.owner = None if v.owner == "asking" else "no"
+        if v.ended_at is None and v.owner == "no":
+            guest.forget(v)
+    db.commit()
+    return {"set": True}
+
 
 @private.get("")
 def visitors(limit: int = 50, db: Session = Depends(get_db)):

@@ -340,8 +340,78 @@ def _short(text: str, keep: int = 3) -> str:
     return " ".join(parts[:keep])
 
 
+ASK_PASSWORD = "If you're really Tarun, tell me our password. You have 3 tries."
+NO_PASSWORD_YET = ("Tarun hasn't set my password yet, so I can't tell if it's really him. "
+                   "Happy to tell you about his work though.")
+NOT_TARUN = ("Three wrong passwords, so you're not Tarun. No hard feelings! "
+             "I'm still happy to tell you about him and his work.")
+CANCEL = re.compile(r"^\s*(no|nope|cancel|never ?mind|not (him|that tarun|me)|wrong tarun|skip|forget it|stop)\b[\s.!]*$", re.I)
+
+
+def owner_ready(v: GuestVisit) -> bool:
+    """He proved it with the password: this visit talks to his own TRINETRA (memories, timetable, everything)."""
+    return v.owner == "yes"
+
+
+def _challenge(db: Session, v: GuestVisit, step) -> dict | None:
+    """They say they're Tarun. None when this visit can't try any more (wrong 3 times already)."""
+    from app.core import owner
+    if v.owner == "no":
+        step("wellbeing", "Guard: this visit already got the password wrong 3 times")
+        return {"reply": "You've used your three tries on this visit, so I'll keep treating you as a guest."}
+    if not owner.has_password(db):
+        step("wellbeing", "Guard: no owner password set yet — can't verify")
+        return {"reply": NO_PASSWORD_YET}
+    if owner.paused(db):
+        step("wellbeing", "Guard: too many wrong passwords this hour — checks paused")
+        return {"reply": "Too many wrong passwords lately, so I've paused the check for an hour. Try again later."}
+    v.owner, v.owner_tries = "asking", v.owner_tries or 0
+    step("wellbeing", "Guard: says they're Tarun — password first (3 tries)")
+    return {"reply": ASK_PASSWORD, "secret": True}
+
+
+def _password_turn(db: Session, v: GuestVisit, text: str) -> dict:
+    """The answer to "what's our password?". It is never stored, never sent to a model."""
+    from app.core import owner
+    v.turns += 1
+    _remember(v, "visitor", "••••••")
+    trace = [{"team": "wellbeing", "did": "Guard: checked the password (never stored, never sent to a model)"}]
+
+    def done(reply: str, **extra) -> dict:
+        _remember(v, "trinetra", reply)
+        db.commit()
+        return {"reply": reply, **extra, "trace": trace}
+
+    if CANCEL.search(text):
+        v.owner = None
+        return done("No problem. What would you like to know about Tarun?")
+    if owner.paused(db):
+        v.owner = None
+        return done("Too many wrong passwords lately, so I've paused the check for an hour. Try again later.")
+    if owner.check(db, text):
+        v.owner, v.name = "yes", "Tarun"
+        v.messages = [m for m in (v.messages or []) if m["role"] == "trinetra"][-1:]  # the guest chat isn't needed any more
+        push.send(db, "TRINETRA 🔐", "You unlocked me on your portfolio with the password. Not you? Change it in the app (Visitors).",
+                  url="/#visitors", tag="owner-unlock")
+        trace.append({"team": "command", "did": "Verified: it's Tarun — switching to his own TRINETRA"})
+        return done("It's really you. Welcome back, Tarun. You're talking to your own TRINETRA now: "
+                    "your plan, your goals, anything you'd ask me in the app.", owner=True)
+    v.owner_tries = (v.owner_tries or 0) + 1
+    left = owner.TRIES - v.owner_tries
+    if left > 0:
+        return done(f"That's not it. {left} {'try' if left == 1 else 'tries'} left.", secret=True)
+    v.owner = "no"
+    v.topics = [*(v.topics or []), "pretended to be you (3 wrong passwords)"][-12:]
+    push.send(db, "TRINETRA ⚠️", f"{_who(v) if v.name != 'Tarun' else 'A visitor'} said they're you on your portfolio "
+              "and got the password wrong 3 times.", url="/#visitors", tag="owner-fail")
+    trace.append({"team": "reminders", "did": "Told Tarun someone tried to pass as him"})
+    return done(NOT_TARUN)
+
+
 async def chat(db: Session, v: GuestVisit, text: str) -> dict:
     text = text.strip()[:MAX_TEXT]
+    if v.owner == "asking":  # before anything else: a password can look like anything, and it's never stored
+        return _password_turn(db, v, text)
     v.turns += 1
     _remember(v, "visitor", text)
     trace: list[dict] = []  # what really happened, step by step — the portfolio shows it live in the Brain
@@ -382,6 +452,10 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
         _take_contact(db, v, text)
         step("wellbeing", "Guard: crisis words — care and the 988 line, nothing else")
         return done("I'm really glad you said something. What you're feeling matters. " + CRISIS_LINE)
+    # 1c. "I'm Tarun" / "I'm your creator": prove it with the password first.
+    from app.core import owner
+    if owner.claims_to_be_tarun(text) and (c := _challenge(db, v, step)) is not None:
+        return done(c.pop("reply"), **c)
     # 2. Leaving.
     if BYE.search(text) and len(text) < 60:
         step("communications", "Host: a goodbye")
@@ -425,6 +499,8 @@ async def chat(db: Session, v: GuestVisit, text: str) -> dict:
             name, company = _guess_name(text)
             role = _role_from_words(text)
         name = " ".join(w[:1].upper() + w[1:] for w in name.split()) if name else None  # "charan" → "Charan"
+        if name and name.split()[0].lower() == "tarun" and v.owner is None and (c := _challenge(db, v, step)) is not None:
+            return done(c.pop("reply"), **c)
         if name:  # only an introduction tells us who THEY are ("his research?" doesn't make them a researcher)
             v.name, v.company, v.role = name, v.company or company, v.role or role
             step("memory", f"Profile keeper: remembered the visitor's name ({name})")

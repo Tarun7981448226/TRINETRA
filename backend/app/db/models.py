@@ -232,6 +232,8 @@ class GuestVisit(Base):
     topics: Mapped[list | None] = mapped_column(JSON(none_as_null=True))  # short labels of what they asked
     messages: Mapped[list | None] = mapped_column(JSON(none_as_null=True))  # live conversation; None once forgotten
     turns: Mapped[int] = mapped_column(Integer, default=0)
+    owner: Mapped[str | None] = mapped_column(String(10))  # claims to be Tarun: "asking" (password) / "yes" / "no" (3 wrong tries)
+    owner_tries: Mapped[int | None] = mapped_column(Integer)
     last_said: Mapped[str | None] = mapped_column(Text)  # what TRINETRA just said (the only text /guest/speak voices)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

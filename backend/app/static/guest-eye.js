@@ -650,6 +650,10 @@
   }
   function afterReply(d) {  // whatever TRINETRA said, plus what comes with it
     if (d.eject) { add(d.reply, "tri"); return throwOut(); }
+    asking = !!d.secret;  // "what's our password?": the next thing typed is hidden, here and on screen
+    input.type = asking ? "password" : "text";
+    input.placeholder = asking ? "Password" : "Type a message…";
+    if (d.owner) root.querySelector(".head small").textContent = "Your own mentor · it's you, Tarun 🔐";
     add(d.reply, "tri");
     if (d.trace?.length && BRAIN_ON) {  // what really happened to their message — watch it live in the Brain
       lastTrace = d.trace;
@@ -669,11 +673,14 @@
     if (d.ask_id) { delete noteForm.dataset.shown; pollAsk(d.ask_id); }
   }
 
+  let asking = false;  // TRINETRA asked for the password
   talkForm.onsubmit = async (e) => {
     e.preventDefault();
     const text = input.value.trim();
     if (!text || sendBtn.disabled) return;
-    input.value = ""; add(text, "me");
+    input.value = ""; add(asking ? "••••••" : text, "me");
+    if (asking) { thinking(true); try { const d = await api("chat", { token, text }); thinking(false); afterReply(d); }
+                  catch (err) { thinking(false); asking = false; input.type = "text"; add(err.message, "tri"); } return; }
     stopShow();  // you said something: the music stops (a new "play …" starts the next one)
     root.querySelector(".roles")?.remove();
     const offered = root.querySelector(".choices");
