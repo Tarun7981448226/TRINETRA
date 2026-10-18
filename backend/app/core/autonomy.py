@@ -58,9 +58,28 @@ def engagement(db: Session, kind: str, days: int = 30) -> tuple[int, int]:
     return got.get("engaged", 0), got.get("engaged", 0) + got.get("ignored", 0)
 
 
-def p_engage(db: Session, kind: str) -> float:
+def part_of_day(t: datetime) -> str:
+    from app.core.timeutil import user_tz
+    h = t.astimezone(user_tz()).hour
+    return "morning" if 5 <= h < 12 else "afternoon" if h < 17 else "evening" if h < 22 else "night"
+
+
+def p_engage(db: Session, kind: str, when: datetime | None = None) -> float:
+    """P(he answers this kind of nudge), and — once there's data — at this time of day. The time-of-day estimate is
+    shrunk towards the kind's overall rate (k = 3 pseudo-observations): a part of the day with little data leans on
+    the overall habit, one with lots of data speaks for itself."""
     engaged, n = engagement(db, kind)
-    return (engaged + 1.5) / (n + 2)
+    p_kind = (engaged + 1.5) / (n + 2)
+    if when is None:
+        return p_kind
+    from app.core.timeutil import from_db
+    since = _now() - timedelta(days=30)
+    rows = db.execute(select(Decision.created_at, Decision.outcome).where(
+        Decision.kind == kind, Decision.action == "sent", Decision.outcome.is_not(None), Decision.created_at >= since)).all()
+    part = part_of_day(when)
+    here = [o for t, o in rows if part_of_day(from_db(t)) == part]
+    k = 3
+    return (sum(o == "engaged" for o in here) + k * p_kind) / (len(here) + k)
 
 
 QUIET_DAYS = 3
@@ -102,10 +121,10 @@ def decide(db: Session, kind: str, label: str | None = None) -> Verdict:
     today = sent_since(now - timedelta(hours=24))
     # other kinds only: each watcher already paces its own kind (e.g. the 30-minute free-time check-in Tarun asked for)
     recent = sent_since(now - timedelta(hours=3), Decision.kind != kind)
-    p = p_engage(db, kind)
+    p = p_engage(db, kind, now)
     value = VALUE.get(kind, 0.5)
     score = value * p - COST_PER_RECENT * recent
-    why = f"value {value:.2f} × P(engage) {p:.2f} − {recent} recent nudge(s) = {score:.2f}"
+    why = f"value {value:.2f} × P(engage, {part_of_day(now)}) {p:.2f} − {recent} recent nudge(s) = {score:.2f}"
     if kind == "wellbeing" and label in ("comforting", "gentle"):
         return Verdict(True, max(score, THRESHOLD), "he's low — care always gets through · " + why)
     if (q := quiet_until(db)) and not (kind == "wellbeing" and label in ("comforting", "gentle")):

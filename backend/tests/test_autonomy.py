@@ -14,7 +14,7 @@ def _sent(db, kind, outcome, n, hours_ago=48):
 def test_a_new_kind_gets_a_fair_try(client):
     with client.session_factory() as db:
         v = autonomy.decide(db, "why")
-        assert v.send and "P(engage) 0.75" in v.reason
+        assert v.send and "0.75" in v.reason
 
 
 def test_a_nudge_he_keeps_ignoring_fades_and_one_he_answers_stays(client):
@@ -152,3 +152,23 @@ def test_quiet_mode_is_not_triggered_by_ordinary_sentences(client, llm_calls):
     client.post("/chat", json={"text": "never nudge me again"})  # not a request to turn them back on
     with client.session_factory() as db:
         assert autonomy.quiet_until(db) is not None
+
+
+def test_it_learns_when_he_answers_not_just_whether():
+    """Answers lag talks in the afternoon, ignores them at night: the same nudge, two different decisions."""
+    from app.core.timeutil import user_tz
+    import app.core.autonomy as A
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session as S
+    from app.db.models import Base
+    eng = create_engine("sqlite://"); Base.metadata.create_all(eng)
+    with S(eng) as db:
+        today = datetime.now(user_tz()).replace(minute=0, second=0, microsecond=0)
+        for d in range(1, 9):
+            day = today - timedelta(days=d)
+            db.add(Decision(kind="lag", action="sent", outcome="engaged", created_at=day.replace(hour=14).astimezone(timezone.utc)))
+            db.add(Decision(kind="lag", action="sent", outcome="ignored", created_at=day.replace(hour=23).astimezone(timezone.utc)))
+        db.commit()
+        p_day = A.p_engage(db, "lag", today.replace(hour=15))
+        p_night = A.p_engage(db, "lag", today.replace(hour=23))
+        assert p_day > 0.75 and p_night < 0.3
