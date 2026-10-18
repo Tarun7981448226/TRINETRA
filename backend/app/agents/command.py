@@ -93,7 +93,11 @@ def _today_context(ctx: AgentContext) -> str:
             lines.append(f"- {local(t.planned_start):%H:%M}–{local(t.planned_end):%H:%M} {t.title} [{t.status}]")
     else:
         lines.append("Today's timetable: empty")
-    memories = ctx.db.scalars(select(Memory).order_by(Memory.importance.desc(), Memory.id.desc()).limit(40)).all()
+    from app.core import recall  # the memories that matter for what he just said (not just the 40 "most important")
+    text = str(ctx.event.payload.get("text", ""))
+    recent = " ".join(m.content for m in ctx.db.scalars(select(Message).where(Message.role == "user")
+                                                         .order_by(Message.id.desc()).limit(3)).all())
+    memories = recall.recall(ctx.db, f"{text} {recent}".strip())
     if memories:
         lines.append("What you know about them:")
         lines += [f"- ({m.kind}) {m.content}" for m in memories]

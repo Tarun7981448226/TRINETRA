@@ -123,6 +123,11 @@ class Memory(Base):
     content: Mapped[str] = mapped_column(Text)
     importance: Mapped[int] = mapped_column(Integer, default=3)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Recall (core/recall.py): when it was last brought into a conversation and how often — a memory that keeps
+    # mattering stays fresh (Ebbinghaus strength); one never used fades from the top. Archived = kept, never recalled.
+    last_used: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    uses: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    archived: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
 
 
 class PushSubscription(Base):
