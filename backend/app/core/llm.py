@@ -104,8 +104,7 @@ def retry_after(msg: str) -> float | None:
 def _bench(model: str, error: Exception) -> None:
     msg = str(error)
     told = retry_after(msg)
-    daily = "PerDay" in msg or "per day" in msg.lower()
-    if daily and told is not None and told < 3600:
+    if "PerDay" in msg and told is not None and told < 3600:
         told = None  # Gemini's daily-quota 429 still says "retryDelay: 41s" — trusting it would retry a dead model all day
     if told is not None and ("429" in msg or "RateLimit" in type(error).__name__):
         seconds = min(max(told + 2, 5), 24 * 3600)  # exactly as long as the provider asked (plus a breath)
