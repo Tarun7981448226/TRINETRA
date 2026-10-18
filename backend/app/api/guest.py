@@ -177,6 +177,10 @@ async def _as_owner(db: Session, v: GuestVisit, text: str, core) -> dict:
     from app.core import llm
     from app.core.orchestrator import IncomingEvent
 
+    if guest.LOCK.search(text):  # "lock" / "sign out": back to being a guest on this visit
+        v.owner, v.name, v.last_said = None, None, guest.LOCKED
+        db.commit()
+        return {"reply": guest.LOCKED, "locked": True, "trace": [{"team": "command", "did": "Signed Tarun out of this visit"}]}
     llm.load_bench(db)
     result = await core.dispatch(IncomingEvent(type="user.message", payload={"text": text}, source="portfolio"), db)
     llm.save_bench(db)
@@ -185,7 +189,11 @@ async def _as_owner(db: Session, v: GuestVisit, text: str, core) -> dict:
     db.commit()
     specs = core.registry.specs
     trace = [{"team": specs[a].council, "did": specs[a].name} for a in result.ran if a in specs]
-    return {"reply": reply, "owner": True, "mood": result.mood, "trace": trace}
+    out = {"reply": reply, "owner": True, "mood": result.mood, "trace": trace}
+    for k in ("show", "perform"):  # "dance", "show me your emotions": the doll acts it out, as in the app
+        if result.notes.get(k):
+            out[k] = result.notes[k]
+    return out
 
 
 class RoleIn(BaseModel):
@@ -248,7 +256,13 @@ def resume(body: TokenIn, db: Session = Depends(get_db)):
     v = _visit(db, body.token)
     v.last_seen = datetime.now(timezone.utc)
     db.commit()
-    return {"name": v.name, "messages": v.messages or []}
+    if guest.owner_ready(v):  # Tarun, still signed in: his own recent chat from this visit
+        from app.db.models import Message
+        rows = db.scalars(select(Message).where(Message.channel == "portfolio", Message.created_at >= v.started_at)
+                          .order_by(Message.id.desc()).limit(12)).all()[::-1]
+        said = [{"role": "trinetra" if m.role == "trinetra" else "visitor", "text": m.content} for m in rows]
+        return {"name": v.name, "owner": True, "messages": (v.messages or [])[:1] + said}
+    return {"name": v.name, "messages": v.messages or [], "asking": v.owner == "asking"}
 
 
 @public.post("/tour/{i}")

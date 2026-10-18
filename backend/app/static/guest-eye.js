@@ -304,6 +304,7 @@
 
   // ---- the conversation ----
   let token = store(sessionStorage, KEY), started = false;
+  let asking = false;  // TRINETRA asked for the password: the next thing typed is hidden, in the box and on screen
   function add(text, who) {
     const el = document.createElement("div");
     el.className = `msg ${who}` + (who === "tri" && text.startsWith("Message from Tarun:") ? " tarun" : ""); el.textContent = text;
@@ -336,6 +337,7 @@
             const d = await api("resume", { token });
             log.innerHTML = "";
             for (const m of d.messages) add(m.text, m.role === "trinetra" ? "tri" : "me");
+            secretMode(!!d.asking); ownerMode(!!d.owner);
             if (!d.messages.length) await hello();
             return;
           } catch (e) { if (e.status !== 404) throw e; }
@@ -650,10 +652,8 @@
   }
   function afterReply(d) {  // whatever TRINETRA said, plus what comes with it
     if (d.eject) { add(d.reply, "tri"); return throwOut(); }
-    asking = !!d.secret;  // "what's our password?": the next thing typed is hidden, here and on screen
-    input.type = asking ? "password" : "text";
-    input.placeholder = asking ? "Password" : "Type a message…";
-    if (d.owner) root.querySelector(".head small").textContent = "Your own mentor · it's you, Tarun 🔐";
+    secretMode(!!d.secret);
+    if (d.owner || d.locked) ownerMode(!!d.owner);
     add(d.reply, "tri");
     if (d.trace?.length && BRAIN_ON) {  // what really happened to their message — watch it live in the Brain
       lastTrace = d.trace;
@@ -673,14 +673,19 @@
     if (d.ask_id) { delete noteForm.dataset.shown; pollAsk(d.ask_id); }
   }
 
-  let asking = false;  // TRINETRA asked for the password
+  function secretMode(on) {
+    asking = on; input.type = on ? "password" : "text"; input.placeholder = on ? "Password" : "Type a message…";
+  }
+  function ownerMode(on) {  // it's Tarun: the header says so (type "lock" to be a guest again)
+    root.querySelector(".head small").textContent = on ? "It's you, Tarun 🔐 · “lock” to sign out" : "Tarun's AI mentor";
+  }
   talkForm.onsubmit = async (e) => {
     e.preventDefault();
     const text = input.value.trim();
     if (!text || sendBtn.disabled) return;
     input.value = ""; add(asking ? "••••••" : text, "me");
     if (asking) { thinking(true); try { const d = await api("chat", { token, text }); thinking(false); afterReply(d); }
-                  catch (err) { thinking(false); asking = false; input.type = "text"; add(err.message, "tri"); } return; }
+                  catch (err) { thinking(false); secretMode(false); add(err.message, "tri"); } return; }
     stopShow();  // you said something: the music stops (a new "play …" starts the next one)
     root.querySelector(".roles")?.remove();
     const offered = root.querySelector(".choices");

@@ -345,6 +345,8 @@ NO_PASSWORD_YET = ("Tarun hasn't set my password yet, so I can't tell if it's re
                    "Happy to tell you about his work though.")
 NOT_TARUN = ("Three wrong passwords, so you're not Tarun. No hard feelings! "
              "I'm still happy to tell you about him and his work.")
+LOCK = re.compile(r"^\s*(lock( it| me out)?|sign ?out|log ?out|logout|i'?m done)[\s.!]*$", re.I)
+LOCKED = "Locked. Anyone typing here now is a guest again."
 CANCEL = re.compile(r"^\s*(no|nope|cancel|never ?mind|not (him|that tarun|me)|wrong tarun|skip|forget it|stop)\b[\s.!]*$", re.I)
 
 
@@ -390,7 +392,7 @@ def _password_turn(db: Session, v: GuestVisit, text: str) -> dict:
         return done("Too many wrong passwords lately, so I've paused the check for an hour. Try again later.")
     if owner.check(db, text):
         v.owner, v.name = "yes", "Tarun"
-        v.messages = [m for m in (v.messages or []) if m["role"] == "trinetra"][-1:]  # the guest chat isn't needed any more
+        v.messages = []  # the guest chat isn't needed any more; the welcome below is all this visit keeps
         push.send(db, "TRINETRA 🔐", "You unlocked me on your portfolio with the password. Not you? Change it in the app (Visitors).",
                   url="/#visitors", tag="owner-unlock")
         trace.append({"team": "command", "did": "Verified: it's Tarun — switching to his own TRINETRA"})

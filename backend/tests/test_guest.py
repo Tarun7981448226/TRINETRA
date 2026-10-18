@@ -542,3 +542,18 @@ def test_password_guessing_across_visits_pauses_the_check(client, llm_calls):
     assert "paused" in r["reply"] and not r.get("secret")
     with client.session_factory() as db:
         assert owner.paused(db)
+
+
+def test_signed_in_tarun_gets_dances_keeps_it_across_pages_and_can_lock(client, llm_calls):
+    client.post("/visitors/password", json={"password": "kalki-2026"})
+    token = hello(client)
+    client.post("/guest/chat", json={"token": token, "text": "I'm Tarun"})
+    client.post("/guest/chat", json={"token": token, "text": "kalki-2026"})
+    r = client.post("/guest/chat", json={"token": token, "text": "dance"}).json()
+    assert r["owner"] and r["show"]  # the doll dances for him too
+    back = client.post("/guest/resume", json={"token": token}).json()  # another page of the portfolio
+    assert back["owner"] and "really you" in back["messages"][0]["text"] and back["messages"][-1]["role"] == "trinetra"
+    assert "kalki" not in str(back)
+    assert client.post("/guest/chat", json={"token": token, "text": "lock"}).json()["locked"]
+    assert not client.post("/guest/chat", json={"token": token, "text": "what's my plan today?"}).json().get("owner")
+    assert not client.post("/guest/resume", json={"token": token}).json().get("owner")
