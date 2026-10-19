@@ -1369,7 +1369,13 @@
     if (red && !red.meta.answered && red.at && Date.now() - Date.parse(red.at) < 30 * 60e3) go(`alert/${red.id}`);
   }).catch(() => {}).finally(() => setInterval(poll, 5000));
   // back from the background (e.g. tapped a notification): check for new lines right away
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); wakeIfRinging(); } });
+  // The alarm rang and the questions aren't answered: whatever opened the app, the wake screen comes first.
+  async function wakeIfRinging() {
+    if ($("wakeScreen").classList.contains("open")) return;
+    try { if ((await (await fetch("/wake/pending")).json()).pending) go("wake"); } catch {}
+  }
+  wakeIfRinging();
 
   // ---- installable app + lock-screen notifications ----
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);

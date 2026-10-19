@@ -1089,6 +1089,17 @@ def _wake_state(s) -> dict:
             "rings": s.rings, "last": s.last}
 
 
+@router.get("/wake/pending")
+def wake_pending(db: Session = Depends(get_db)):
+    """Has the alarm rung (in the last 3 hours) without the questions being answered? Then opening the app goes
+    straight to the wake screen. Only looks: never starts a wake-up by itself."""
+    from app.core import wake
+
+    s = wake.today_session(db, create=False)
+    rang = s is not None and s.first_ring_at is not None and datetime.now(timezone.utc) - from_db(s.first_ring_at) < timedelta(hours=3)
+    return {"pending": bool(rang and s.last != "done")}
+
+
 @router.get("/wake/state")
 def wake_state(db: Session = Depends(get_db)):
     from app.core import wake

@@ -260,3 +260,17 @@ def test_talking_counts_as_a_sign_of_life(client, llm_calls, monkeypatch):
         core = client.app.state.orchestrator
         assert not asyncio.run(scheduler.silence_watch(db, core, start + timedelta(minutes=70)))
         assert asyncio.run(scheduler.silence_watch(db, core, start + timedelta(minutes=115)))
+
+
+def test_opening_the_app_after_the_alarm_goes_to_the_questions(client, llm_calls):
+    assert client.get("/wake/pending").json() == {"pending": False}  # no alarm yet: nothing to answer
+    from app.db.models import WakeSession
+    with client.session_factory() as db:
+        assert db.scalar(select(WakeSession)) is None  # just looking never starts a wake-up
+    sc(client, "/sc/wake/start")  # the alarm was stopped, the Shortcut ran
+    assert client.get("/wake/pending").json() == {"pending": True}
+    with client.session_factory() as db:
+        s = db.scalar(select(WakeSession))
+        s.last = "done"
+        db.commit()
+    assert client.get("/wake/pending").json() == {"pending": False}
