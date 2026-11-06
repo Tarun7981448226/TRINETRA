@@ -1,6 +1,8 @@
-# TRINETRA — The Eye That Watches Over You
+# TRINETRA: The Eye That Watches Over You
 
-A personal AI mentor and caretaker. It runs Tarun's timetable, reminders and check-ins, learns his patterns, and talks with him like a mentor who knows him. It also greets visitors on his portfolio. About 70 agents in 10 teams do the work, each team has a manager, and TRINETRA decides.
+A personal AI mentor and caretaker I built for myself. It runs my timetable, reminders and check-ins, learns my patterns, and talks with me like a mentor who knows me. It also greets visitors on my portfolio. It is designed around about 70 agents in 10 teams, each team has a manager, and a core orchestrator decides. Agents are being added in stages; [ROADMAP.md](ROADMAP.md) has the current count.
+
+**Stack:** Python, FastAPI, PostgreSQL (Neon), PyTorch, Google Gemini and Groq, Vercel, Cloudflare cron, Render (WhatsApp bridge), a PWA front end.
 
 ## How it thinks
 Each message goes through these steps:
@@ -41,4 +43,12 @@ TRINETRA_TEST_DB=postgresql://… ../.venv/bin/python -m pytest -q             #
 ```
 
 ## Status
-See ROADMAP.md.
+See [ROADMAP.md](ROADMAP.md).
+
+## Third-party data and models
+My code is under the MIT License, but these keep their own licenses:
+- `music/`: POP909 (MIT) and FluidR3 GM samples (CC BY 3.0). See [music/README.md](music/README.md).
+- `backend/app/data/embed/`: built from potion-base-8M and GoEmotions. See [training/README.md](training/README.md).
+
+## License
+[MIT](LICENSE) © 2026 Tarun Deep Reddy B V
