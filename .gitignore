@@ -12,3 +12,6 @@ deploy/server.env
 .vercel
 shortcuts/out/
 bridge/node_modules
+
+# Personal timetable data, kept on this Mac only
+deploy/seed_tarun.py
